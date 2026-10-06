@@ -84,8 +84,9 @@ is GET, or POST when a body is set. The response must be
 - `duration: 30s` — stop after this long. On its own this ends the step
   successfully; with `events` or `match`, reaching it first is a failure.
 
-With no `until`, the step reads until the server closes the stream. A
-stream with no events fails (`sse no events`).
+With both `events` and `match`, the stream stops at whichever comes first
+and both must be met. With no `until`, the step reads until the server
+closes the stream. A stream with no events fails (`sse no events`).
 
 Checks and extractors see the data of the matching event (or the last event
 read) as the response body. To extract from the final chunk of an OpenAI-style
