@@ -9,10 +9,16 @@ import (
 	"os/signal"
 	"syscall"
 
+	"io/fs"
+
 	"github.com/Ivan825/Stampede/internal/cli"
+	"github.com/Ivan825/Stampede/web"
 )
 
 func main() {
+	if ui, err := fs.Sub(web.Dist, "dist"); err == nil {
+		cli.UI = ui
+	}
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
