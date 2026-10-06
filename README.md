@@ -63,7 +63,9 @@ failed. Accuracy is checked against a calibrated server in CI
 **Every test type.** Open and closed models; smoke, baseline, stress, spike,
 soak, breakpoint, steps, recovery and wave shapes on any scenario; targets
 such as `checkout.p95 < 800ms`; breakpoint search; the knee of the
-throughput-against-load curve ([test types](docs/guides/test-types.md)).
+throughput-against-load curve; per-user network emulation (3G, 4G, slow
+Wi-Fi, or explicit latency, jitter, bandwidth and packet loss); auto-abort
+when a target falls over ([test types](docs/guides/test-types.md)).
 
 **Protocols:** HTTP/1.1, HTTP/2 (TLS and h2c), REST, GraphQL (with
 persisted queries), WebSocket, server-sent events with time to first event
@@ -115,7 +117,7 @@ per server and per target; audit log ([safety](docs/safety.md)).
 Browser (Playwright) workers, the plugin interface with MQTT, Kafka, Redis,
 SQL and UDP plugins, the other 19 product packs, AI generation from GraphQL
 introspection and browser crawls, AI report narratives, the fault-injection
-agent, packet loss and jitter emulation, mutual TLS between server and workers, several
+agent, mutual TLS between server and workers, several
 active server replicas (today extra replicas are hot standbys), scheduled runs, side-by-side benchmarks with k6 and
 wrk2, a packaged GitHub Action, and the website.
 
