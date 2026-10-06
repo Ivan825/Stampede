@@ -91,14 +91,14 @@ func RunDistributed(ctx context.Context, o DistributedOptions) (*report.Report, 
 			}
 		}
 	}()
-	var bp *breakpointTracker
+	var bp *BreakpointTracker
 	if plan.StopOnFail {
-		bp = newBreakpointTracker(prog, plan)
+		bp = NewBreakpointTracker(prog, plan)
 	}
 	go func() {
 		defer wg.Done()
 		for s := range run.Snapshots() {
-			if bp != nil && bp.observe(s) {
+			if bp != nil && bp.Observe(s) {
 				run.StopWithReason("breakpoint reached")
 			}
 			if o.Progress != nil {
@@ -121,7 +121,7 @@ func RunDistributed(ctx context.Context, o DistributedOptions) (*report.Report, 
 		Workers: len(res.Workers), Interval: res.Interval, Snapshots: res.Snapshots, Phases: res.Phases,
 	}
 	if bp != nil {
-		in.Breakpoint = bp.result()
+		in.Breakpoint = bp.Result()
 	}
 	rep := report.Build(in)
 	annotate(rep, res)
