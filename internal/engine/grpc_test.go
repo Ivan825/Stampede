@@ -224,7 +224,7 @@ func TestGRPC(t *testing.T) {
 		},
 		{
 			name:    "deadline",
-			steps:   `[{grpc: grpc.testing.TestService/StreamingOutputCall, target: "grpc://` + addr + `", timeout: 30ms, message: {responseParameters: [{size: 1, intervalUs: 500000}]}}]`,
+			steps:   `[{grpc: grpc.testing.TestService/StreamingOutputCall, target: "grpc://` + addr + `", timeout: 300ms, message: {responseParameters: [{size: 1, intervalUs: 2000000}]}}]`,
 			wantErr: "gRPC DEADLINE_EXCEEDED",
 		},
 		{

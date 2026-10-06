@@ -38,11 +38,11 @@ func TestRunInjectsFaultsOnTime(t *testing.T) {
 metadata: {name: faults}
 target: {baseURL: "http://%s"}
 journeys: [{name: home, steps: [{get: /}]}]
-load: {mode: rate, rate: 40/s, duration: 4s}
+load: {mode: rate, rate: 40/s, duration: 5s}
 faults:
   agent: {url: "%s", token: x}
   timeline:
-    - {name: slow api, at: 1s, for: 1500ms, proxy: api, latency: 100ms}`, p.Addr(), client.BaseURL))
+    - {name: slow api, at: 1s, for: 2500ms, proxy: api, latency: 100ms}`, p.Addr(), client.BaseURL))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -57,13 +57,14 @@ faults:
 		t.Fatalf("faults = %+v", rep.Faults)
 	}
 	f := rep.Faults[0]
-	if f.Error != "" || f.Label != "slow api" || f.Kind != "proxy" || f.Target != "api" || f.Start < 0.9 || f.Start > 1.5 || f.End-f.Start < 1.4 {
+	if f.Error != "" || f.Label != "slow api" || f.Kind != "proxy" || f.Target != "api" || f.Start < 0.9 || f.Start > 1.5 || f.End-f.Start < 2.4 {
 		t.Errorf("event = %+v", f)
 	}
-	// Seconds 1 and 2 had 200ms round trips; second 0 and 3 did not.
+	// The fault covers all of second 2 (and most of 1 and 3); seconds 0
+	// and 4 are clear of it.
 	for _, pt := range rep.Timeline {
 		switch {
-		case pt.T == 0 || pt.T >= 3:
+		case pt.T == 0 || pt.T >= 4:
 			if pt.P50 > 0.05 {
 				t.Errorf("second %v: p50 %.3fs outside the fault", pt.T, pt.P50)
 			}

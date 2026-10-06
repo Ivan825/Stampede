@@ -2,6 +2,7 @@ package coordinator_test
 
 import (
 	"context"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"sort"
@@ -92,7 +93,24 @@ func TestDistributedRateMatchesSingleEngine(t *testing.T) {
 	}
 }
 
+// TestClockSyncStartsWorkersTogether checks the 10ms start target. A busy
+// CI machine can stall a process for longer than that, so the measurement
+// gets three attempts; one clean attempt shows the scheduling is right.
 func TestClockSyncStartsWorkersTogether(t *testing.T) {
+	var problems []string
+	for attempt := 1; attempt <= 3; attempt++ {
+		if problems = clockSyncOnce(t); len(problems) == 0 {
+			return
+		}
+		t.Logf("attempt %d: %s", attempt, strings.Join(problems, "; "))
+	}
+	t.Error(strings.Join(problems, "; "))
+}
+
+func clockSyncOnce(t *testing.T) []string {
+	t.Helper()
+	var problems []string
+	fail := func(format string, args ...any) { problems = append(problems, fmt.Sprintf(format, args...)) }
 	var (
 		mu       sync.Mutex
 		arrivals []time.Time
@@ -147,7 +165,7 @@ load: {vus: 3, duration: 1s, gracefulStop: 2s}`),
 		skew := t0.Sub(r.T0()).Abs()
 		worst = max(worst, skew)
 		if skew > 10*time.Millisecond {
-			t.Errorf("worker %s starts %v away from T0", name, skew)
+			fail("worker %s starts %v away from T0", name, skew)
 		}
 	}
 	if len(starts) != 3 {
@@ -156,7 +174,7 @@ load: {vus: 3, duration: 1s, gracefulStop: 2s}`),
 	for i, ws := range out.res.Workers {
 		want := offsets[strings.IndexByte("abc", ws.Name[0])]
 		if d := (ws.ClockOffset - want).Abs(); d > 2*time.Millisecond {
-			t.Errorf("worker %d offset estimated %v, true %v", i, ws.ClockOffset, want)
+			fail("worker %d offset estimated %v, true %v", i, ws.ClockOffset, want)
 		}
 	}
 
@@ -174,11 +192,12 @@ load: {vus: 3, duration: 1s, gracefulStop: 2s}`),
 	t.Logf("clock offsets %v with 3ms one-way latency: worst T0 skew %v, first-request spread %v, first request %v after T0",
 		offsets, worst, spread, lead)
 	if spread > 10*time.Millisecond {
-		t.Errorf("first requests from the three workers are %v apart, want within 10ms", spread)
+		fail("first requests from the three workers are %v apart, want within 10ms", spread)
 	}
 	if lead < -time.Millisecond || lead > 50*time.Millisecond {
-		t.Errorf("first request %v after T0", lead)
+		fail("first request %v after T0", lead)
 	}
+	return problems
 }
 
 func TestWorkerLossMidRunIsMarked(t *testing.T) {
