@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"context"
 	"crypto/tls"
 	"errors"
 	"fmt"
@@ -114,7 +115,7 @@ func runServer(cmd *cobra.Command, f *serverFlags) error {
 	if f.databaseURL == "" {
 		return errors.New("set --database-url or STAMPEDE_DATABASE_URL")
 	}
-	st, err := store.Open(ctx, f.databaseURL)
+	st, err := openStoreWithRetry(ctx, log, f.databaseURL, 60*time.Second)
 	if err != nil {
 		return err
 	}
@@ -209,5 +210,28 @@ func newKeygenCmd() *cobra.Command {
 		Run: func(cmd *cobra.Command, _ []string) {
 			fmt.Fprintln(cmd.OutOrStdout(), keyring.GenerateKey())
 		},
+	}
+}
+
+// openStoreWithRetry waits for the database, which may still be starting
+// (TimescaleDB restarts once while initialising a new data directory).
+func openStoreWithRetry(ctx context.Context, log *slog.Logger, url string, wait time.Duration) (*store.Store, error) {
+	deadline := time.Now().Add(wait)
+	delay := 250 * time.Millisecond
+	for {
+		st, err := store.Open(ctx, url)
+		if err == nil {
+			return st, nil
+		}
+		if time.Now().After(deadline) || ctx.Err() != nil {
+			return nil, err
+		}
+		log.Warn("database not ready, retrying", "error", err, "in", delay)
+		select {
+		case <-time.After(delay):
+		case <-ctx.Done():
+			return nil, ctx.Err()
+		}
+		delay = min(delay*2, 5*time.Second)
 	}
 }
