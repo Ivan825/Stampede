@@ -164,7 +164,7 @@ func firstPartySource(ctx context.Context, name string, o InstallOptions, tmp st
 			continue
 		}
 		dir := filepath.Join(root, "plugins", name)
-		if _, err := os.Stat(filepath.Join(dir, "go.mod")); err != nil {
+		if _, err := os.Stat(filepath.Join(dir, "go.mod")); err != nil { //nolint:gosec // the checkout the user pointed at
 			return "", fmt.Errorf("there is no first-party plugin %q (no plugins/%s in %s)", name, name, root)
 		}
 		return dir, nil
@@ -180,7 +180,7 @@ func firstPartySource(ctx context.Context, name string, o InstallOptions, tmp st
 		args = append(args, "--branch", o.Ref)
 	}
 	args = append(args, repo, clone)
-	cmd := exec.CommandContext(ctx, "git", args...)
+	cmd := exec.CommandContext(ctx, "git", args...) //nolint:gosec // git with the repository the user configured
 	cmd.Stdout, cmd.Stderr = o.Output, o.Output
 	if err := cmd.Run(); err != nil {
 		return "", fmt.Errorf("no Stampede checkout found and cloning %s failed: %w (set %s to a checkout)", repo, err, SourceEnv)
@@ -206,7 +206,7 @@ func checkoutAbove(dir string) string {
 
 // isCheckout reports whether root is the root of Stampede's module.
 func isCheckout(root string) bool {
-	f, err := os.Open(filepath.Join(root, "go.mod"))
+	f, err := os.Open(filepath.Join(root, "go.mod")) //nolint:gosec // the checkout the user pointed at
 	if err != nil {
 		return false
 	}
@@ -221,7 +221,7 @@ func isCheckout(root string) bool {
 }
 
 func goBuild(ctx context.Context, dir, out string, w io.Writer) error {
-	cmd := exec.CommandContext(ctx, "go", "build", "-trimpath", "-o", out, ".")
+	cmd := exec.CommandContext(ctx, "go", "build", "-trimpath", "-o", out, ".") //nolint:gosec // builds the plugin source the user chose
 	cmd.Dir = dir
 	cmd.Stdout, cmd.Stderr = w, w
 	if err := cmd.Run(); err != nil {
@@ -237,7 +237,7 @@ func goInstall(ctx context.Context, pkg, tmp string, w io.Writer) (string, error
 		pkg += "@latest"
 	}
 	gobin := filepath.Join(tmp, "bin")
-	cmd := exec.CommandContext(ctx, "go", "install", "-trimpath", pkg)
+	cmd := exec.CommandContext(ctx, "go", "install", "-trimpath", pkg) //nolint:gosec // installs the Go package the user named
 	cmd.Env = append(os.Environ(), "GOBIN="+gobin)
 	cmd.Stdout, cmd.Stderr = w, w
 	if err := cmd.Run(); err != nil {
@@ -263,11 +263,11 @@ func copyFile(src, dst string) error {
 	}
 	if _, err := io.Copy(out, in); err != nil {
 		out.Close()
-		os.Remove(tmp)
+		_ = os.Remove(tmp)
 		return err
 	}
 	if err := out.Close(); err != nil {
-		os.Remove(tmp)
+		_ = os.Remove(tmp)
 		return err
 	}
 	return os.Rename(tmp, dst)

@@ -133,7 +133,7 @@ func (p *Plugin) launch() (*process, error) {
 	client := plugin.NewClient(&plugin.ClientConfig{
 		HandshakeConfig:  pluginsdk.Handshake,
 		Plugins:          plugin.PluginSet{pluginsdk.PluginKey: &pluginsdk.GRPCPlugin{}},
-		Cmd:              exec.Command(p.Path),
+		Cmd:              exec.Command(p.Path), //nolint:gosec // runs the plugin executable the user installed
 		AllowedProtocols: []plugin.Protocol{plugin.ProtocolGRPC},
 		StartTimeout:     15 * time.Second,
 		Logger:           hclogTo(p.log, name),

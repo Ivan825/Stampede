@@ -133,7 +133,7 @@ func pluginName(e fs.DirEntry) (string, bool) {
 }
 
 func isExecutable(p string) bool {
-	fi, err := os.Stat(p)
+	fi, err := os.Stat(p) //nolint:gosec // plugin paths are where the user put plugins
 	if err != nil || fi.IsDir() {
 		return false
 	}

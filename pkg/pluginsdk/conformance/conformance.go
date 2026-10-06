@@ -84,7 +84,7 @@ const MaxClassLen = 64
 func Build(t testing.TB, dir, name string) string {
 	t.Helper()
 	out := filepath.Join(t.TempDir(), "stampede-plugin-"+name)
-	cmd := exec.Command("go", "build", "-o", out, ".")
+	cmd := exec.Command("go", "build", "-o", out, ".") //nolint:gosec // builds the plugin under test
 	cmd.Dir = dir
 	if b, err := cmd.CombinedOutput(); err != nil {
 		t.Fatalf("go build: %v\n%s", err, b)

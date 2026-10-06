@@ -18,7 +18,7 @@ type session struct {
 	closed    *atomic.Int64
 }
 
-func (s *session) Close() error {
+func (s *session) Close() error { //nolint:unparam // implements io.Closer
 	s.closed.Add(1)
 	return nil
 }

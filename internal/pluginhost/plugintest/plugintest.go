@@ -29,7 +29,7 @@ func EchoDir(t testing.TB) string {
 			return
 		}
 		out := filepath.Join(dir, pluginhost.BinaryName("echo"))
-		cmd := exec.Command("go", "build", "-o", out, "github.com/Ivan825/Stampede/internal/pluginhost/plugintest/echo")
+		cmd := exec.Command("go", "build", "-o", out, "github.com/Ivan825/Stampede/internal/pluginhost/plugintest/echo") //nolint:gosec // builds the test plugin
 		cmd.Stderr = os.Stderr
 		err = cmd.Run()
 		built = dir
