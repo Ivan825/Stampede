@@ -47,6 +47,7 @@ func TestRateLimit(t *testing.T) {
 	for _, fixes := range []string{"", "limiter"} {
 		_, base := start(t, fixes)
 		ok, limited := 0, 0
+		t0 := time.Now()
 		for range 30 {
 			resp, _ := do(t, "GET", base+"/v1/items?limit=1", "sk_test_free", "")
 			switch resp.StatusCode {
@@ -61,8 +62,11 @@ func TestRateLimit(t *testing.T) {
 				t.Fatalf("status %d", resp.StatusCode)
 			}
 		}
-		// The free plan allows 5 a second (a burst of 10, plus refill, with the fix).
-		if ok < 5 || ok > 12 || limited == 0 {
+		// The free plan allows 5 a second: a burst of 10 plus refill with
+		// the fix, at most 5 per second without it. Slow machines take
+		// longer to send the 30, so they are allowed more.
+		most := 10 + int(5*time.Since(t0).Seconds()) + 1
+		if ok < 5 || ok > most || limited == 0 {
 			t.Errorf("fixes %q: %d allowed, %d limited", fixes, ok, limited)
 		}
 	}

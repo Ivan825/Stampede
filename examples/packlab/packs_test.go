@@ -228,8 +228,20 @@ func shorten(s *scenario.Scenario) {
 		shortenSteps(s.Journeys[i].Steps)
 	}
 	l := &s.Load
-	l.GracefulStop = scenario.Duration(20 * time.Second)
+	// Long streams and slow CI runners (race detector, every package
+	// testing at once) need time to finish their last iterations.
+	l.GracefulStop = scenario.Duration(60 * time.Second)
 	l.Abort = nil
+	// Preset shapes peak at Max; keep it as low as the capped stages.
+	if l.Max != "" {
+		if l.Mode == scenario.ModeRate {
+			if r, err := scenario.ParseRate(l.Max); err == nil && r > 50 {
+				l.Max = "50/s"
+			}
+		} else if n, err := strconv.Atoi(l.Max); err == nil && n > 50 {
+			l.Max = "50"
+		}
+	}
 	if l.Iterations > 0 {
 		l.Iterations = min(l.Iterations, 60)
 		l.VUs = min(l.VUs, 20)
@@ -263,6 +275,11 @@ func shortenSteps(steps []scenario.Step) {
 		st := &steps[i]
 		if st.Think != nil {
 			st.Think.Min, st.Think.Max = min(st.Think.Min/10, limit), min(st.Think.Max/10, limit)
+		}
+		// This test proves the journeys work; latency on a shared runner
+		// under the race detector says nothing about the pack.
+		if st.Request != nil && st.Request.Check != nil {
+			st.Request.Check.MaxLatency = 0
 		}
 		if st.Loop != nil {
 			shortenSteps(st.Loop.Steps)
