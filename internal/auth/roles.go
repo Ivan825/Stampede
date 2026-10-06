@@ -41,6 +41,7 @@ const (
 	PermView          = RoleViewer
 	PermRun           = RoleRunner // start, stop and kill runs
 	PermEditScenarios = RoleEditor // scenarios, targets, secrets
+	PermEditSchedules = RoleEditor // create, change and delete schedules
 	PermManageUsers   = RoleAdmin  // users, audit log
 	PermManageOwners  = RoleOwner  // grant or remove the owner role
 )

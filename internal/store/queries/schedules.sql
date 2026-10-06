@@ -35,9 +35,10 @@ WHERE id = $1;
 DELETE FROM schedules WHERE id = $1;
 
 -- name: ListDueSchedules :many
-SELECT id, cron, timezone, next_run_at FROM schedules
-WHERE enabled AND next_run_at <= @now::timestamptz
-ORDER BY next_run_at
+SELECT sc.id, sc.cron, sc.timezone, sc.next_run_at, p.org_id
+FROM schedules sc JOIN projects p ON p.id = sc.project_id
+WHERE sc.enabled AND sc.next_run_at <= @now::timestamptz
+ORDER BY sc.next_run_at
 LIMIT 100;
 
 -- name: ClaimSchedule :one

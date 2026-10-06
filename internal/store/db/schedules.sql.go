@@ -175,9 +175,10 @@ func (q *Queries) GetSchedule(ctx context.Context, arg GetScheduleParams) (GetSc
 }
 
 const listDueSchedules = `-- name: ListDueSchedules :many
-SELECT id, cron, timezone, next_run_at FROM schedules
-WHERE enabled AND next_run_at <= $1::timestamptz
-ORDER BY next_run_at
+SELECT sc.id, sc.cron, sc.timezone, sc.next_run_at, p.org_id
+FROM schedules sc JOIN projects p ON p.id = sc.project_id
+WHERE sc.enabled AND sc.next_run_at <= $1::timestamptz
+ORDER BY sc.next_run_at
 LIMIT 100
 `
 
@@ -186,6 +187,7 @@ type ListDueSchedulesRow struct {
 	Cron      string
 	Timezone  string
 	NextRunAt *time.Time
+	OrgID     uuid.UUID
 }
 
 func (q *Queries) ListDueSchedules(ctx context.Context, now time.Time) ([]ListDueSchedulesRow, error) {
@@ -202,6 +204,7 @@ func (q *Queries) ListDueSchedules(ctx context.Context, now time.Time) ([]ListDu
 			&i.Cron,
 			&i.Timezone,
 			&i.NextRunAt,
+			&i.OrgID,
 		); err != nil {
 			return nil, err
 		}
