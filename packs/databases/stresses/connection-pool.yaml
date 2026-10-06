@@ -1,0 +1,45 @@
+# A service with a pool of 20 connections serving more and more users at
+# once. Users share the pool (pool: shared), so once every connection is
+# busy they queue for one, and that wait is part of each query's latency:
+# the database looks idle while the service gets slow. Raise maxConns (and
+# the database's max_connections) to see where the wait moves.
+apiVersion: stampede.dev/v1
+kind: Scenario
+metadata:
+  name: databases-connection-pool
+  tags: [pack:databases, ramp]
+journeys:
+  - name: service
+    steps:
+      - name: order history
+        plugin: sql.query
+        with:
+          driver: postgres
+          dsn: ${env.SQL_DSN}
+          sql: SELECT id, product_id, qty, total, created_at FROM orders WHERE customer_id = $1 ORDER BY created_at DESC LIMIT 20
+          args: ["${rand(1, 2000)}"]
+          rows: 20
+          pool: shared
+          maxConns: 20
+      - name: product
+        plugin: sql.query
+        with:
+          driver: postgres
+          dsn: ${env.SQL_DSN}
+          sql: SELECT id, name, price, stock FROM products WHERE id = $1
+          args: ["${rand(1, 1000)}"]
+          pool: shared
+          maxConns: 20
+        check: { json: { "$.rowCount": 1 } }
+      - think: 50ms..200ms
+load:
+  mode: vus
+  stages:
+    - { duration: 1m, target: "20" }
+    - { duration: 1m, target: "100" }
+    - { duration: 1m, target: "300" }
+    - { duration: 2m, target: "300" }
+targets:
+  - service/product.p95 < 20ms
+  - service/order history.p95 < 100ms
+  - errors < 1%

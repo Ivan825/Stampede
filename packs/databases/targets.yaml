@@ -1,0 +1,10 @@
+# Default targets for a database and its cache. Point reads and cache
+# hits should take a few milliseconds; a customer's order history is the
+# query a missing index hurts first; checkouts are writes that also wait
+# for any lock they share.
+targets:
+  - shopper/product.p95 < 10ms
+  - shopper/order history.p95 < 50ms
+  - checkout/place order.p95 < 50ms
+  - shopper/cached product.p99 < 5ms
+  - errors < 1%

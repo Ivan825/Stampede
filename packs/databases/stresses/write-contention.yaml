@@ -1,0 +1,45 @@
+# Many checkouts at the same moment. Each one inserts an order and takes
+# stock from one of a handful of best sellers, so writes meet on the same
+# rows (and on any row a trigger updates for every order) and wait for
+# each other's locks. Watch the write latency climb with concurrency while
+# reads stay quick.
+apiVersion: stampede.dev/v1
+kind: Scenario
+metadata:
+  name: databases-write-contention
+  tags: [pack:databases, contention]
+journeys:
+  - name: checkout
+    steps:
+      - name: place order
+        plugin: sql.exec
+        with:
+          driver: postgres
+          dsn: ${env.SQL_DSN}
+          sql: INSERT INTO orders (customer_id, product_id, qty, total) VALUES ($1, $2, 1, $3)
+          args: ["${rand(1, 2000)}", "${rand(1, 5)}", "${rand(5, 500)}"]
+        check: { json: { "$.rowsAffected": 1 } }
+      - name: take stock             # five best sellers: hot rows
+        plugin: sql.exec
+        with:
+          driver: postgres
+          dsn: ${env.SQL_DSN}
+          sql: UPDATE products SET stock = stock - 1 WHERE id = $1 AND stock > 0
+          args: ["${rand(1, 5)}"]
+        check: { json: { "$.rowsAffected": 1 } }
+      - name: count sale
+        plugin: redis.command
+        with:
+          addr: ${env.REDIS_ADDR}
+          command: [INCR, "stats:orders"]
+      - think: 10ms..50ms
+load:
+  mode: vus
+  stages:
+    - { duration: 30s, target: "10" }
+    - { duration: 1m, target: "50" }
+    - { duration: 2m, target: "50" }
+targets:
+  - checkout/place order.p95 < 100ms
+  - checkout/take stock.p95 < 100ms
+  - errors < 1%

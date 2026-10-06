@@ -14,11 +14,11 @@ packs:
   - { name: edtech, title: "EdTech, exam platforms", status: planned, signature: "Everyone starts at 10:00; deadline submission rush", drivers: [http, websocket] }
   - { name: government, title: "Government, results portals", status: planned, signature: "Results-day and deadline-day surges", drivers: [http] }
   - { name: delivery, title: "Food delivery, ride hailing", status: planned, signature: "Location updates; matching; live tracking", drivers: [http, websocket] }
-  - { name: gaming, title: "Gaming backends", status: planned, signature: "Matchmaking, leaderboards, session servers", drivers: [websocket, udp] }
-  - { name: iot, title: "IoT platforms", status: planned, signature: "Huge numbers of connected devices; telemetry ingest", drivers: [mqtt] }
+  - { name: gaming, title: "Gaming backends", status: shipped, signature: "Matchmaking, leaderboards, session servers", drivers: [websocket, udp] }
+  - { name: iot, title: "IoT platforms", status: shipped, signature: "Huge numbers of connected devices; telemetry ingest", drivers: [mqtt] }
   - { name: public-apis, title: "Public APIs, developer platforms", status: shipped, signature: "Rate limits, API keys, webhook delivery", drivers: [http] }
   - { name: identity, title: "Login and identity", status: shipped, signature: "Login storm; token refresh waves", drivers: [http] }
   - { name: mobile-backends, title: "Mobile app backends", status: planned, signature: "Matching category, driven at the API", drivers: [http, graphql, grpc] }
   - { name: serverless, title: "Serverless and edge", status: planned, signature: "Cold starts; concurrency limits", drivers: [http] }
-  - { name: event-pipelines, title: "Event pipelines, queues", status: planned, signature: "Ingest rate; consumer lag; backlog recovery", drivers: [kafka] }
-  - { name: databases, title: "Databases, caches", status: planned, signature: "Query mix; connection-pool exhaustion", drivers: [sql, redis] }
+  - { name: event-pipelines, title: "Event pipelines, queues", status: shipped, signature: "Ingest rate; consumer lag; backlog recovery", drivers: [kafka] }
+  - { name: databases, title: "Databases, caches", status: shipped, signature: "Query mix; connection-pool exhaustion", drivers: [sql, redis] }

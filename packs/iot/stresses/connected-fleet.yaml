@@ -1,0 +1,49 @@
+# Thousands of devices connected at once, each reporting every 10 to 20
+# seconds like a battery-powered sensor. Finds connection, memory and
+# file-descriptor limits in the broker; the ack time should not grow with
+# the number of devices. Past about 10,000 connections per worker, raise
+# `ulimit -n` and spread the load over workers (see docs/protocols.md).
+apiVersion: stampede.dev/v1
+kind: Scenario
+metadata:
+  name: iot-connected-fleet
+  tags: [pack:iot, soak]
+vars:
+  password: iotlab-pass
+journeys:
+  - name: sensor
+    steps:
+      - name: connect
+        plugin: mqtt.connect
+        with:
+          broker: ${env.MQTT_BROKER}
+          clientId: dev-${vu}
+          username: dev-${vu}
+          password: ${vars.password}
+          keepAlive: 60s
+        timeout: 10s
+      - name: listen
+        plugin: mqtt.subscribe
+        with: { topic: "devices/dev-${vu}/acks", qos: 1 }
+      - think: 10s..20s
+      - name: report
+        plugin: mqtt.publish
+        with:
+          topic: devices/dev-${vu}/telemetry
+          payload: '{"seq": ${iter}, "temp": ${rand(15, 30)}}'
+          qos: 1
+      - name: stored
+        plugin: mqtt.expect
+        with:
+          topic: devices/dev-${vu}/acks
+          json: { "$.seq": "${iter}" }
+        timeout: 10s
+load:
+  mode: vus
+  stages:
+    - { duration: 2m, target: "2000" }
+    - { duration: 5m, target: "2000" }
+targets:
+  - sensor/stored.p95 < 500ms
+  - sensor/connect.p99 < 2s
+  - errors < 1%

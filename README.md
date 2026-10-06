@@ -143,12 +143,16 @@ checkout", always confirmed before it runs.
 
 **Product packs.** `stampede init` probes a target (its OpenAPI document,
 OpenID Connect discovery, home page and headers) and installs the matching
-pack. Seven packs ship: e-commerce (tested against ShopLab), and SaaS with
+pack. Eleven packs ship: e-commerce (tested against ShopLab), and SaaS with
 GraphQL, AI and LLM apps over SSE, chat over WebSocket, ticketing with a
-waiting room, login and identity, and public APIs with rate limits, each
-tested on every push against a small in-memory reference app with planted
-bottlenecks ([PackLab](examples/packlab/README.md)). The other 13 product types
-are catalogued as planned ([packs](docs/guides/packs.md)).
+waiting room, login and identity, public APIs with rate limits, IoT over
+MQTT, event pipelines on Kafka, databases and caches (PostgreSQL and
+Redis) and game backends (WebSocket matchmaking, a UDP game server), each
+tested on every push against a small reference app with planted
+bottlenecks ([PackLab](examples/packlab/README.md)); the last four use the
+protocol plugins, against an in-process broker, Kafka cluster, Redis or
+UDP server, and PostgreSQL in a service container. The other 9 product
+types are catalogued as planned ([packs](docs/guides/packs.md)).
 
 **AI journey generation** (optional, bring your own key, never during
 load). Anthropic, OpenAI, Gemini, Ollama or any OpenAI-compatible server
@@ -170,9 +174,8 @@ per server and per target; audit log ([safety](docs/safety.md)).
 
 ## Planned for v1.0
 
-The other 13 product packs (including the
-IoT, event-pipeline, database and gaming packs that use the plugins), side-by-side benchmarks with k6 and
-wrk2, and the website.
+The other 9 product packs, side-by-side benchmarks with k6 and wrk2, and
+the website.
 
 ## Deploy
 

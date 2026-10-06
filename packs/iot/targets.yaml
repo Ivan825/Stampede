@@ -1,0 +1,9 @@
+# Default targets for IoT platforms. "stored" is the time from a device
+# publishing a reading to the platform acknowledging it was stored, the
+# ingest delay a dashboard or alert sees; connecting must stay quick even
+# when the whole fleet reconnects.
+targets:
+  - device/stored.p95 < 500ms
+  - device/report.p99 < 200ms
+  - device/connect.p99 < 1s
+  - errors < 1%

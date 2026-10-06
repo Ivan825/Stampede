@@ -1,0 +1,27 @@
+apiVersion: stampede.dev/v1
+kind: Pack
+name: databases
+title: Databases and caches
+description: >
+  Straight at the data tier, without the application in front: a query
+  mix of point reads, order history, checkouts and a heavy report on
+  PostgreSQL next to cache reads and counters on Redis, a connection-pool
+  squeeze and concurrent writes that contend for the same rows. Needs the
+  sql and redis plugins (stampede plugin install sql redis). Built for a
+  schema like DBLab's (customers, products, orders); replace the SQL and
+  keys with your own.
+status: shipped
+protocols: [sql, redis]
+referenceApp: examples/packlab/dblab
+# A database has no HTTP side for stampede init to probe.
+detect:
+  paths: []
+  openapiTags: []
+  htmlMeta: []
+  headers: {}
+variables:
+  SQL_DSN: { description: "PostgreSQL connection string, such as postgres://app:secret@db:5432/shop?sslmode=disable" }
+  REDIS_ADDR: { description: "Redis address: host:port or redis://user:pass@host:6379/0" }
+targets:
+  - shopper/order history.p95 < 50ms
+  - errors < 1%

@@ -1,0 +1,93 @@
+# The everyday mix for an IoT platform: most of the traffic is devices
+# that stay connected and report readings, each acknowledged once it is
+# stored; some devices fetch their desired state, and operators change
+# device settings and read the fleet over HTTP.
+apiVersion: stampede.dev/v1
+kind: Scenario
+metadata:
+  name: iot-device-mix
+  description: Connected devices report telemetry and sync their shadow over MQTT; operators work over HTTP.
+  tags: [pack:iot]
+target:
+  baseURL: ${env.TARGET_URL}
+vars:
+  # IoTLab's fleet password (devices are dev-0 to dev-19999). For your
+  # fleet, use your devices' own credentials.
+  password: iotlab-pass
+journeys:
+  - name: device
+    weight: 70
+    steps:
+      - name: connect                 # skipped while the device is still connected
+        plugin: mqtt.connect
+        with:
+          broker: ${env.MQTT_BROKER}
+          clientId: dev-${vu}
+          username: dev-${vu}
+          password: ${vars.password}
+          keepAlive: 30s
+      - name: listen                  # skipped once subscribed
+        plugin: mqtt.subscribe
+        with: { topic: "devices/dev-${vu}/acks", qos: 1 }
+      - name: report
+        plugin: mqtt.publish
+        with:
+          topic: devices/dev-${vu}/telemetry
+          payload: '{"seq": ${iter}, "temp": ${rand(15, 30)}, "battery": ${rand(20, 100)}}'
+          qos: 1                      # latency includes the broker's PUBACK
+      - name: stored                  # publish -> the platform's ack once the reading is stored
+        plugin: mqtt.expect
+        with:
+          topic: devices/dev-${vu}/acks
+          json: { "$.seq": "${iter}" }
+        timeout: 10s
+      - think: 2s..5s
+  - name: shadow-sync
+    weight: 15
+    steps:
+      - name: connect
+        plugin: mqtt.connect
+        with:
+          broker: ${env.MQTT_BROKER}
+          clientId: dev-${vu}
+          username: dev-${vu}
+          password: ${vars.password}
+          keepAlive: 30s
+      - name: listen
+        plugin: mqtt.subscribe
+        with: { topic: "devices/dev-${vu}/shadow", qos: 1 }
+      - name: request shadow
+        plugin: mqtt.publish
+        with:
+          topic: devices/dev-${vu}/shadow/get
+          payload: '{"token": "${vu}-${iter}"}'
+          qos: 1
+      - name: shadow                  # request -> the desired state, matched by its token
+        plugin: mqtt.expect
+        with:
+          topic: devices/dev-${vu}/shadow
+          json: { "$.token": "${vu}-${iter}", "$.version": exists }
+        timeout: 10s
+      - think: 2s..5s
+  - name: operator
+    weight: 15
+    steps:
+      - name: fleet
+        get: /api/fleet
+        check: { status: 200, json: { "$.online": exists } }
+      - think: 1s..3s
+      - name: change setting
+        put: /api/devices/dev-${rand(0, 999)}/shadow
+        json: { desired: { reportEvery: "${rand(10, 60)}", firmware: "2.4.1" } }
+        check: { status: 200, json: { "$.version": exists } }
+      - name: device telemetry
+        get: /api/devices/dev-${rand(0, 999)}/telemetry?limit=20
+        check: { status: 200, json: { "$.readings": exists } }
+load:
+  mode: rate
+  rate: 10/s
+  duration: 5m
+targets:
+  - device/stored.p95 < 500ms
+  - shadow-sync/shadow.p95 < 300ms
+  - errors < 1%

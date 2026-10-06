@@ -1,0 +1,52 @@
+# A season launch, a new map or a tournament start: everyone queues at
+# once. Squads of four take longer to fill than duels, so the queue grows;
+# watch the time to a match as it does, and whether bots start filling
+# matches that real players should have.
+apiVersion: stampede.dev/v1
+kind: Scenario
+metadata:
+  name: gaming-matchmaking-rush
+  tags: [pack:gaming, spike]
+target:
+  baseURL: ${env.TARGET_URL}
+journeys:
+  - name: rush
+    steps:
+      - name: sign in
+        post: /api/login
+        json: { player: "rush-${vu}-${iter}" }
+        check: { status: 200 }
+        extract: { token: "$.token" }
+      - name: matchmaking
+        ws: /api/matchmaking
+        headers: { Authorization: "Bearer ${token}" }
+        timeout: 10s
+        steps:
+          - send: { type: queue, mode: squad }
+          - name: queued
+            expect: { json: { "$.type": queued }, timeout: 10s }
+          - name: matched
+            expect: { json: { "$.type": match }, timeout: 60s }
+            extract: { match: "$.match", server: "$.server", ticket: "$.ticket" }
+      - name: join
+        plugin: udp.send
+        with:
+          addr: ${server}
+          payload: "join ${match} ${ticket}"
+          reply: true
+          match: "^joined ${match} "
+        timeout: 2s
+      - name: leave
+        plugin: udp.send
+        with: { addr: "${server}", payload: "leave ${match}", reply: true, match: "^bye ${match}" }
+        timeout: 2s
+load:
+  shape: spike
+  mode: rate
+  start: 10/s
+  max: 300/s
+  duration: 3m
+targets:
+  - rush/matched.p95 < 10s
+  - rush/queued.p95 < 300ms
+  - errors < 1%

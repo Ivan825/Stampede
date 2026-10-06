@@ -1,0 +1,52 @@
+# A broker restart, a load balancer failover or a cellular outage drops
+# the fleet, and every device reconnects at once: connect, subscribe,
+# report what it missed and go quiet again. Sign-in and presence tracking
+# take the whole load together.
+apiVersion: stampede.dev/v1
+kind: Scenario
+metadata:
+  name: iot-reconnect-storm
+  tags: [pack:iot, spike]
+vars:
+  password: iotlab-pass
+journeys:
+  - name: reconnect
+    steps:
+      - name: connect
+        plugin: mqtt.connect
+        with:
+          broker: ${env.MQTT_BROKER}
+          clientId: dev-${vu}
+          username: dev-${vu}
+          password: ${vars.password}
+          fresh: true                 # a new connection every time
+        timeout: 10s
+      - name: listen
+        plugin: mqtt.subscribe
+        with: { topic: "devices/dev-${vu}/acks", qos: 1 }
+      - name: catch up
+        plugin: mqtt.publish
+        with:
+          topic: devices/dev-${vu}/telemetry
+          payload: '{"seq": ${iter}, "buffered": ${rand(1, 20)}}'
+          qos: 1
+      - name: stored
+        plugin: mqtt.expect
+        with:
+          topic: devices/dev-${vu}/acks
+          json: { "$.seq": "${iter}" }
+        timeout: 10s
+      - name: disconnect
+        plugin: mqtt.disconnect
+        with: {}
+      - think: 1s..3s
+load:
+  shape: spike
+  mode: rate
+  start: 10/s
+  max: 300/s
+  duration: 3m
+targets:
+  - reconnect/connect.p99 < 1s
+  - reconnect/stored.p95 < 500ms
+  - errors < 1%

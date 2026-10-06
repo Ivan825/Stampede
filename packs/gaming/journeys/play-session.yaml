@@ -1,0 +1,77 @@
+# The everyday mix for a game backend: most players sign in, queue for a
+# match, play it on the game server over UDP and post their score; the rest
+# browse the leaderboard.
+apiVersion: stampede.dev/v1
+kind: Scenario
+metadata:
+  name: gaming-play-session
+  description: Sign in, matchmaking over WebSocket, a short match over UDP, a score; leaderboard reads.
+  tags: [pack:gaming]
+target:
+  baseURL: ${env.TARGET_URL}
+journeys:
+  - name: match
+    weight: 70
+    steps:
+      - name: sign in
+        post: /api/login
+        json: { player: "player-${vu}" }
+        check: { status: 200 }
+        extract: { token: "$.token" }
+      - name: matchmaking
+        ws: /api/matchmaking
+        headers: { Authorization: "Bearer ${token}" }
+        timeout: 5s
+        steps:
+          - send: { type: queue, mode: duel }
+          - name: queued
+            expect: { json: { "$.type": queued }, timeout: 5s }
+          - name: matched               # time in the queue
+            expect: { json: { "$.type": match }, timeout: 30s }
+            extract: { match: "$.match", server: "$.server", ticket: "$.ticket" }
+      - name: join                      # the game server matchmaking named
+        plugin: udp.send
+        with:
+          addr: ${server}
+          payload: "join ${match} ${ticket}"
+          reply: true
+          match: "^joined ${match} "
+        timeout: 2s
+      - loop: 20
+        steps:
+          - name: input                 # an input and its answer on the next tick
+            plugin: udp.send
+            with:
+              addr: ${server}
+              payload: "input ${match} ${iter} move ${rand(0, 359)}"
+              reply: true
+              match: "^state ${match} "
+            timeout: 1s
+          - think: 50ms..100ms
+      - name: leave
+        plugin: udp.send
+        with: { addr: "${server}", payload: "leave ${match}", reply: true, match: "^bye ${match}" }
+        timeout: 2s
+      - name: submit score
+        post: /api/scores
+        headers: { Authorization: "Bearer ${token}" }
+        json: { score: "${rand(0, 100000)}" }
+        check: { status: 200, json: { "$.rank": exists } }
+  - name: leaderboard
+    weight: 30
+    steps:
+      - name: top
+        get: /api/leaderboard?limit=10
+        check: { status: 200, json: { "$.entries[0].player": exists } }
+      - think: 1s..3s
+      - name: player rank
+        get: /api/leaderboard/p${rand(1, 10000)}
+        check: { status: 200, json: { "$.rank": exists } }
+load:
+  mode: rate
+  rate: 5/s
+  duration: 5m
+targets:
+  - match/matched.p95 < 5s
+  - match/input.p95 < 100ms
+  - errors < 1%

@@ -1,0 +1,106 @@
+# The everyday query mix of a shop's data tier, run straight against the
+# database and the cache: product and history reads, checkouts that write
+# an order and update stock, a heavy report, and session reads and writes
+# in Redis. Each virtual user holds its own connections, like a fleet of
+# application instances with a pool of one.
+apiVersion: stampede.dev/v1
+kind: Scenario
+metadata:
+  name: databases-query-mix
+  description: Reads, writes and a report on PostgreSQL; cache, ranking and session commands on Redis.
+  tags: [pack:databases]
+journeys:
+  - name: shopper
+    weight: 50
+    steps:
+      - name: cached product
+        plugin: redis.command
+        with:
+          addr: ${env.REDIS_ADDR}
+          command: [HGET, "product:${rand(1, 1000)}", price]
+        check: { json: { "$.value": exists } }
+      - name: product
+        plugin: sql.query
+        with:
+          driver: postgres
+          dsn: ${env.SQL_DSN}
+          sql: SELECT id, name, price, stock FROM products WHERE id = $1
+          args: ["${rand(1, 1000)}"]
+        check: { json: { "$.rowCount": 1 } }
+      - think: 200ms..1s
+      - name: order history          # needs an index on orders (customer_id)
+        plugin: sql.query
+        with:
+          driver: postgres
+          dsn: ${env.SQL_DSN}
+          sql: SELECT id, product_id, qty, total, created_at FROM orders WHERE customer_id = $1 ORDER BY created_at DESC LIMIT 20
+          args: ["${rand(1, 2000)}"]
+          rows: 20
+  - name: checkout
+    weight: 25
+    steps:
+      - name: place order
+        plugin: sql.exec
+        with:
+          driver: postgres
+          dsn: ${env.SQL_DSN}
+          sql: INSERT INTO orders (customer_id, product_id, qty, total) VALUES ($1, $2, 1, $3)
+          args: ["${rand(1, 2000)}", "${rand(1, 1000)}", "${rand(5, 500)}"]
+        check: { json: { "$.rowsAffected": 1 } }
+      - name: take stock
+        plugin: sql.exec
+        with:
+          driver: postgres
+          dsn: ${env.SQL_DSN}
+          sql: UPDATE products SET stock = stock - 1 WHERE id = $1 AND stock > 0
+          args: ["${rand(1, 1000)}"]
+        check: { json: { "$.rowsAffected": 1 } }
+      - name: count sale
+        plugin: redis.command
+        with:
+          addr: ${env.REDIS_ADDR}
+          pipeline:
+            - [ZINCRBY, popular, 1, "${rand(1, 1000)}"]
+            - [INCR, "stats:orders"]
+  - name: report
+    weight: 10
+    steps:
+      - name: revenue by region      # a day of orders joined to customers
+        plugin: sql.query
+        with:
+          driver: postgres
+          dsn: ${env.SQL_DSN}
+          sql: >-
+            SELECT c.region, count(*) AS orders, sum(o.total) AS revenue
+            FROM orders o JOIN customers c ON c.id = o.customer_id
+            WHERE o.created_at > now() - interval '1 day'
+            GROUP BY c.region ORDER BY revenue DESC
+          rows: 10
+        check: { json: { "$.rowCount": exists } }
+      - name: top products
+        plugin: redis.command
+        with:
+          addr: ${env.REDIS_ADDR}
+          command: [ZREVRANGE, popular, 0, 9, WITHSCORES]
+  - name: session
+    weight: 15
+    steps:
+      - name: save session
+        plugin: redis.command
+        with:
+          addr: ${env.REDIS_ADDR}
+          command: [SET, "session:${vu}", '{"user": ${vu}, "cart": []}', EX, 1800]
+      - name: read session
+        plugin: redis.command
+        with:
+          addr: ${env.REDIS_ADDR}
+          command: [GET, "session:${vu}"]
+        check: { json: { "$.value": exists } }
+load:
+  mode: rate
+  rate: 20/s
+  duration: 5m
+targets:
+  - shopper/order history.p95 < 50ms
+  - checkout/place order.p95 < 50ms
+  - errors < 1%

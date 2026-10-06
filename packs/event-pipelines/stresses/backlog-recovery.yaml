@@ -1,0 +1,58 @@
+# Normal traffic, then three times as much for three minutes (a sale, a
+# replay, a partner catching up), then normal again for five. The burst
+# leaves the consumers behind: how large does the backlog get, and how
+# long after the burst does the pipeline catch up?
+# The tracers' "enriched" age rises during the burst and must come back
+# down once it ends; the lag journey reads offset lag from the admin API.
+apiVersion: stampede.dev/v1
+kind: Scenario
+metadata:
+  name: event-pipelines-backlog-recovery
+  tags: [pack:event-pipelines, recovery]
+target:
+  baseURL: ${env.TARGET_URL}
+journeys:
+  - name: firehose
+    weight: 85
+    steps:
+      - name: publish
+        plugin: kafka.produce
+        with:
+          brokers: ["${env.KAFKA_BROKERS}"]
+          topic: orders
+          key: "order-${vu}-${iter}"
+          value: '{"order": "${vu}-${iter}", "customer": ${rand(1, 10000)}, "total": ${rand(5, 500)}}'
+  - name: tracer
+    weight: 10
+    steps:
+      - name: publish
+        plugin: kafka.produce
+        with:
+          brokers: ["${env.KAFKA_BROKERS}"]
+          topic: orders
+          key: "trace-${vu}-${iter}"
+          value: '{"order": "trace-${vu}-${iter}", "customer": ${rand(1, 10000)}, "total": 1}'
+        extract: { partition: "$.partition" }
+      - name: enriched
+        plugin: kafka.consume
+        with:
+          brokers: ["${env.KAFKA_BROKERS}"]
+          topic: orders.enriched
+          partition: ${partition}
+          from: start
+          key: "trace-${vu}-${iter}"
+          latency: age
+        timeout: 2m
+  - name: lag
+    weight: 5
+    steps:
+      - name: consumer lag
+        get: /api/consumer-groups/enricher/lag
+        check: { status: 200, json: { "$.lag": exists } }
+load:
+  shape: recovery
+  mode: rate
+  start: 100/s
+targets:
+  - firehose/publish.p99 < 100ms
+  - errors < 1%

@@ -5,19 +5,24 @@ import (
 	"context"
 	"io"
 	"log/slog"
+	"maps"
 	"net/http/httptest"
 	"net/url"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"strconv"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
 	"github.com/Ivan825/Stampede/examples/packlab/labkit"
 	"github.com/Ivan825/Stampede/internal/cli"
 	"github.com/Ivan825/Stampede/internal/pack"
+	"github.com/Ivan825/Stampede/internal/pluginhost"
 	"github.com/Ivan825/Stampede/internal/runner"
 	"github.com/Ivan825/Stampede/internal/safety"
 	"github.com/Ivan825/Stampede/internal/scenario"
@@ -30,6 +35,11 @@ import (
 //  2. stampede pack test dry-runs every journey once without an error;
 //  3. every journey and stress file runs under real load (shortened) with
 //     no failed request and no failed iteration.
+//
+// Packs whose scenarios use protocol plugins (mqtt, kafka, redis, sql,
+// udp) run with the plugins built from plugins/ in this checkout. DBLab
+// needs a PostgreSQL database: STAMPEDE_TEST_POSTGRES_DSN, as for the SQL
+// plugin's tests; without it the databases pack is skipped.
 func TestPacksAgainstReferenceApps(t *testing.T) {
 	shipped, err := pack.Shipped()
 	if err != nil {
@@ -38,15 +48,54 @@ func TestPacksAgainstReferenceApps(t *testing.T) {
 	for _, name := range names() {
 		p := products[name]
 		t.Run(name, func(t *testing.T) {
-			srv := httptest.NewServer(p.new(labkit.Config{Fast: true}))
+			cfg := labkit.Config{Fast: true, Listen: "127.0.0.1:0", Postgres: os.Getenv("STAMPEDE_TEST_POSTGRES_DSN")}
+			if p.postgres && cfg.Postgres == "" {
+				t.Skip("set STAMPEDE_TEST_POSTGRES_DSN to a PostgreSQL database to test this pack")
+			}
+			if len(p.plugins) > 0 {
+				t.Setenv(pluginhost.DirEnv, pluginDir(t, p.plugins))
+			}
+			app, err := p.start(cfg)
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer app.Close()
+			srv := httptest.NewServer(app.Handler)
 			defer srv.Close()
 
-			t.Run("detect", func(t *testing.T) { checkDetect(t, srv.URL, p.pack, shipped) })
+			t.Run("detect", func(t *testing.T) {
+				pk, err := pack.Load(p.pack)
+				if err != nil {
+					t.Fatal(err)
+				}
+				if !detectable(pk) {
+					t.Skip("the pack has nothing stampede init can detect over HTTP")
+				}
+				checkDetect(t, srv.URL, p.pack, shipped)
+				if len(app.Env) == 0 {
+					return
+				}
+				// Without the broker's address init installs the pack and
+				// says what else it needs instead of failing the dry run.
+				out, err := stampede(t, "", "init", "--yes", "--target", srv.URL, "--dir", t.TempDir())
+				if err != nil {
+					t.Fatalf("init: %v\n%s", err, out)
+				}
+				for k := range app.Env {
+					if !strings.Contains(out, "  "+k+": ") {
+						t.Fatalf("init did not ask for %s:\n%s", k, out)
+					}
+				}
+			})
 			t.Run("pack test", func(t *testing.T) {
 				// The pack's own files with think times cut to 10ms, so
 				// the dry run takes seconds; the CI packs job runs the
 				// unmodified pack against the packlab binary.
-				out, err := stampede(t, "", "pack", "test", quickCopy(t, p.pack), "--target", srv.URL)
+				args := []string{"pack", "test", quickCopy(t, p.pack), "--target", srv.URL}
+				for _, k := range slices.Sorted(maps.Keys(app.Env)) {
+					args = append(args, "-e", k+"="+app.Env[k])
+				}
+				out, err := stampede(t, "", args...)
 				if err != nil {
 					t.Fatalf("pack test: %v\n%s", err, out)
 				}
@@ -54,9 +103,57 @@ func TestPacksAgainstReferenceApps(t *testing.T) {
 					t.Fatalf("unexpected output:\n%s", out)
 				}
 			})
-			t.Run("load", func(t *testing.T) { checkLoad(t, srv.URL, p.pack) })
+			t.Run("load", func(t *testing.T) { checkLoad(t, srv.URL, p.pack, app.Env) })
 		})
 	}
+}
+
+// detectable reports whether a pack gives stampede init anything to look
+// for. A database has no HTTP side to probe.
+func detectable(p *pack.Pack) bool {
+	d := p.Detect
+	return len(d.Paths)+len(d.OpenAPITags)+len(d.HTMLMeta)+len(d.Headers) > 0
+}
+
+var (
+	pluginMu    sync.Mutex
+	pluginsDir  string
+	pluginBuilt = map[string]bool{}
+)
+
+// pluginDir builds the named plugins from plugins/<name> (each its own Go
+// module) into one directory, once per test binary, and returns it.
+func pluginDir(t *testing.T, names []string) string {
+	t.Helper()
+	pluginMu.Lock()
+	defer pluginMu.Unlock()
+	if pluginsDir == "" {
+		d, err := os.MkdirTemp("", "packlab-plugins-")
+		if err != nil {
+			t.Fatal(err)
+		}
+		pluginsDir = d
+	}
+	for _, n := range names {
+		if pluginBuilt[n] {
+			continue
+		}
+		cmd := exec.Command("go", "build", "-o", filepath.Join(pluginsDir, pluginhost.BinaryName(n)), ".") //nolint:gosec // builds a first-party plugin
+		cmd.Dir = filepath.Join("..", "..", "plugins", n)
+		if out, err := cmd.CombinedOutput(); err != nil {
+			t.Fatalf("building the %s plugin: %v\n%s", n, err, out)
+		}
+		pluginBuilt[n] = true
+	}
+	return pluginsDir
+}
+
+func TestMain(m *testing.M) {
+	code := m.Run()
+	if pluginsDir != "" {
+		_ = os.RemoveAll(pluginsDir)
+	}
+	os.Exit(code)
 }
 
 // Every product the catalogue lists as shipped (apart from e-commerce,
@@ -162,7 +259,7 @@ func stampede(t *testing.T, stdin string, args ...string) (string, error) {
 // checkLoad runs every scenario of the pack under load, shortened so the
 // test stays quick: think times are capped, durations are cut to a couple
 // of seconds and user counts are capped.
-func checkLoad(t *testing.T, target, name string) {
+func checkLoad(t *testing.T, target, name string, appEnv map[string]string) {
 	p, err := pack.Load(name)
 	if err != nil {
 		t.Fatal(err)
@@ -190,6 +287,7 @@ func checkLoad(t *testing.T, target, name string) {
 			ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
 			defer cancel()
 			env := map[string]string{"TARGET_URL": target}
+			maps.Copy(env, appEnv)
 			rep, err := runner.Run(ctx, runner.Options{
 				Scenario: s, Env: env, Secrets: env, AllowHost: policy.Allow,
 				Logger: slog.New(slog.NewTextHandler(io.Discard, nil)),

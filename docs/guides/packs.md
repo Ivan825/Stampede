@@ -13,8 +13,8 @@ stampede pack test ecommerce --target http://localhost:8090
 
 ## Shipped packs
 
-Seven packs are shipped. A pack is shipped only when its journeys and
-stresses run without errors against a reference app in CI; the other 13
+Eleven packs are shipped. A pack is shipped only when its journeys and
+stresses run without errors against a reference app in CI; the other 9
 product types are listed as planned until each has one.
 
 | Pack | Protocols | What it tests | Reference app |
@@ -26,6 +26,18 @@ product types are listed as planned until each has one.
 | [`ticketing`](../../packs/ticketing) | HTTP, WebSocket | Seat maps, holds and orders; a WebSocket waiting room; on-sale rush; seat-lock contention with an oversell check | [TicketLab](../../examples/packlab/README.md#ticketlab), port 8094 |
 | [`identity`](../../packs/identity) | HTTP | OAuth 2.0 / OpenID Connect password, refresh and client-credentials grants, introspection, revocation; login storm; refresh waves | [AuthLab](../../examples/packlab/README.md#authlab), port 8095 |
 | [`public-apis`](../../packs/public-apis) | HTTP | API keys, cursor pagination, idempotent creates, webhook deliveries; rate-limit burst (429 with Retry-After); noisy neighbour; webhook burst | [APILab](../../examples/packlab/README.md#apilab), port 8096 |
+| [`iot`](../../packs/iot) | MQTT (plugin), HTTP | Connected devices reporting readings, timed to the platform's ack once stored; device shadows; 2,000 connected devices; telemetry burst; reconnect storm | [IoTLab](../../examples/packlab/README.md#iotlab) (in-process Mochi MQTT broker), ports 8110 and 8111 |
+| [`event-pipelines`](../../packs/event-pipelines) | Kafka (plugin), HTTP | Orders published and timed until they come out of a consumer group processed; consumer lag; ingest ramp; backlog recovery | [PipelineLab](../../examples/packlab/README.md#pipelinelab) (in-process kfake cluster), ports 8112 and 8113 |
+| [`databases`](../../packs/databases) | SQL and Redis (plugins) | A query mix on PostgreSQL and Redis; a shared connection pool under rising load; write contention on hot rows | [DBLab](../../examples/packlab/README.md#dblab) (PostgreSQL you provide, in-process miniredis), ports 8114 and 8115 |
+| [`gaming`](../../packs/gaming) | WebSocket, UDP (plugin), HTTP | Sign-in, matchmaking, a match on a UDP game server, scores; matchmaking rush; a full game server; leaderboard flood | [GameLab](../../examples/packlab/README.md#gamelab), ports 8116 and 8117 |
+
+The last four use [protocol plugins](../plugins.md): install the ones a
+pack names (`stampede plugin install mqtt`) on every machine that runs
+it. Their reference apps listen on a second port for the broker, cluster,
+cache or game server, and the pack's variables say how to reach it
+(`MQTT_BROKER`, `KAFKA_BROKERS`, `SQL_DSN` and `REDIS_ADDR`; GameLab's
+matchmaking hands out its game server's address). These are fakes and a
+small lab, not production brokers or clusters.
 
 Each pack's README lists its files and what each one checks. The PackLab
 apps are small in-memory Go servers with planted bottlenecks, each with a
@@ -42,9 +54,27 @@ How the packs are tested: `examples/packlab/packs_test.go` starts every
 PackLab app in-process, checks that `stampede init`'s probe picks the right
 pack, runs `stampede pack test` on it, and runs every journey and stress
 under load for a couple of seconds, failing on any failed request or
-iteration. The CI `packlab` job repeats the detection and the dry run
-against the `packlab` binary with the packs exactly as shipped, one job per
-pack; the `packs` job does the same for e-commerce against ShopLab.
+iteration. Packs that use plugins run with the plugins built from
+`plugins/` in the same checkout. The databases pack needs a PostgreSQL
+database (`STAMPEDE_TEST_POSTGRES_DSN`) and is skipped without one. The
+CI `packlab` job repeats the detection and the dry run against the
+`packlab` binary with the packs exactly as shipped, one job per pack,
+installing the pack's plugins first; for databases it starts PostgreSQL
+16 as a service container and also runs the in-process checks. The
+`packs` job does the same for e-commerce against ShopLab.
+
+A pack that needs more than the target's URL (a broker address, a
+database connection string) declares it under `variables`. `stampede
+init` then installs the pack and lists them instead of dry-running it;
+pass them with `-e`:
+
+```sh
+stampede init --target http://localhost:8110 -e MQTT_BROKER=tcp://localhost:8111
+stampede pack test iot --target http://localhost:8110 -e MQTT_BROKER=tcp://localhost:8111
+```
+
+A database has no HTTP side to probe, so `init` never proposes the
+databases pack; install it with `stampede pack install databases`.
 
 ## Layout
 
@@ -85,7 +115,10 @@ installed.
    that is the dry run's budget per file.
 3. Add a reference app and make `stampede pack test` pass against it. For
    an in-memory app, add a package under `examples/packlab` and register
-   it in `examples/packlab/main.go`; `packs_test.go` then tests it.
+   it in `examples/packlab/main.go`; `packs_test.go` then tests it. An app
+   with a second listener (a broker, a cache, a UDP server) returns a
+   `labkit.App` with the variables the pack needs to reach it, and lists
+   the plugins its pack uses so the test builds them.
 4. Add the directory to the embed list in `packs/embed.go`, set its status to
    `shipped` in `packs/catalog.yaml`, and add it to the CI `packlab` matrix
    (or a job of its own).
