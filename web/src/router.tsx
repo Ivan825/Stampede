@@ -6,6 +6,7 @@ import {
   lazyRouteComponent,
   Outlet,
   redirect,
+  type RouterHistory,
 } from '@tanstack/react-router';
 import { meQuery, projectsQuery, versionQuery } from '@/api/queries';
 import { Shell } from '@/app/Shell';
@@ -192,10 +193,11 @@ const routeTree = rootRoute.addChildren([
   ]),
 ]);
 
-export function makeRouter(queryClient: QueryClient) {
+export function makeRouter(queryClient: QueryClient, history?: RouterHistory) {
   return createRouter({
     routeTree,
     context: { queryClient },
+    ...(history ? { history } : {}),
     defaultPreload: 'intent',
     defaultPreloadStaleTime: 0,
     scrollRestoration: true,
