@@ -14,6 +14,7 @@ import (
 	"errors"
 	"log/slog"
 	"math/rand/v2"
+	"net"
 	"os"
 	"runtime"
 	"sync"
@@ -52,6 +53,18 @@ type Config struct {
 	// means the system roots).
 	Insecure bool
 	TLS      *tls.Config
+	// MTLS enrolls with the server's built-in CA and connects with the
+	// worker's own certificate (servers started with --worker-mtls). The
+	// join token is then never sent.
+	MTLS bool
+	// CAFingerprint pins the server's CA ("sha256:..."). Without it the
+	// CA is learned at the first enrollment, authenticated by the join
+	// token, and pinned from then on.
+	CAFingerprint string
+	// EnrollDialer replaces the TCP dialer used to enroll (tests).
+	EnrollDialer interface {
+		DialContext(ctx context.Context, network, addr string) (net.Conn, error)
+	}
 	// DialOptions are added to the gRPC dial options (tests dial bufconn).
 	DialOptions []grpc.DialOption
 
@@ -85,6 +98,9 @@ type Worker struct {
 	// time.Now Unix nanoseconds. The dead man's switch watches it.
 	lastContact atomic.Int64
 	hbInterval  atomic.Int64
+
+	idMu  sync.Mutex
+	ident *identity
 
 	mu   sync.Mutex
 	id   string
@@ -169,13 +185,19 @@ func permanent(err error) bool {
 	return false
 }
 
-func (w *Worker) dialOptions() []grpc.DialOption {
+func (w *Worker) dialOptions(ctx context.Context) ([]grpc.DialOption, error) {
 	opts := []grpc.DialOption{
 		grpc.WithKeepaliveParams(keepalive.ClientParameters{
 			Time: 10 * time.Second, Timeout: 5 * time.Second, PermitWithoutStream: true,
 		}),
 	}
 	switch {
+	case w.cfg.MTLS:
+		creds, err := w.mtlsCreds(ctx)
+		if err != nil {
+			return nil, err
+		}
+		opts = append(opts, grpc.WithTransportCredentials(creds))
 	case w.cfg.Insecure:
 		opts = append(opts, grpc.WithTransportCredentials(insecure.NewCredentials()))
 	case w.cfg.TLS != nil:
@@ -183,7 +205,16 @@ func (w *Worker) dialOptions() []grpc.DialOption {
 	default:
 		opts = append(opts, grpc.WithTransportCredentials(credentials.NewTLS(&tls.Config{MinVersion: tls.VersionTLS12})))
 	}
-	return append(opts, w.cfg.DialOptions...)
+	return append(opts, w.cfg.DialOptions...), nil
+}
+
+// joinToken is sent in Hello only without mutual TLS; with it the
+// certificate is the credential.
+func (w *Worker) joinToken() string {
+	if w.cfg.MTLS {
+		return ""
+	}
+	return w.cfg.Token
 }
 
 // session is one connected stream.
@@ -236,7 +267,11 @@ func (w *Worker) touch() { w.lastContact.Store(time.Now().UnixNano()) }
 
 // session runs one connection to the server until it breaks.
 func (w *Worker) session(ctx context.Context) error {
-	conn, err := grpc.NewClient(w.cfg.Server, w.dialOptions()...)
+	opts, err := w.dialOptions(ctx)
+	if err != nil {
+		return err
+	}
+	conn, err := grpc.NewClient(w.cfg.Server, opts...)
 	if err != nil {
 		return err
 	}
@@ -250,7 +285,7 @@ func (w *Worker) session(ctx context.Context) error {
 
 	w.mu.Lock()
 	hello := &workerv1.Hello{
-		Protocol: wire.Version(), JoinToken: w.cfg.Token, Name: w.cfg.Name,
+		Protocol: wire.Version(), JoinToken: w.joinToken(), Name: w.cfg.Name,
 		Version: version.Version, Region: w.cfg.Region, Labels: w.cfg.Labels,
 		Capacity: &workerv1.Capacity{
 			Cpus: uint32(w.cfg.CPUs), MemoryBytes: totalMemory(),

@@ -23,6 +23,39 @@ service WorkerService {
   // message must be a Hello; the server answers with a Welcome or ends the
   // stream with an error (bad join token, incompatible protocol major).
   rpc Connect(stream WorkerMessage) returns (stream ServerMessage);
+
+  // Enroll issues a worker a client certificate from the server's built-in
+  // CA (servers started with --worker-mtls). The join token is never sent:
+  // the worker proves it knows the token with an HMAC over keying material
+  // exported from this TLS session, and the server answers with its own
+  // proof over the certificates. See internal/pki.
+  rpc Enroll(EnrollRequest) returns (EnrollResponse);
+}
+
+// EnrollRequest asks for a worker certificate.
+message EnrollRequest {
+  string name = 1;
+  // public_key is the worker's Ed25519 public key (32 bytes). The private
+  // key never leaves the worker.
+  bytes public_key = 2;
+  // proof is HMAC-SHA256 keyed by the join token over the TLS binding, the
+  // name and the public key (pki.WorkerProof).
+  bytes proof = 3;
+}
+
+// EnrollResponse carries the certificate and the CA that issued it.
+message EnrollResponse {
+  // certificate is the worker's certificate (DER), valid for client
+  // authentication only.
+  bytes certificate = 1;
+  // ca_certificate is the server's CA (DER). The worker pins it.
+  bytes ca_certificate = 2;
+  // proof is HMAC-SHA256 keyed by the join token over the TLS binding and
+  // both certificates (pki.ServerProof).
+  bytes proof = 3;
+  // worker_id is the id in the certificate; the worker presents it in
+  // Hello as resume_worker_id.
+  string worker_id = 4;
 }
 
 // WorkerMessage is anything a worker sends.

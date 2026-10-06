@@ -34,6 +34,7 @@ const _ = grpc.SupportPackageIsVersion9
 
 const (
 	WorkerService_Connect_FullMethodName = "/stampede.worker.v1.WorkerService/Connect"
+	WorkerService_Enroll_FullMethodName  = "/stampede.worker.v1.WorkerService/Enroll"
 )
 
 // WorkerServiceClient is the client API for WorkerService service.
@@ -46,6 +47,12 @@ type WorkerServiceClient interface {
 	// message must be a Hello; the server answers with a Welcome or ends the
 	// stream with an error (bad join token, incompatible protocol major).
 	Connect(ctx context.Context, opts ...grpc.CallOption) (grpc.BidiStreamingClient[WorkerMessage, ServerMessage], error)
+	// Enroll issues a worker a client certificate from the server's built-in
+	// CA (servers started with --worker-mtls). The join token is never sent:
+	// the worker proves it knows the token with an HMAC over keying material
+	// exported from this TLS session, and the server answers with its own
+	// proof over the certificates. See internal/pki.
+	Enroll(ctx context.Context, in *EnrollRequest, opts ...grpc.CallOption) (*EnrollResponse, error)
 }
 
 type workerServiceClient struct {
@@ -69,6 +76,16 @@ func (c *workerServiceClient) Connect(ctx context.Context, opts ...grpc.CallOpti
 // This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
 type WorkerService_ConnectClient = grpc.BidiStreamingClient[WorkerMessage, ServerMessage]
 
+func (c *workerServiceClient) Enroll(ctx context.Context, in *EnrollRequest, opts ...grpc.CallOption) (*EnrollResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(EnrollResponse)
+	err := c.cc.Invoke(ctx, WorkerService_Enroll_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // WorkerServiceServer is the server API for WorkerService service.
 // All implementations must embed UnimplementedWorkerServiceServer
 // for forward compatibility.
@@ -79,6 +96,12 @@ type WorkerServiceServer interface {
 	// message must be a Hello; the server answers with a Welcome or ends the
 	// stream with an error (bad join token, incompatible protocol major).
 	Connect(grpc.BidiStreamingServer[WorkerMessage, ServerMessage]) error
+	// Enroll issues a worker a client certificate from the server's built-in
+	// CA (servers started with --worker-mtls). The join token is never sent:
+	// the worker proves it knows the token with an HMAC over keying material
+	// exported from this TLS session, and the server answers with its own
+	// proof over the certificates. See internal/pki.
+	Enroll(context.Context, *EnrollRequest) (*EnrollResponse, error)
 	mustEmbedUnimplementedWorkerServiceServer()
 }
 
@@ -91,6 +114,9 @@ type UnimplementedWorkerServiceServer struct{}
 
 func (UnimplementedWorkerServiceServer) Connect(grpc.BidiStreamingServer[WorkerMessage, ServerMessage]) error {
 	return status.Error(codes.Unimplemented, "method Connect not implemented")
+}
+func (UnimplementedWorkerServiceServer) Enroll(context.Context, *EnrollRequest) (*EnrollResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method Enroll not implemented")
 }
 func (UnimplementedWorkerServiceServer) mustEmbedUnimplementedWorkerServiceServer() {}
 func (UnimplementedWorkerServiceServer) testEmbeddedByValue()                       {}
@@ -120,13 +146,36 @@ func _WorkerService_Connect_Handler(srv interface{}, stream grpc.ServerStream) e
 // This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
 type WorkerService_ConnectServer = grpc.BidiStreamingServer[WorkerMessage, ServerMessage]
 
+func _WorkerService_Enroll_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(EnrollRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(WorkerServiceServer).Enroll(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: WorkerService_Enroll_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(WorkerServiceServer).Enroll(ctx, req.(*EnrollRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // WorkerService_ServiceDesc is the grpc.ServiceDesc for WorkerService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
 var WorkerService_ServiceDesc = grpc.ServiceDesc{
 	ServiceName: "stampede.worker.v1.WorkerService",
 	HandlerType: (*WorkerServiceServer)(nil),
-	Methods:     []grpc.MethodDesc{},
+	Methods: []grpc.MethodDesc{
+		{
+			MethodName: "Enroll",
+			Handler:    _WorkerService_Enroll_Handler,
+		},
+	},
 	Streams: []grpc.StreamDesc{
 		{
 			StreamName:    "Connect",

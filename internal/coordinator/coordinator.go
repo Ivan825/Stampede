@@ -40,11 +40,16 @@
 //
 // # Transport security
 //
-// The gRPC server takes an optional TLS server certificate (see
-// ServerOptions); workers verify it with the system roots or a CA they are
-// given. Mutual TLS with a CA built into the server, issuing each worker
-// its own certificate at registration, is planned; until then the join
-// token is the worker's credential, so use TLS on untrusted networks.
+// Three modes, from strongest:
+//
+//   - Mutual TLS with the built-in CA (Config.CA, stampede server
+//     --worker-mtls). Workers enroll once per certificate lifetime with the
+//     Enroll RPC, proving they know the join token without sending it, and
+//     then connect with their own certificate. See internal/pki.
+//   - TLS with a server certificate from your own CA (ServerOptions);
+//     workers verify it with the system roots or a CA they are given, and
+//     send the join token in Hello.
+//   - No TLS, for trusted networks only: the join token travels in clear.
 package coordinator
 
 import (
@@ -69,6 +74,7 @@ import (
 	"google.golang.org/grpc/status"
 
 	workerv1 "github.com/Ivan825/Stampede/gen/stampede/worker/v1"
+	"github.com/Ivan825/Stampede/internal/pki"
 	"github.com/Ivan825/Stampede/internal/wire"
 )
 
@@ -85,6 +91,15 @@ type Config struct {
 	// ClockSamples is the number of ping/pong round trips per clock
 	// synchronisation (default 8).
 	ClockSamples int
+	// CA, when set, turns on mutual TLS: workers enroll for a certificate
+	// with Enroll and must present it on Connect, where it replaces the
+	// join token as their credential. The gRPC server must use
+	// CA.ServerTLS.
+	CA *pki.CA
+	// CertValidity is the lifetime of enrolled worker certificates
+	// (default DefaultCertValidity).
+	CertValidity time.Duration
+
 	// MergeGrace is how long after an interval ends the merged snapshot
 	// waits for slow workers before it is emitted without them (default
 	// two snapshot intervals).
@@ -270,7 +285,15 @@ func (c *Coordinator) Connect(stream workerv1.WorkerService_ConnectServer) error
 	if c.cfg.JoinToken == "" {
 		return status.Error(codes.Unauthenticated, "this server has no join token configured, so it accepts no workers")
 	}
-	if subtle.ConstantTimeCompare([]byte(hello.GetJoinToken()), []byte(c.cfg.JoinToken)) != 1 {
+	certName, err := c.checkWorkerCert(stream.Context())
+	if err != nil {
+		c.log.Warn("worker refused: no valid certificate", "name", hello.GetName(), "error", err)
+		return err
+	}
+	if c.cfg.CA != nil {
+		// The certificate is the credential; its name wins.
+		hello.Name = certName
+	} else if subtle.ConstantTimeCompare([]byte(hello.GetJoinToken()), []byte(c.cfg.JoinToken)) != 1 {
 		c.log.Warn("worker refused: invalid join token", "name", hello.GetName())
 		return status.Error(codes.Unauthenticated, "invalid join token")
 	}

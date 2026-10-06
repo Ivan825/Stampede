@@ -35,6 +35,147 @@ const (
 	_ = protoimpl.EnforceVersion(protoimpl.MaxVersion - 20)
 )
 
+// EnrollRequest asks for a worker certificate.
+type EnrollRequest struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	Name  string                 `protobuf:"bytes,1,opt,name=name,proto3" json:"name,omitempty"`
+	// public_key is the worker's Ed25519 public key (32 bytes). The private
+	// key never leaves the worker.
+	PublicKey []byte `protobuf:"bytes,2,opt,name=public_key,json=publicKey,proto3" json:"public_key,omitempty"`
+	// proof is HMAC-SHA256 keyed by the join token over the TLS binding, the
+	// name and the public key (pki.WorkerProof).
+	Proof         []byte `protobuf:"bytes,3,opt,name=proof,proto3" json:"proof,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *EnrollRequest) Reset() {
+	*x = EnrollRequest{}
+	mi := &file_stampede_worker_v1_worker_proto_msgTypes[0]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *EnrollRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*EnrollRequest) ProtoMessage() {}
+
+func (x *EnrollRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_stampede_worker_v1_worker_proto_msgTypes[0]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use EnrollRequest.ProtoReflect.Descriptor instead.
+func (*EnrollRequest) Descriptor() ([]byte, []int) {
+	return file_stampede_worker_v1_worker_proto_rawDescGZIP(), []int{0}
+}
+
+func (x *EnrollRequest) GetName() string {
+	if x != nil {
+		return x.Name
+	}
+	return ""
+}
+
+func (x *EnrollRequest) GetPublicKey() []byte {
+	if x != nil {
+		return x.PublicKey
+	}
+	return nil
+}
+
+func (x *EnrollRequest) GetProof() []byte {
+	if x != nil {
+		return x.Proof
+	}
+	return nil
+}
+
+// EnrollResponse carries the certificate and the CA that issued it.
+type EnrollResponse struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// certificate is the worker's certificate (DER), valid for client
+	// authentication only.
+	Certificate []byte `protobuf:"bytes,1,opt,name=certificate,proto3" json:"certificate,omitempty"`
+	// ca_certificate is the server's CA (DER). The worker pins it.
+	CaCertificate []byte `protobuf:"bytes,2,opt,name=ca_certificate,json=caCertificate,proto3" json:"ca_certificate,omitempty"`
+	// proof is HMAC-SHA256 keyed by the join token over the TLS binding and
+	// both certificates (pki.ServerProof).
+	Proof []byte `protobuf:"bytes,3,opt,name=proof,proto3" json:"proof,omitempty"`
+	// worker_id is the id in the certificate; the worker presents it in
+	// Hello as resume_worker_id.
+	WorkerId      string `protobuf:"bytes,4,opt,name=worker_id,json=workerId,proto3" json:"worker_id,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *EnrollResponse) Reset() {
+	*x = EnrollResponse{}
+	mi := &file_stampede_worker_v1_worker_proto_msgTypes[1]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *EnrollResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*EnrollResponse) ProtoMessage() {}
+
+func (x *EnrollResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_stampede_worker_v1_worker_proto_msgTypes[1]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use EnrollResponse.ProtoReflect.Descriptor instead.
+func (*EnrollResponse) Descriptor() ([]byte, []int) {
+	return file_stampede_worker_v1_worker_proto_rawDescGZIP(), []int{1}
+}
+
+func (x *EnrollResponse) GetCertificate() []byte {
+	if x != nil {
+		return x.Certificate
+	}
+	return nil
+}
+
+func (x *EnrollResponse) GetCaCertificate() []byte {
+	if x != nil {
+		return x.CaCertificate
+	}
+	return nil
+}
+
+func (x *EnrollResponse) GetProof() []byte {
+	if x != nil {
+		return x.Proof
+	}
+	return nil
+}
+
+func (x *EnrollResponse) GetWorkerId() string {
+	if x != nil {
+		return x.WorkerId
+	}
+	return ""
+}
+
 // WorkerMessage is anything a worker sends.
 type WorkerMessage struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
@@ -54,7 +195,7 @@ type WorkerMessage struct {
 
 func (x *WorkerMessage) Reset() {
 	*x = WorkerMessage{}
-	mi := &file_stampede_worker_v1_worker_proto_msgTypes[0]
+	mi := &file_stampede_worker_v1_worker_proto_msgTypes[2]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -66,7 +207,7 @@ func (x *WorkerMessage) String() string {
 func (*WorkerMessage) ProtoMessage() {}
 
 func (x *WorkerMessage) ProtoReflect() protoreflect.Message {
-	mi := &file_stampede_worker_v1_worker_proto_msgTypes[0]
+	mi := &file_stampede_worker_v1_worker_proto_msgTypes[2]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -79,7 +220,7 @@ func (x *WorkerMessage) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use WorkerMessage.ProtoReflect.Descriptor instead.
 func (*WorkerMessage) Descriptor() ([]byte, []int) {
-	return file_stampede_worker_v1_worker_proto_rawDescGZIP(), []int{0}
+	return file_stampede_worker_v1_worker_proto_rawDescGZIP(), []int{2}
 }
 
 func (x *WorkerMessage) GetMsg() isWorkerMessage_Msg {
@@ -216,7 +357,7 @@ type ServerMessage struct {
 
 func (x *ServerMessage) Reset() {
 	*x = ServerMessage{}
-	mi := &file_stampede_worker_v1_worker_proto_msgTypes[1]
+	mi := &file_stampede_worker_v1_worker_proto_msgTypes[3]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -228,7 +369,7 @@ func (x *ServerMessage) String() string {
 func (*ServerMessage) ProtoMessage() {}
 
 func (x *ServerMessage) ProtoReflect() protoreflect.Message {
-	mi := &file_stampede_worker_v1_worker_proto_msgTypes[1]
+	mi := &file_stampede_worker_v1_worker_proto_msgTypes[3]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -241,7 +382,7 @@ func (x *ServerMessage) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ServerMessage.ProtoReflect.Descriptor instead.
 func (*ServerMessage) Descriptor() ([]byte, []int) {
-	return file_stampede_worker_v1_worker_proto_rawDescGZIP(), []int{1}
+	return file_stampede_worker_v1_worker_proto_rawDescGZIP(), []int{3}
 }
 
 func (x *ServerMessage) GetMsg() isServerMessage_Msg {
@@ -357,7 +498,7 @@ type ProtocolVersion struct {
 
 func (x *ProtocolVersion) Reset() {
 	*x = ProtocolVersion{}
-	mi := &file_stampede_worker_v1_worker_proto_msgTypes[2]
+	mi := &file_stampede_worker_v1_worker_proto_msgTypes[4]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -369,7 +510,7 @@ func (x *ProtocolVersion) String() string {
 func (*ProtocolVersion) ProtoMessage() {}
 
 func (x *ProtocolVersion) ProtoReflect() protoreflect.Message {
-	mi := &file_stampede_worker_v1_worker_proto_msgTypes[2]
+	mi := &file_stampede_worker_v1_worker_proto_msgTypes[4]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -382,7 +523,7 @@ func (x *ProtocolVersion) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ProtocolVersion.ProtoReflect.Descriptor instead.
 func (*ProtocolVersion) Descriptor() ([]byte, []int) {
-	return file_stampede_worker_v1_worker_proto_rawDescGZIP(), []int{2}
+	return file_stampede_worker_v1_worker_proto_rawDescGZIP(), []int{4}
 }
 
 func (x *ProtocolVersion) GetMajor() uint32 {
@@ -422,7 +563,7 @@ type Hello struct {
 
 func (x *Hello) Reset() {
 	*x = Hello{}
-	mi := &file_stampede_worker_v1_worker_proto_msgTypes[3]
+	mi := &file_stampede_worker_v1_worker_proto_msgTypes[5]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -434,7 +575,7 @@ func (x *Hello) String() string {
 func (*Hello) ProtoMessage() {}
 
 func (x *Hello) ProtoReflect() protoreflect.Message {
-	mi := &file_stampede_worker_v1_worker_proto_msgTypes[3]
+	mi := &file_stampede_worker_v1_worker_proto_msgTypes[5]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -447,7 +588,7 @@ func (x *Hello) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Hello.ProtoReflect.Descriptor instead.
 func (*Hello) Descriptor() ([]byte, []int) {
-	return file_stampede_worker_v1_worker_proto_rawDescGZIP(), []int{3}
+	return file_stampede_worker_v1_worker_proto_rawDescGZIP(), []int{5}
 }
 
 func (x *Hello) GetProtocol() *ProtocolVersion {
@@ -529,7 +670,7 @@ type Capacity struct {
 
 func (x *Capacity) Reset() {
 	*x = Capacity{}
-	mi := &file_stampede_worker_v1_worker_proto_msgTypes[4]
+	mi := &file_stampede_worker_v1_worker_proto_msgTypes[6]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -541,7 +682,7 @@ func (x *Capacity) String() string {
 func (*Capacity) ProtoMessage() {}
 
 func (x *Capacity) ProtoReflect() protoreflect.Message {
-	mi := &file_stampede_worker_v1_worker_proto_msgTypes[4]
+	mi := &file_stampede_worker_v1_worker_proto_msgTypes[6]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -554,7 +695,7 @@ func (x *Capacity) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Capacity.ProtoReflect.Descriptor instead.
 func (*Capacity) Descriptor() ([]byte, []int) {
-	return file_stampede_worker_v1_worker_proto_rawDescGZIP(), []int{4}
+	return file_stampede_worker_v1_worker_proto_rawDescGZIP(), []int{6}
 }
 
 func (x *Capacity) GetCpus() uint32 {
@@ -606,7 +747,7 @@ type Health struct {
 
 func (x *Health) Reset() {
 	*x = Health{}
-	mi := &file_stampede_worker_v1_worker_proto_msgTypes[5]
+	mi := &file_stampede_worker_v1_worker_proto_msgTypes[7]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -618,7 +759,7 @@ func (x *Health) String() string {
 func (*Health) ProtoMessage() {}
 
 func (x *Health) ProtoReflect() protoreflect.Message {
-	mi := &file_stampede_worker_v1_worker_proto_msgTypes[5]
+	mi := &file_stampede_worker_v1_worker_proto_msgTypes[7]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -631,7 +772,7 @@ func (x *Health) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Health.ProtoReflect.Descriptor instead.
 func (*Health) Descriptor() ([]byte, []int) {
-	return file_stampede_worker_v1_worker_proto_rawDescGZIP(), []int{5}
+	return file_stampede_worker_v1_worker_proto_rawDescGZIP(), []int{7}
 }
 
 func (x *Health) GetSaturated() bool {
@@ -711,7 +852,7 @@ type Heartbeat struct {
 
 func (x *Heartbeat) Reset() {
 	*x = Heartbeat{}
-	mi := &file_stampede_worker_v1_worker_proto_msgTypes[6]
+	mi := &file_stampede_worker_v1_worker_proto_msgTypes[8]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -723,7 +864,7 @@ func (x *Heartbeat) String() string {
 func (*Heartbeat) ProtoMessage() {}
 
 func (x *Heartbeat) ProtoReflect() protoreflect.Message {
-	mi := &file_stampede_worker_v1_worker_proto_msgTypes[6]
+	mi := &file_stampede_worker_v1_worker_proto_msgTypes[8]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -736,7 +877,7 @@ func (x *Heartbeat) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Heartbeat.ProtoReflect.Descriptor instead.
 func (*Heartbeat) Descriptor() ([]byte, []int) {
-	return file_stampede_worker_v1_worker_proto_rawDescGZIP(), []int{6}
+	return file_stampede_worker_v1_worker_proto_rawDescGZIP(), []int{8}
 }
 
 func (x *Heartbeat) GetWorkerTimeUnixNano() int64 {
@@ -780,7 +921,7 @@ type ClockPong struct {
 
 func (x *ClockPong) Reset() {
 	*x = ClockPong{}
-	mi := &file_stampede_worker_v1_worker_proto_msgTypes[7]
+	mi := &file_stampede_worker_v1_worker_proto_msgTypes[9]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -792,7 +933,7 @@ func (x *ClockPong) String() string {
 func (*ClockPong) ProtoMessage() {}
 
 func (x *ClockPong) ProtoReflect() protoreflect.Message {
-	mi := &file_stampede_worker_v1_worker_proto_msgTypes[7]
+	mi := &file_stampede_worker_v1_worker_proto_msgTypes[9]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -805,7 +946,7 @@ func (x *ClockPong) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ClockPong.ProtoReflect.Descriptor instead.
 func (*ClockPong) Descriptor() ([]byte, []int) {
-	return file_stampede_worker_v1_worker_proto_rawDescGZIP(), []int{7}
+	return file_stampede_worker_v1_worker_proto_rawDescGZIP(), []int{9}
 }
 
 func (x *ClockPong) GetT1UnixNano() int64 {
@@ -840,7 +981,7 @@ type RunAccepted struct {
 
 func (x *RunAccepted) Reset() {
 	*x = RunAccepted{}
-	mi := &file_stampede_worker_v1_worker_proto_msgTypes[8]
+	mi := &file_stampede_worker_v1_worker_proto_msgTypes[10]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -852,7 +993,7 @@ func (x *RunAccepted) String() string {
 func (*RunAccepted) ProtoMessage() {}
 
 func (x *RunAccepted) ProtoReflect() protoreflect.Message {
-	mi := &file_stampede_worker_v1_worker_proto_msgTypes[8]
+	mi := &file_stampede_worker_v1_worker_proto_msgTypes[10]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -865,7 +1006,7 @@ func (x *RunAccepted) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RunAccepted.ProtoReflect.Descriptor instead.
 func (*RunAccepted) Descriptor() ([]byte, []int) {
-	return file_stampede_worker_v1_worker_proto_rawDescGZIP(), []int{8}
+	return file_stampede_worker_v1_worker_proto_rawDescGZIP(), []int{10}
 }
 
 func (x *RunAccepted) GetRunId() string {
@@ -896,7 +1037,7 @@ type Snapshot struct {
 
 func (x *Snapshot) Reset() {
 	*x = Snapshot{}
-	mi := &file_stampede_worker_v1_worker_proto_msgTypes[9]
+	mi := &file_stampede_worker_v1_worker_proto_msgTypes[11]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -908,7 +1049,7 @@ func (x *Snapshot) String() string {
 func (*Snapshot) ProtoMessage() {}
 
 func (x *Snapshot) ProtoReflect() protoreflect.Message {
-	mi := &file_stampede_worker_v1_worker_proto_msgTypes[9]
+	mi := &file_stampede_worker_v1_worker_proto_msgTypes[11]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -921,7 +1062,7 @@ func (x *Snapshot) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Snapshot.ProtoReflect.Descriptor instead.
 func (*Snapshot) Descriptor() ([]byte, []int) {
-	return file_stampede_worker_v1_worker_proto_rawDescGZIP(), []int{9}
+	return file_stampede_worker_v1_worker_proto_rawDescGZIP(), []int{11}
 }
 
 func (x *Snapshot) GetRunId() string {
@@ -1026,7 +1167,7 @@ type StepStats struct {
 
 func (x *StepStats) Reset() {
 	*x = StepStats{}
-	mi := &file_stampede_worker_v1_worker_proto_msgTypes[10]
+	mi := &file_stampede_worker_v1_worker_proto_msgTypes[12]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1038,7 +1179,7 @@ func (x *StepStats) String() string {
 func (*StepStats) ProtoMessage() {}
 
 func (x *StepStats) ProtoReflect() protoreflect.Message {
-	mi := &file_stampede_worker_v1_worker_proto_msgTypes[10]
+	mi := &file_stampede_worker_v1_worker_proto_msgTypes[12]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1051,7 +1192,7 @@ func (x *StepStats) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use StepStats.ProtoReflect.Descriptor instead.
 func (*StepStats) Descriptor() ([]byte, []int) {
-	return file_stampede_worker_v1_worker_proto_rawDescGZIP(), []int{10}
+	return file_stampede_worker_v1_worker_proto_rawDescGZIP(), []int{12}
 }
 
 func (x *StepStats) GetRequests() uint64 {
@@ -1172,7 +1313,7 @@ type JourneyStats struct {
 
 func (x *JourneyStats) Reset() {
 	*x = JourneyStats{}
-	mi := &file_stampede_worker_v1_worker_proto_msgTypes[11]
+	mi := &file_stampede_worker_v1_worker_proto_msgTypes[13]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1184,7 +1325,7 @@ func (x *JourneyStats) String() string {
 func (*JourneyStats) ProtoMessage() {}
 
 func (x *JourneyStats) ProtoReflect() protoreflect.Message {
-	mi := &file_stampede_worker_v1_worker_proto_msgTypes[11]
+	mi := &file_stampede_worker_v1_worker_proto_msgTypes[13]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1197,7 +1338,7 @@ func (x *JourneyStats) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use JourneyStats.ProtoReflect.Descriptor instead.
 func (*JourneyStats) Descriptor() ([]byte, []int) {
-	return file_stampede_worker_v1_worker_proto_rawDescGZIP(), []int{11}
+	return file_stampede_worker_v1_worker_proto_rawDescGZIP(), []int{13}
 }
 
 func (x *JourneyStats) GetStarted() uint64 {
@@ -1239,7 +1380,7 @@ type PhaseHistograms struct {
 
 func (x *PhaseHistograms) Reset() {
 	*x = PhaseHistograms{}
-	mi := &file_stampede_worker_v1_worker_proto_msgTypes[12]
+	mi := &file_stampede_worker_v1_worker_proto_msgTypes[14]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1251,7 +1392,7 @@ func (x *PhaseHistograms) String() string {
 func (*PhaseHistograms) ProtoMessage() {}
 
 func (x *PhaseHistograms) ProtoReflect() protoreflect.Message {
-	mi := &file_stampede_worker_v1_worker_proto_msgTypes[12]
+	mi := &file_stampede_worker_v1_worker_proto_msgTypes[14]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1264,7 +1405,7 @@ func (x *PhaseHistograms) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PhaseHistograms.ProtoReflect.Descriptor instead.
 func (*PhaseHistograms) Descriptor() ([]byte, []int) {
-	return file_stampede_worker_v1_worker_proto_rawDescGZIP(), []int{12}
+	return file_stampede_worker_v1_worker_proto_rawDescGZIP(), []int{14}
 }
 
 func (x *PhaseHistograms) GetPhases() [][]byte {
@@ -1292,7 +1433,7 @@ type RunFinished struct {
 
 func (x *RunFinished) Reset() {
 	*x = RunFinished{}
-	mi := &file_stampede_worker_v1_worker_proto_msgTypes[13]
+	mi := &file_stampede_worker_v1_worker_proto_msgTypes[15]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1304,7 +1445,7 @@ func (x *RunFinished) String() string {
 func (*RunFinished) ProtoMessage() {}
 
 func (x *RunFinished) ProtoReflect() protoreflect.Message {
-	mi := &file_stampede_worker_v1_worker_proto_msgTypes[13]
+	mi := &file_stampede_worker_v1_worker_proto_msgTypes[15]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1317,7 +1458,7 @@ func (x *RunFinished) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RunFinished.ProtoReflect.Descriptor instead.
 func (*RunFinished) Descriptor() ([]byte, []int) {
-	return file_stampede_worker_v1_worker_proto_rawDescGZIP(), []int{13}
+	return file_stampede_worker_v1_worker_proto_rawDescGZIP(), []int{15}
 }
 
 func (x *RunFinished) GetRunId() string {
@@ -1380,7 +1521,7 @@ type RunFailed struct {
 
 func (x *RunFailed) Reset() {
 	*x = RunFailed{}
-	mi := &file_stampede_worker_v1_worker_proto_msgTypes[14]
+	mi := &file_stampede_worker_v1_worker_proto_msgTypes[16]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1392,7 +1533,7 @@ func (x *RunFailed) String() string {
 func (*RunFailed) ProtoMessage() {}
 
 func (x *RunFailed) ProtoReflect() protoreflect.Message {
-	mi := &file_stampede_worker_v1_worker_proto_msgTypes[14]
+	mi := &file_stampede_worker_v1_worker_proto_msgTypes[16]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1405,7 +1546,7 @@ func (x *RunFailed) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RunFailed.ProtoReflect.Descriptor instead.
 func (*RunFailed) Descriptor() ([]byte, []int) {
-	return file_stampede_worker_v1_worker_proto_rawDescGZIP(), []int{14}
+	return file_stampede_worker_v1_worker_proto_rawDescGZIP(), []int{16}
 }
 
 func (x *RunFailed) GetRunId() string {
@@ -1434,7 +1575,7 @@ type Welcome struct {
 
 func (x *Welcome) Reset() {
 	*x = Welcome{}
-	mi := &file_stampede_worker_v1_worker_proto_msgTypes[15]
+	mi := &file_stampede_worker_v1_worker_proto_msgTypes[17]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1446,7 +1587,7 @@ func (x *Welcome) String() string {
 func (*Welcome) ProtoMessage() {}
 
 func (x *Welcome) ProtoReflect() protoreflect.Message {
-	mi := &file_stampede_worker_v1_worker_proto_msgTypes[15]
+	mi := &file_stampede_worker_v1_worker_proto_msgTypes[17]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1459,7 +1600,7 @@ func (x *Welcome) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Welcome.ProtoReflect.Descriptor instead.
 func (*Welcome) Descriptor() ([]byte, []int) {
-	return file_stampede_worker_v1_worker_proto_rawDescGZIP(), []int{15}
+	return file_stampede_worker_v1_worker_proto_rawDescGZIP(), []int{17}
 }
 
 func (x *Welcome) GetWorkerId() string {
@@ -1493,7 +1634,7 @@ type ClockPing struct {
 
 func (x *ClockPing) Reset() {
 	*x = ClockPing{}
-	mi := &file_stampede_worker_v1_worker_proto_msgTypes[16]
+	mi := &file_stampede_worker_v1_worker_proto_msgTypes[18]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1505,7 +1646,7 @@ func (x *ClockPing) String() string {
 func (*ClockPing) ProtoMessage() {}
 
 func (x *ClockPing) ProtoReflect() protoreflect.Message {
-	mi := &file_stampede_worker_v1_worker_proto_msgTypes[16]
+	mi := &file_stampede_worker_v1_worker_proto_msgTypes[18]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1518,7 +1659,7 @@ func (x *ClockPing) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ClockPing.ProtoReflect.Descriptor instead.
 func (*ClockPing) Descriptor() ([]byte, []int) {
-	return file_stampede_worker_v1_worker_proto_rawDescGZIP(), []int{16}
+	return file_stampede_worker_v1_worker_proto_rawDescGZIP(), []int{18}
 }
 
 func (x *ClockPing) GetT1UnixNano() int64 {
@@ -1556,7 +1697,7 @@ type StartRun struct {
 
 func (x *StartRun) Reset() {
 	*x = StartRun{}
-	mi := &file_stampede_worker_v1_worker_proto_msgTypes[17]
+	mi := &file_stampede_worker_v1_worker_proto_msgTypes[19]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1568,7 +1709,7 @@ func (x *StartRun) String() string {
 func (*StartRun) ProtoMessage() {}
 
 func (x *StartRun) ProtoReflect() protoreflect.Message {
-	mi := &file_stampede_worker_v1_worker_proto_msgTypes[17]
+	mi := &file_stampede_worker_v1_worker_proto_msgTypes[19]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1581,7 +1722,7 @@ func (x *StartRun) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use StartRun.ProtoReflect.Descriptor instead.
 func (*StartRun) Descriptor() ([]byte, []int) {
-	return file_stampede_worker_v1_worker_proto_rawDescGZIP(), []int{17}
+	return file_stampede_worker_v1_worker_proto_rawDescGZIP(), []int{19}
 }
 
 func (x *StartRun) GetRunId() string {
@@ -1674,7 +1815,7 @@ type StopRun struct {
 
 func (x *StopRun) Reset() {
 	*x = StopRun{}
-	mi := &file_stampede_worker_v1_worker_proto_msgTypes[18]
+	mi := &file_stampede_worker_v1_worker_proto_msgTypes[20]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1686,7 +1827,7 @@ func (x *StopRun) String() string {
 func (*StopRun) ProtoMessage() {}
 
 func (x *StopRun) ProtoReflect() protoreflect.Message {
-	mi := &file_stampede_worker_v1_worker_proto_msgTypes[18]
+	mi := &file_stampede_worker_v1_worker_proto_msgTypes[20]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1699,7 +1840,7 @@ func (x *StopRun) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use StopRun.ProtoReflect.Descriptor instead.
 func (*StopRun) Descriptor() ([]byte, []int) {
-	return file_stampede_worker_v1_worker_proto_rawDescGZIP(), []int{18}
+	return file_stampede_worker_v1_worker_proto_rawDescGZIP(), []int{20}
 }
 
 func (x *StopRun) GetRunId() string {
@@ -1736,7 +1877,7 @@ type Ack struct {
 
 func (x *Ack) Reset() {
 	*x = Ack{}
-	mi := &file_stampede_worker_v1_worker_proto_msgTypes[19]
+	mi := &file_stampede_worker_v1_worker_proto_msgTypes[21]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1748,7 +1889,7 @@ func (x *Ack) String() string {
 func (*Ack) ProtoMessage() {}
 
 func (x *Ack) ProtoReflect() protoreflect.Message {
-	mi := &file_stampede_worker_v1_worker_proto_msgTypes[19]
+	mi := &file_stampede_worker_v1_worker_proto_msgTypes[21]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1761,7 +1902,7 @@ func (x *Ack) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Ack.ProtoReflect.Descriptor instead.
 func (*Ack) Descriptor() ([]byte, []int) {
-	return file_stampede_worker_v1_worker_proto_rawDescGZIP(), []int{19}
+	return file_stampede_worker_v1_worker_proto_rawDescGZIP(), []int{21}
 }
 
 func (x *Ack) GetRunId() string {
@@ -1796,7 +1937,7 @@ type ServerHeartbeat struct {
 
 func (x *ServerHeartbeat) Reset() {
 	*x = ServerHeartbeat{}
-	mi := &file_stampede_worker_v1_worker_proto_msgTypes[20]
+	mi := &file_stampede_worker_v1_worker_proto_msgTypes[22]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1808,7 +1949,7 @@ func (x *ServerHeartbeat) String() string {
 func (*ServerHeartbeat) ProtoMessage() {}
 
 func (x *ServerHeartbeat) ProtoReflect() protoreflect.Message {
-	mi := &file_stampede_worker_v1_worker_proto_msgTypes[20]
+	mi := &file_stampede_worker_v1_worker_proto_msgTypes[22]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1821,7 +1962,7 @@ func (x *ServerHeartbeat) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ServerHeartbeat.ProtoReflect.Descriptor instead.
 func (*ServerHeartbeat) Descriptor() ([]byte, []int) {
-	return file_stampede_worker_v1_worker_proto_rawDescGZIP(), []int{20}
+	return file_stampede_worker_v1_worker_proto_rawDescGZIP(), []int{22}
 }
 
 func (x *ServerHeartbeat) GetServerTimeUnixNano() int64 {
@@ -1835,7 +1976,17 @@ var File_stampede_worker_v1_worker_proto protoreflect.FileDescriptor
 
 const file_stampede_worker_v1_worker_proto_rawDesc = "" +
 	"\n" +
-	"\x1fstampede/worker/v1/worker.proto\x12\x12stampede.worker.v1\"\xd0\x03\n" +
+	"\x1fstampede/worker/v1/worker.proto\x12\x12stampede.worker.v1\"X\n" +
+	"\rEnrollRequest\x12\x12\n" +
+	"\x04name\x18\x01 \x01(\tR\x04name\x12\x1d\n" +
+	"\n" +
+	"public_key\x18\x02 \x01(\fR\tpublicKey\x12\x14\n" +
+	"\x05proof\x18\x03 \x01(\fR\x05proof\"\x8c\x01\n" +
+	"\x0eEnrollResponse\x12 \n" +
+	"\vcertificate\x18\x01 \x01(\fR\vcertificate\x12%\n" +
+	"\x0eca_certificate\x18\x02 \x01(\fR\rcaCertificate\x12\x14\n" +
+	"\x05proof\x18\x03 \x01(\fR\x05proof\x12\x1b\n" +
+	"\tworker_id\x18\x04 \x01(\tR\bworkerId\"\xd0\x03\n" +
 	"\rWorkerMessage\x121\n" +
 	"\x05hello\x18\x01 \x01(\v2\x19.stampede.worker.v1.HelloH\x00R\x05hello\x12=\n" +
 	"\theartbeat\x18\x02 \x01(\v2\x1d.stampede.worker.v1.HeartbeatH\x00R\theartbeat\x12>\n" +
@@ -2011,9 +2162,10 @@ const file_stampede_worker_v1_worker_proto_rawDesc = "" +
 	"\x03seq\x18\x02 \x01(\x04R\x03seq\x12\x1a\n" +
 	"\bfinished\x18\x03 \x01(\bR\bfinished\"D\n" +
 	"\x0fServerHeartbeat\x121\n" +
-	"\x15server_time_unix_nano\x18\x01 \x01(\x03R\x12serverTimeUnixNano2d\n" +
+	"\x15server_time_unix_nano\x18\x01 \x01(\x03R\x12serverTimeUnixNano2\xb5\x01\n" +
 	"\rWorkerService\x12S\n" +
-	"\aConnect\x12!.stampede.worker.v1.WorkerMessage\x1a!.stampede.worker.v1.ServerMessage(\x010\x01B=Z;github.com/Ivan825/Stampede/gen/stampede/worker/v1;workerv1b\x06proto3"
+	"\aConnect\x12!.stampede.worker.v1.WorkerMessage\x1a!.stampede.worker.v1.ServerMessage(\x010\x01\x12O\n" +
+	"\x06Enroll\x12!.stampede.worker.v1.EnrollRequest\x1a\".stampede.worker.v1.EnrollResponseB=Z;github.com/Ivan825/Stampede/gen/stampede/worker/v1;workerv1b\x06proto3"
 
 var (
 	file_stampede_worker_v1_worker_proto_rawDescOnce sync.Once
@@ -2027,74 +2179,78 @@ func file_stampede_worker_v1_worker_proto_rawDescGZIP() []byte {
 	return file_stampede_worker_v1_worker_proto_rawDescData
 }
 
-var file_stampede_worker_v1_worker_proto_msgTypes = make([]protoimpl.MessageInfo, 30)
+var file_stampede_worker_v1_worker_proto_msgTypes = make([]protoimpl.MessageInfo, 32)
 var file_stampede_worker_v1_worker_proto_goTypes = []any{
-	(*WorkerMessage)(nil),   // 0: stampede.worker.v1.WorkerMessage
-	(*ServerMessage)(nil),   // 1: stampede.worker.v1.ServerMessage
-	(*ProtocolVersion)(nil), // 2: stampede.worker.v1.ProtocolVersion
-	(*Hello)(nil),           // 3: stampede.worker.v1.Hello
-	(*Capacity)(nil),        // 4: stampede.worker.v1.Capacity
-	(*Health)(nil),          // 5: stampede.worker.v1.Health
-	(*Heartbeat)(nil),       // 6: stampede.worker.v1.Heartbeat
-	(*ClockPong)(nil),       // 7: stampede.worker.v1.ClockPong
-	(*RunAccepted)(nil),     // 8: stampede.worker.v1.RunAccepted
-	(*Snapshot)(nil),        // 9: stampede.worker.v1.Snapshot
-	(*StepStats)(nil),       // 10: stampede.worker.v1.StepStats
-	(*JourneyStats)(nil),    // 11: stampede.worker.v1.JourneyStats
-	(*PhaseHistograms)(nil), // 12: stampede.worker.v1.PhaseHistograms
-	(*RunFinished)(nil),     // 13: stampede.worker.v1.RunFinished
-	(*RunFailed)(nil),       // 14: stampede.worker.v1.RunFailed
-	(*Welcome)(nil),         // 15: stampede.worker.v1.Welcome
-	(*ClockPing)(nil),       // 16: stampede.worker.v1.ClockPing
-	(*StartRun)(nil),        // 17: stampede.worker.v1.StartRun
-	(*StopRun)(nil),         // 18: stampede.worker.v1.StopRun
-	(*Ack)(nil),             // 19: stampede.worker.v1.Ack
-	(*ServerHeartbeat)(nil), // 20: stampede.worker.v1.ServerHeartbeat
-	nil,                     // 21: stampede.worker.v1.Hello.LabelsEntry
-	nil,                     // 22: stampede.worker.v1.Snapshot.StepsEntry
-	nil,                     // 23: stampede.worker.v1.Snapshot.JourneysEntry
-	nil,                     // 24: stampede.worker.v1.StepStats.ErrorsEntry
-	nil,                     // 25: stampede.worker.v1.StepStats.StatusEntry
-	nil,                     // 26: stampede.worker.v1.StepStats.ProtocolsEntry
-	nil,                     // 27: stampede.worker.v1.RunFinished.PhasesEntry
-	nil,                     // 28: stampede.worker.v1.StartRun.EnvEntry
-	nil,                     // 29: stampede.worker.v1.StartRun.SecretsEntry
+	(*EnrollRequest)(nil),   // 0: stampede.worker.v1.EnrollRequest
+	(*EnrollResponse)(nil),  // 1: stampede.worker.v1.EnrollResponse
+	(*WorkerMessage)(nil),   // 2: stampede.worker.v1.WorkerMessage
+	(*ServerMessage)(nil),   // 3: stampede.worker.v1.ServerMessage
+	(*ProtocolVersion)(nil), // 4: stampede.worker.v1.ProtocolVersion
+	(*Hello)(nil),           // 5: stampede.worker.v1.Hello
+	(*Capacity)(nil),        // 6: stampede.worker.v1.Capacity
+	(*Health)(nil),          // 7: stampede.worker.v1.Health
+	(*Heartbeat)(nil),       // 8: stampede.worker.v1.Heartbeat
+	(*ClockPong)(nil),       // 9: stampede.worker.v1.ClockPong
+	(*RunAccepted)(nil),     // 10: stampede.worker.v1.RunAccepted
+	(*Snapshot)(nil),        // 11: stampede.worker.v1.Snapshot
+	(*StepStats)(nil),       // 12: stampede.worker.v1.StepStats
+	(*JourneyStats)(nil),    // 13: stampede.worker.v1.JourneyStats
+	(*PhaseHistograms)(nil), // 14: stampede.worker.v1.PhaseHistograms
+	(*RunFinished)(nil),     // 15: stampede.worker.v1.RunFinished
+	(*RunFailed)(nil),       // 16: stampede.worker.v1.RunFailed
+	(*Welcome)(nil),         // 17: stampede.worker.v1.Welcome
+	(*ClockPing)(nil),       // 18: stampede.worker.v1.ClockPing
+	(*StartRun)(nil),        // 19: stampede.worker.v1.StartRun
+	(*StopRun)(nil),         // 20: stampede.worker.v1.StopRun
+	(*Ack)(nil),             // 21: stampede.worker.v1.Ack
+	(*ServerHeartbeat)(nil), // 22: stampede.worker.v1.ServerHeartbeat
+	nil,                     // 23: stampede.worker.v1.Hello.LabelsEntry
+	nil,                     // 24: stampede.worker.v1.Snapshot.StepsEntry
+	nil,                     // 25: stampede.worker.v1.Snapshot.JourneysEntry
+	nil,                     // 26: stampede.worker.v1.StepStats.ErrorsEntry
+	nil,                     // 27: stampede.worker.v1.StepStats.StatusEntry
+	nil,                     // 28: stampede.worker.v1.StepStats.ProtocolsEntry
+	nil,                     // 29: stampede.worker.v1.RunFinished.PhasesEntry
+	nil,                     // 30: stampede.worker.v1.StartRun.EnvEntry
+	nil,                     // 31: stampede.worker.v1.StartRun.SecretsEntry
 }
 var file_stampede_worker_v1_worker_proto_depIdxs = []int32{
-	3,  // 0: stampede.worker.v1.WorkerMessage.hello:type_name -> stampede.worker.v1.Hello
-	6,  // 1: stampede.worker.v1.WorkerMessage.heartbeat:type_name -> stampede.worker.v1.Heartbeat
-	7,  // 2: stampede.worker.v1.WorkerMessage.clock_pong:type_name -> stampede.worker.v1.ClockPong
-	8,  // 3: stampede.worker.v1.WorkerMessage.run_accepted:type_name -> stampede.worker.v1.RunAccepted
-	9,  // 4: stampede.worker.v1.WorkerMessage.snapshot:type_name -> stampede.worker.v1.Snapshot
-	13, // 5: stampede.worker.v1.WorkerMessage.run_finished:type_name -> stampede.worker.v1.RunFinished
-	14, // 6: stampede.worker.v1.WorkerMessage.run_failed:type_name -> stampede.worker.v1.RunFailed
-	15, // 7: stampede.worker.v1.ServerMessage.welcome:type_name -> stampede.worker.v1.Welcome
-	16, // 8: stampede.worker.v1.ServerMessage.clock_ping:type_name -> stampede.worker.v1.ClockPing
-	17, // 9: stampede.worker.v1.ServerMessage.start_run:type_name -> stampede.worker.v1.StartRun
-	18, // 10: stampede.worker.v1.ServerMessage.stop_run:type_name -> stampede.worker.v1.StopRun
-	19, // 11: stampede.worker.v1.ServerMessage.ack:type_name -> stampede.worker.v1.Ack
-	20, // 12: stampede.worker.v1.ServerMessage.heartbeat:type_name -> stampede.worker.v1.ServerHeartbeat
-	2,  // 13: stampede.worker.v1.Hello.protocol:type_name -> stampede.worker.v1.ProtocolVersion
-	21, // 14: stampede.worker.v1.Hello.labels:type_name -> stampede.worker.v1.Hello.LabelsEntry
-	4,  // 15: stampede.worker.v1.Hello.capacity:type_name -> stampede.worker.v1.Capacity
-	5,  // 16: stampede.worker.v1.Heartbeat.health:type_name -> stampede.worker.v1.Health
-	22, // 17: stampede.worker.v1.Snapshot.steps:type_name -> stampede.worker.v1.Snapshot.StepsEntry
-	23, // 18: stampede.worker.v1.Snapshot.journeys:type_name -> stampede.worker.v1.Snapshot.JourneysEntry
-	5,  // 19: stampede.worker.v1.Snapshot.health:type_name -> stampede.worker.v1.Health
-	24, // 20: stampede.worker.v1.StepStats.errors:type_name -> stampede.worker.v1.StepStats.ErrorsEntry
-	25, // 21: stampede.worker.v1.StepStats.status:type_name -> stampede.worker.v1.StepStats.StatusEntry
-	26, // 22: stampede.worker.v1.StepStats.protocols:type_name -> stampede.worker.v1.StepStats.ProtocolsEntry
-	27, // 23: stampede.worker.v1.RunFinished.phases:type_name -> stampede.worker.v1.RunFinished.PhasesEntry
-	2,  // 24: stampede.worker.v1.Welcome.protocol:type_name -> stampede.worker.v1.ProtocolVersion
-	28, // 25: stampede.worker.v1.StartRun.env:type_name -> stampede.worker.v1.StartRun.EnvEntry
-	29, // 26: stampede.worker.v1.StartRun.secrets:type_name -> stampede.worker.v1.StartRun.SecretsEntry
-	10, // 27: stampede.worker.v1.Snapshot.StepsEntry.value:type_name -> stampede.worker.v1.StepStats
-	11, // 28: stampede.worker.v1.Snapshot.JourneysEntry.value:type_name -> stampede.worker.v1.JourneyStats
-	12, // 29: stampede.worker.v1.RunFinished.PhasesEntry.value:type_name -> stampede.worker.v1.PhaseHistograms
-	0,  // 30: stampede.worker.v1.WorkerService.Connect:input_type -> stampede.worker.v1.WorkerMessage
-	1,  // 31: stampede.worker.v1.WorkerService.Connect:output_type -> stampede.worker.v1.ServerMessage
-	31, // [31:32] is the sub-list for method output_type
-	30, // [30:31] is the sub-list for method input_type
+	5,  // 0: stampede.worker.v1.WorkerMessage.hello:type_name -> stampede.worker.v1.Hello
+	8,  // 1: stampede.worker.v1.WorkerMessage.heartbeat:type_name -> stampede.worker.v1.Heartbeat
+	9,  // 2: stampede.worker.v1.WorkerMessage.clock_pong:type_name -> stampede.worker.v1.ClockPong
+	10, // 3: stampede.worker.v1.WorkerMessage.run_accepted:type_name -> stampede.worker.v1.RunAccepted
+	11, // 4: stampede.worker.v1.WorkerMessage.snapshot:type_name -> stampede.worker.v1.Snapshot
+	15, // 5: stampede.worker.v1.WorkerMessage.run_finished:type_name -> stampede.worker.v1.RunFinished
+	16, // 6: stampede.worker.v1.WorkerMessage.run_failed:type_name -> stampede.worker.v1.RunFailed
+	17, // 7: stampede.worker.v1.ServerMessage.welcome:type_name -> stampede.worker.v1.Welcome
+	18, // 8: stampede.worker.v1.ServerMessage.clock_ping:type_name -> stampede.worker.v1.ClockPing
+	19, // 9: stampede.worker.v1.ServerMessage.start_run:type_name -> stampede.worker.v1.StartRun
+	20, // 10: stampede.worker.v1.ServerMessage.stop_run:type_name -> stampede.worker.v1.StopRun
+	21, // 11: stampede.worker.v1.ServerMessage.ack:type_name -> stampede.worker.v1.Ack
+	22, // 12: stampede.worker.v1.ServerMessage.heartbeat:type_name -> stampede.worker.v1.ServerHeartbeat
+	4,  // 13: stampede.worker.v1.Hello.protocol:type_name -> stampede.worker.v1.ProtocolVersion
+	23, // 14: stampede.worker.v1.Hello.labels:type_name -> stampede.worker.v1.Hello.LabelsEntry
+	6,  // 15: stampede.worker.v1.Hello.capacity:type_name -> stampede.worker.v1.Capacity
+	7,  // 16: stampede.worker.v1.Heartbeat.health:type_name -> stampede.worker.v1.Health
+	24, // 17: stampede.worker.v1.Snapshot.steps:type_name -> stampede.worker.v1.Snapshot.StepsEntry
+	25, // 18: stampede.worker.v1.Snapshot.journeys:type_name -> stampede.worker.v1.Snapshot.JourneysEntry
+	7,  // 19: stampede.worker.v1.Snapshot.health:type_name -> stampede.worker.v1.Health
+	26, // 20: stampede.worker.v1.StepStats.errors:type_name -> stampede.worker.v1.StepStats.ErrorsEntry
+	27, // 21: stampede.worker.v1.StepStats.status:type_name -> stampede.worker.v1.StepStats.StatusEntry
+	28, // 22: stampede.worker.v1.StepStats.protocols:type_name -> stampede.worker.v1.StepStats.ProtocolsEntry
+	29, // 23: stampede.worker.v1.RunFinished.phases:type_name -> stampede.worker.v1.RunFinished.PhasesEntry
+	4,  // 24: stampede.worker.v1.Welcome.protocol:type_name -> stampede.worker.v1.ProtocolVersion
+	30, // 25: stampede.worker.v1.StartRun.env:type_name -> stampede.worker.v1.StartRun.EnvEntry
+	31, // 26: stampede.worker.v1.StartRun.secrets:type_name -> stampede.worker.v1.StartRun.SecretsEntry
+	12, // 27: stampede.worker.v1.Snapshot.StepsEntry.value:type_name -> stampede.worker.v1.StepStats
+	13, // 28: stampede.worker.v1.Snapshot.JourneysEntry.value:type_name -> stampede.worker.v1.JourneyStats
+	14, // 29: stampede.worker.v1.RunFinished.PhasesEntry.value:type_name -> stampede.worker.v1.PhaseHistograms
+	2,  // 30: stampede.worker.v1.WorkerService.Connect:input_type -> stampede.worker.v1.WorkerMessage
+	0,  // 31: stampede.worker.v1.WorkerService.Enroll:input_type -> stampede.worker.v1.EnrollRequest
+	3,  // 32: stampede.worker.v1.WorkerService.Connect:output_type -> stampede.worker.v1.ServerMessage
+	1,  // 33: stampede.worker.v1.WorkerService.Enroll:output_type -> stampede.worker.v1.EnrollResponse
+	32, // [32:34] is the sub-list for method output_type
+	30, // [30:32] is the sub-list for method input_type
 	30, // [30:30] is the sub-list for extension type_name
 	30, // [30:30] is the sub-list for extension extendee
 	0,  // [0:30] is the sub-list for field type_name
@@ -2105,7 +2261,7 @@ func file_stampede_worker_v1_worker_proto_init() {
 	if File_stampede_worker_v1_worker_proto != nil {
 		return
 	}
-	file_stampede_worker_v1_worker_proto_msgTypes[0].OneofWrappers = []any{
+	file_stampede_worker_v1_worker_proto_msgTypes[2].OneofWrappers = []any{
 		(*WorkerMessage_Hello)(nil),
 		(*WorkerMessage_Heartbeat)(nil),
 		(*WorkerMessage_ClockPong)(nil),
@@ -2114,7 +2270,7 @@ func file_stampede_worker_v1_worker_proto_init() {
 		(*WorkerMessage_RunFinished)(nil),
 		(*WorkerMessage_RunFailed)(nil),
 	}
-	file_stampede_worker_v1_worker_proto_msgTypes[1].OneofWrappers = []any{
+	file_stampede_worker_v1_worker_proto_msgTypes[3].OneofWrappers = []any{
 		(*ServerMessage_Welcome)(nil),
 		(*ServerMessage_ClockPing)(nil),
 		(*ServerMessage_StartRun)(nil),
@@ -2128,7 +2284,7 @@ func file_stampede_worker_v1_worker_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_stampede_worker_v1_worker_proto_rawDesc), len(file_stampede_worker_v1_worker_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   30,
+			NumMessages:   32,
 			NumExtensions: 0,
 			NumServices:   1,
 		},
