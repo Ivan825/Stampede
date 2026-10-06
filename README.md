@@ -64,8 +64,9 @@ failed. Accuracy is checked against a calibrated server in CI
 soak, breakpoint, steps, recovery and wave shapes on any scenario; targets
 such as `checkout.p95 < 800ms`; breakpoint search; the knee of the
 throughput-against-load curve; per-user network emulation (3G, 4G, slow
-Wi-Fi, or explicit latency, jitter, bandwidth and packet loss); auto-abort
-when a target falls over ([test types](docs/guides/test-types.md)).
+Wi-Fi, or explicit latency, jitter, bandwidth and packet loss); replay of
+an access log or HAR file at its recorded times; auto-abort when a target
+falls over ([test types](docs/guides/test-types.md)).
 
 **Fault injection.** `stampede agent` sits next to your database, cache or
 downstream services and, on a scenario's timeline, slows, throttles,

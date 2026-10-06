@@ -35,7 +35,8 @@ The authoritative definition is the [JSON Schema](../../schema/scenario.schema.j
 
 | Field | Notes |
 |---|---|
-| `mode` | `vus` (closed) or `rate` (open); `rate:` alone implies `rate` |
+| `mode` | `vus` (closed), `rate` (open) or `replay`; `rate:` alone implies `rate` |
+| `replay` | with `mode: replay`: `{file, format (auto, log, har), speed, limit, host, static}`; journeys come from the recording ([replay](../guides/test-types.md#replaying-recorded-traffic)) |
 | `vus`, `rate`, `duration` | constant load |
 | `stages[]` | `{duration, target}`; target is users or a rate |
 | `shape` | `smoke baseline stress spike soak breakpoint steps recovery wave` |

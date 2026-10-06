@@ -17,7 +17,7 @@ groups:
       - { name: Breakpoint search and the knee of the throughput curve, status: shipped, doc: test-types }
       - { name: "Network emulation per user: latency, jitter, bandwidth, packet loss", status: shipped, doc: test-types }
       - { name: Auto-abort on sustained errors or latency, status: shipped, doc: safety }
-      - { name: Replay of recorded traffic, status: planned }
+      - { name: Replay of recorded traffic from access logs and HAR files, status: shipped, doc: docs/guides/test-types }
       - { name: "Fault injection agent: slow, cut or kill dependencies mid-run", status: shipped, doc: docs/guides/faults }
   - name: Protocols
     features:

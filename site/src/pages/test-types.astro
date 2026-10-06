@@ -28,7 +28,9 @@ const shapes = [
         <div class="card"><h3>Slower networks</h3><p><code>network: {"{ profile: 3g }"}</code> adds round-trip time, jitter, bandwidth limits and packet loss to every user's connections: slow-3g, 3g, 4g, slow-wifi, or your own values.</p></div>
         <div class="card"><h3>Auto-abort</h3><p>Stop a run when errors or p95 stay above a limit for a set time. The server applies a floor to every run.</p></div>
         <div class="card"><h3>Contention and spikes</h3><p>Last-item races and flash-sale spikes ship in the e-commerce pack.</p></div>
-        <div class="card"><h3>Planned</h3><p>Connection floods, slow clients, large payloads, and failing a dependency mid-run with an in-environment agent.</p></div>
+        <div class="card"><h3>Replay</h3><p><code>mode: replay</code> sends the requests of an access log or HAR file at their recorded times, sped up if you like, with latency per endpoint.</p></div>
+        <div class="card"><h3>Fault injection</h3><p><code>stampede agent</code> slows, throttles or cuts a dependency's connections, pauses containers or scales deployments on a timeline, and reverts everything at the end.</p></div>
+        <div class="card"><h3>Planned</h3><p>Connection floods, slow clients and large payloads.</p></div>
       </div>
       <p style="margin-top:24px"><a href="/docs/guides/test-types/">Test types in the docs →</a></p>
     </section>

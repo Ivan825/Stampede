@@ -42,6 +42,48 @@ The **knee** is the last level that still scaled: the next one delivered
 less than half of the throughput the extra load should have added, tripled
 p95 compared with the lightest level, or sharply raised errors.
 
+## Replaying recorded traffic
+
+`mode: replay` sends the requests of a recording at their recorded times,
+so the target sees the arrival pattern it saw in production: the morning
+ramp, the lunchtime burst, the bots at 3 a.m.
+
+```yaml
+target:
+  baseURL: ${env.TARGET_URL}
+  headers:
+    Authorization: Bearer ${secret.API_TOKEN}   # recorded credentials are never replayed
+load:
+  mode: replay
+  replay:
+    file: access.log    # common/combined access log, or a HAR file
+    speed: 4            # an hour of traffic in 15 minutes
+targets:
+  - http.p95 < 500ms
+```
+
+- **Access logs** give the method, path and query of each request at
+  one-second resolution. **HAR files** add request bodies and their
+  content type, with millisecond timing; only requests to one host are
+  kept (the most frequent, or `host:`).
+- Static assets (`.js`, `.css`, images, fonts) are skipped unless
+  `static: true`. At most `limit` requests are replayed (default 100,000).
+- Headers and cookies from the recording are not replayed. Set any
+  credentials the target needs in `target.headers`.
+- Every distinct endpoint (`GET /api/products/{id}`: numbers, UUIDs and
+  long hex or token segments become placeholders) becomes a journey with
+  one step, so the report breaks latency down per endpoint. Leave
+  `journeys` out of a replay scenario.
+- Replay is an open model. A request is due at its recorded offset divided
+  by `speed`, and latency counts from then. If no user is free the request
+  is dropped and counted, as in any rate-mode run.
+- Distributed runs split the requests between workers, and each request is
+  sent once. Like CSV feeders, the file must be readable at the same path
+  on the server (under `--data-dir`) and on every worker.
+
+`--rate`, `--vus`, `--duration` and `--shape` do not apply to a replay;
+change `speed` instead.
+
 ## Targeted stresses
 
 Some stresses are journeys rather than shapes. The [e-commerce
