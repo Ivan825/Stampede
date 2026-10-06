@@ -248,6 +248,7 @@ func (v *VU) request(ctx context.Context, st *scenario.CStep, intended time.Time
 	res := httpx.Do(v.client, req, bodyLen, keepBody, v.e.maxBody)
 	sample.Start, sample.End, sample.Phases = res.Start, res.End, res.Phases
 	sample.Status, sample.BytesIn, sample.BytesOut = res.Status, res.BytesIn, res.BytesOut
+	sample.Proto = res.Proto
 
 	if res.Err != nil {
 		if ctx.Err() != nil {

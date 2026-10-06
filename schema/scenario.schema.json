@@ -32,7 +32,8 @@
           "additionalProperties": false,
           "properties": {
             "connections": { "enum": ["per-vu", "shared"], "default": "per-vu", "description": "per-vu: each user has its own keep-alive connections like a browser; shared: one pool like a service client." },
-            "http2": { "type": "boolean" },
+            "http2": { "type": "boolean", "description": "Negotiate HTTP/2 over TLS when the server offers it." },
+            "h2c": { "type": "boolean", "description": "Speak HTTP/2 without TLS to http:// targets (prior knowledge)." },
             "disableKeepAlive": { "type": "boolean" },
             "insecureSkipVerify": { "type": "boolean", "description": "Skip TLS certificate checks (test targets only)." },
             "maxRedirects": { "type": "integer", "description": "0 = default 10, -1 = do not follow." },
