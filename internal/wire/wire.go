@@ -18,7 +18,7 @@ import (
 // so any minor of the same major interoperates.
 const (
 	ProtocolMajor = 1
-	ProtocolMinor = 2
+	ProtocolMinor = 3 // 1.3: browser phases (fcp, lcp, cls, inp, load)
 )
 
 // Version is the protocol version as a message.
@@ -176,9 +176,8 @@ func SnapshotFromProto(worker string, p *workerv1.Snapshot) (*metrics.Snapshot, 
 		st.Requests, st.Failed = ps.GetRequests(), ps.GetFailed()
 		st.ChecksPassed, st.ChecksFailed = ps.GetChecksPassed(), ps.GetChecksFailed()
 		st.BytesIn, st.BytesOut = ps.GetBytesIn(), ps.GetBytesOut()
-		if len(ps.GetPhaseSum()) > len(st.PhaseSum) {
-			return nil, nil, fmt.Errorf("step %d: %d phase sums, want at most %d", id, len(ps.GetPhaseSum()), len(st.PhaseSum))
-		}
+		// A newer peer may know more phases; the ones this build does not
+		// know are dropped (copy stops at the shorter length).
 		copy(st.PhaseSum[:], ps.GetPhaseSum())
 		st.Streams, st.Events, st.StreamUs = ps.GetStreams(), ps.GetEvents(), ps.GetStreamUs()
 		for k, v := range ps.GetProtocols() {
@@ -250,14 +249,15 @@ func PhasesToProto(ph map[int]*[metrics.NumPhases]*metrics.Histogram) (map[int32
 func PhasesFromProto(p map[int32]*workerv1.PhaseHistograms) (map[int]*[metrics.NumPhases]*metrics.Histogram, error) {
 	out := make(map[int]*[metrics.NumPhases]*metrics.Histogram, len(p))
 	for id, hs := range p {
-		if len(hs.GetPhases()) > int(metrics.NumPhases) {
-			return nil, fmt.Errorf("step %d: %d phase histograms, want at most %d", id, len(hs.GetPhases()), metrics.NumPhases)
-		}
 		dst := &[metrics.NumPhases]*metrics.Histogram{}
 		for i := range dst {
 			dst[i] = metrics.NewHistogram()
 		}
-		for i, b := range hs.GetPhases() {
+		phases := hs.GetPhases()
+		if len(phases) > len(dst) {
+			phases = phases[:len(dst)] // phases a newer peer knows and this build does not
+		}
+		for i, b := range phases {
 			if err := dst[i].UnmarshalBinary(b); err != nil {
 				return nil, fmt.Errorf("step %d phase %s: %w", id, metrics.PhaseNames[i], err)
 			}

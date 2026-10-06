@@ -65,9 +65,13 @@ type CStep struct {
 	SSE     *CSSE
 	// WS is set for ws steps: Req holds the handshake and Steps run on
 	// the connection.
-	WS     *CWS
-	Send   *CSend
-	Expect *CExpect
+	WS *CWS
+	// Browser is set for browser steps, whose Steps run in the page;
+	// Action for the actions inside them.
+	Browser *CBrowser
+	Action  *CAction
+	Send    *CSend
+	Expect  *CExpect
 	// GRPC is set for grpc steps; Req holds their check (without status),
 	// extractors and timeout.
 	GRPC *CGRPC
@@ -122,6 +126,26 @@ type CGRPC struct {
 // CWS is a compiled WebSocket block.
 type CWS struct {
 	Subprotocols []string
+}
+
+// CBrowser is a compiled browser block: the page is opened at URL and the
+// block's Steps (actions) run in it.
+type CBrowser struct {
+	URL      *Template
+	Timeout  Duration
+	Viewport Viewport
+}
+
+// CAction is a compiled browser action.
+type CAction struct {
+	Target  *Template
+	Pairs   []CSelectorValue
+	Timeout Duration
+}
+
+// CSelectorValue is a selector and its value, both templates.
+type CSelectorValue struct {
+	Selector, Value *Template
 }
 
 // CSend is a compiled WebSocket message: exactly one of Text and JSON.
@@ -270,6 +294,8 @@ type compiler struct {
 	static []string
 	// inWS is set while compiling the steps of a ws block.
 	inWS bool
+	// inBrowser is set while compiling the steps of a browser block.
+	inBrowser bool
 }
 
 func (c *compiler) errf(path, format string, args ...any) {
@@ -405,6 +431,58 @@ func (c *compiler) step(path, journey string, st Step, vars []string) (*CStep, [
 		c.inWS = true
 		cs.Steps, vars = c.steps(path, journey, w.Steps, vars)
 		c.inWS = false
+	case StepBrowser:
+		b := st.Browser
+		if c.inBrowser || c.inWS {
+			c.errf(path, "a browser block cannot be nested in a browser or ws block")
+			break
+		}
+		if cs.Name == "" {
+			cs.Name = "browser " + b.URL
+		}
+		cb := &CBrowser{URL: c.template(scope, path+".browser", b.URL), Timeout: b.Timeout, Viewport: Viewport{Width: 1280, Height: 800}}
+		if v := b.Viewport; v != nil {
+			if v.Width < 200 || v.Height < 200 || v.Width > 8000 || v.Height > 8000 {
+				c.errf(path+".viewport", "width and height must be between 200 and 8000")
+			}
+			cb.Viewport = *v
+		}
+		cs.Browser = cb
+		c.record(cs)
+		if len(b.Steps) == 0 {
+			c.errf(path, "browser needs steps to run in the page")
+		}
+		c.inBrowser = true
+		cs.Steps, vars = c.steps(path, journey, b.Steps, vars)
+		c.inBrowser = false
+	case StepGoto, StepClick, StepFill, StepPress, StepWaitFor, StepAssert:
+		a := st.Action
+		if !c.inBrowser {
+			c.errf(path, "%s only works inside a browser block", st.Kind)
+			break
+		}
+		ca := &CAction{Timeout: a.Timeout}
+		if a.Target != "" {
+			ca.Target = c.template(scope, fmt.Sprintf("%s.%s", path, st.Kind), a.Target)
+		}
+		for i, p := range a.Pairs {
+			pp := fmt.Sprintf("%s.%s[%d]", path, st.Kind, i)
+			ca.Pairs = append(ca.Pairs, CSelectorValue{Selector: c.template(scope, pp, p.Selector), Value: c.template(scope, pp, p.Value)})
+		}
+		if cs.Name == "" {
+			switch {
+			case a.Target != "":
+				cs.Name = string(st.Kind) + " " + a.Target
+			default:
+				var sels []string
+				for _, p := range a.Pairs {
+					sels = append(sels, p.Selector)
+				}
+				cs.Name = string(st.Kind) + " " + strings.Join(sels, ", ")
+			}
+		}
+		cs.Action = ca
+		c.record(cs)
 	case StepSend:
 		if !c.inWS {
 			c.errf(path, "send only works inside a ws block")

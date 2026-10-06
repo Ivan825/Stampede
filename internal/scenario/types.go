@@ -266,6 +266,15 @@ const (
 	StepExpect  StepKind = "expect"
 	StepGRPC    StepKind = "grpc"
 	StepPlugin  StepKind = "plugin"
+	// Browser opens a real browser page; the actions after it run in
+	// that page.
+	StepBrowser StepKind = "browser"
+	StepGoto    StepKind = "goto"
+	StepClick   StepKind = "click"
+	StepFill    StepKind = "fill"
+	StepPress   StepKind = "press"
+	StepWaitFor StepKind = "waitFor"
+	StepAssert  StepKind = "assert"
 )
 
 // Step is one action within a journey. Exactly one kind-specific field is
@@ -288,10 +297,13 @@ type Step struct {
 	GraphQL *GraphQL
 	SSE     *SSE
 	WS      *WebSocket
-	Send    *Send
-	Expect  *Expect
-	GRPC    *GRPC
-	Plugin  *PluginStep
+	Browser *Browser
+	// Action is set for goto, click, fill, press, waitFor and assert.
+	Action *BrowserAction
+	Send   *Send
+	Expect *Expect
+	GRPC   *GRPC
+	Plugin *PluginStep
 }
 
 // Request is an HTTP call.
@@ -356,6 +368,38 @@ type WebSocket struct {
 	// Timeout bounds the opening handshake.
 	Timeout Duration
 	Steps   []Step
+}
+
+// Browser opens URL in a browser page as one virtual user would, then
+// runs Steps (browser actions) in that page.
+type Browser struct {
+	URL string
+	// Timeout bounds each action (default the target timeout).
+	Timeout  Duration
+	Viewport *Viewport
+	Steps    []Step
+}
+
+// Viewport is the page size in CSS pixels (default 1280×800).
+type Viewport struct {
+	Width  int `yaml:"width" json:"width"`
+	Height int `yaml:"height" json:"height"`
+}
+
+// BrowserAction is one action in a browser page. Target is the URL for
+// goto, the CSS selector for click and waitFor, and the key for press.
+// Pairs map selectors to values for fill (text to type) and assert (text
+// the element must contain), in order.
+type BrowserAction struct {
+	Target  string
+	Pairs   []SelectorValue
+	Timeout Duration
+}
+
+// SelectorValue is one selector and its value.
+type SelectorValue struct {
+	Selector string
+	Value    string
 }
 
 // Send writes one text message: Text is a template, JSON a JSON template

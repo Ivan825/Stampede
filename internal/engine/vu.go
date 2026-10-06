@@ -42,6 +42,8 @@ type VU struct {
 	traceID [16]byte
 	// ws is the connection of the ws block being run, if any.
 	ws *wsConn
+	// page is the page of the browser block being run, if any.
+	page *page
 	// plugins holds the user's session in each plugin it has used.
 	plugins map[string]*pluginhost.Session
 }
@@ -174,6 +176,10 @@ func (v *VU) runStep(ctx context.Context, st *scenario.CStep, intended time.Time
 		return v.sse(ctx, st, intended)
 	case scenario.StepWS:
 		return v.websocket(ctx, st, intended)
+	case scenario.StepBrowser:
+		return v.browserBlock(ctx, st, intended)
+	case scenario.StepGoto, scenario.StepClick, scenario.StepFill, scenario.StepPress, scenario.StepWaitFor, scenario.StepAssert:
+		return v.browserAction(ctx, st)
 	case scenario.StepSend:
 		return v.wsSend(ctx, st)
 	case scenario.StepExpect:

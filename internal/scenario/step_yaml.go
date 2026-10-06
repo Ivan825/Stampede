@@ -20,7 +20,8 @@ var httpMethods = map[string]string{
 
 // kindKeys are the step keys that name a step kind, besides HTTP methods,
 // in the order they are listed in error messages.
-var kindKeys = []string{"think", "branch", "loop", "while", "group", "script", "graphql", "sse", "ws", "send", "expect", "grpc", "plugin"}
+var kindKeys = []string{"think", "branch", "loop", "while", "group", "script", "graphql", "sse", "ws", "send", "expect", "grpc", "plugin",
+	"browser", "goto", "click", "fill", "press", "waitFor", "assert"}
 
 // requestKeys are the HTTP request parts shared by request-like steps.
 var requestKeys = []string{"headers", "query", "json", "body", "form", "check", "extract", "timeout"}
@@ -42,6 +43,13 @@ var stepKeys = map[string][]string{
 	"expect":  {"extract"},
 	"grpc":    {"target", "message", "metadata", "protoset", "proto", "importPaths", "check", "extract", "timeout"},
 	"plugin":  {"with", "check", "extract", "timeout"},
+	"browser": {"timeout", "viewport", "steps"},
+	"goto":    {"timeout"},
+	"click":   {"timeout"},
+	"fill":    {"timeout"},
+	"press":   {"timeout"},
+	"waitFor": {"timeout"},
+	"assert":  {"timeout"},
 }
 
 // UnmarshalYAML reads the compact step syntax, for example
@@ -220,6 +228,50 @@ func (s *Step) UnmarshalYAML(n *yaml.Node) error {
 			return err
 		}
 		out.Plugin = p
+	case "browser":
+		out.Kind = StepBrowser
+		b := &Browser{URL: fields["browser"].Value}
+		if v, ok := fields["timeout"]; ok {
+			if err := v.Decode(&b.Timeout); err != nil {
+				return err
+			}
+		}
+		if v, ok := fields["viewport"]; ok {
+			b.Viewport = &Viewport{}
+			if err := decodeStrict(v, "viewport", b.Viewport); err != nil {
+				return err
+			}
+		}
+		if _, ok := fields["steps"]; !ok {
+			return fmt.Errorf("line %d: browser needs steps to run in the page (click, fill, press, waitFor, assert, goto)", fields["browser"].Line)
+		}
+		if err := decodeSteps(fields, &b.Steps); err != nil {
+			return err
+		}
+		out.Browser = b
+	case "goto", "click", "press", "waitFor", "fill", "assert":
+		out.Kind = StepKind(kind)
+		a := &BrowserAction{}
+		v := fields[kind]
+		if kind == "fill" || kind == "assert" {
+			if v.Kind != yaml.MappingNode || len(v.Content) == 0 {
+				return fmt.Errorf("line %d: %s takes a mapping of CSS selector to text, e.g. {\"#email\": \"a@b.c\"}", v.Line, kind)
+			}
+			for i := 0; i+1 < len(v.Content); i += 2 {
+				a.Pairs = append(a.Pairs, SelectorValue{Selector: v.Content[i].Value, Value: v.Content[i+1].Value})
+			}
+		} else {
+			if v.Kind != yaml.ScalarNode || v.Value == "" {
+				return fmt.Errorf("line %d: %s takes a string", v.Line, kind)
+			}
+			a.Target = v.Value
+		}
+		if t, ok := fields["timeout"]; ok {
+			if err := t.Decode(&a.Timeout); err != nil {
+				return err
+			}
+		}
+		out.Action = a
 	}
 	*s = out
 	return nil
@@ -678,6 +730,31 @@ func (s Step) toMap() map[string]any {
 		}
 		if g.Timeout > 0 {
 			m["timeout"] = g.Timeout
+		}
+	case StepBrowser:
+		b := s.Browser
+		m["browser"] = b.URL
+		if b.Timeout > 0 {
+			m["timeout"] = b.Timeout
+		}
+		if b.Viewport != nil {
+			m["viewport"] = b.Viewport
+		}
+		m["steps"] = b.Steps
+	case StepGoto, StepClick, StepPress, StepWaitFor:
+		m[string(s.Kind)] = s.Action.Target
+		if s.Action.Timeout > 0 {
+			m["timeout"] = s.Action.Timeout
+		}
+	case StepFill, StepAssert:
+		pairs := &yaml.Node{Kind: yaml.MappingNode}
+		for _, p := range s.Action.Pairs {
+			pairs.Content = append(pairs.Content,
+				&yaml.Node{Kind: yaml.ScalarNode, Value: p.Selector}, &yaml.Node{Kind: yaml.ScalarNode, Value: p.Value})
+		}
+		m[string(s.Kind)] = pairs
+		if s.Action.Timeout > 0 {
+			m["timeout"] = s.Action.Timeout
 		}
 	case StepPlugin:
 		p := s.Plugin

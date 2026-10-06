@@ -23,11 +23,21 @@ const (
 	// PhaseFirstEvent is the time from the start of a streaming step to
 	// its first event: time to first token for an LLM API.
 	PhaseFirstEvent
+	// Browser page loads: first contentful paint, largest contentful
+	// paint, cumulative layout shift, interaction to next paint and the
+	// load event, each from the start of the navigation or interaction.
+	// CLS is unitless; it is stored as CLS seconds (a shift of 0.1 is
+	// recorded as 100ms) so it fits the same histograms.
+	PhaseFCP
+	PhaseLCP
+	PhaseCLS
+	PhaseINP
+	PhaseLoad
 	NumPhases
 )
 
 // PhaseNames are the report labels for each phase.
-var PhaseNames = [NumPhases]string{"dns", "connect", "tls", "wait", "download", "firstEvent"}
+var PhaseNames = [NumPhases]string{"dns", "connect", "tls", "wait", "download", "firstEvent", "fcp", "lcp", "cls", "inp", "load"}
 
 // Sample is one completed request.
 type Sample struct {

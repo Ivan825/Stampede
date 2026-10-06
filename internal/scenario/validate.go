@@ -185,6 +185,10 @@ func stepURL(st Step) (string, bool) {
 		return st.SSE.URL, true
 	case StepWS:
 		return st.WS.URL, true
+	case StepBrowser:
+		return st.Browser.URL, true
+	case StepGoto:
+		return st.Action.Target, true
 	}
 	return "", false
 }
@@ -203,6 +207,8 @@ func walkSteps(steps []Step, fn func(Step)) {
 			walkSteps(st.Group.Steps, fn)
 		case StepWS:
 			walkSteps(st.WS.Steps, fn)
+		case StepBrowser:
+			walkSteps(st.Browser.Steps, fn)
 		}
 	}
 }

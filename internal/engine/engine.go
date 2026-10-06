@@ -99,7 +99,9 @@ type Engine struct {
 	grpcDescs *grpcx.Descriptors
 	grpcSteps map[int]*grpcStep
 	// plugins serve plugin steps; nil without any.
-	plugins    pluginhost.Set
+	plugins pluginhost.Set
+	// browser is the headless Chrome of browser steps, started on first use.
+	browser    browserHost
 	pluginOnce sync.Once
 	httpOpts   httpx.Options
 	baseURL    string
@@ -357,6 +359,7 @@ func (e *Engine) shareFrac() float64 { return e.opts.ShareHi - e.opts.ShareLo }
 // Run executes the plan and blocks until all load has stopped.
 func (e *Engine) Run(ctx context.Context) (*Result, error) {
 	defer e.closePlugins()
+	defer e.closeBrowser()
 	e.t0 = e.opts.T0
 	if e.t0.IsZero() {
 		e.t0 = time.Now()
