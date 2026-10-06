@@ -2,6 +2,7 @@ package coordinator_test
 
 import (
 	"context"
+	"fmt"
 	"strings"
 	"sync"
 	"testing"
@@ -188,7 +189,7 @@ func TestRegistrationRejections(t *testing.T) {
 	}
 	t.Run("incompatible major", func(t *testing.T) {
 		err := hello(&workerv1.ProtocolVersion{Major: 2, Minor: 1}, token)
-		if status.Code(err) != codes.FailedPrecondition || !strings.Contains(err.Error(), "worker speaks protocol v2.1 but this server speaks v1.2") {
+		if status.Code(err) != codes.FailedPrecondition || !strings.Contains(err.Error(), fmt.Sprintf("worker speaks protocol v2.1 but this server speaks v%d.%d", wire.ProtocolMajor, wire.ProtocolMinor)) {
 			t.Errorf("got %v", err)
 		}
 	})

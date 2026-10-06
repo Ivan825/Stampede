@@ -31,7 +31,7 @@ var htmlTmpl = template.Must(template.New("report").Funcs(template.FuncMap{
 		}
 		return Ms(ps.Mean) + " / " + Ms(ps.P95)
 	},
-	"offset":  fmtOffset,
+	"offset": fmtOffset,
 }).Parse(htmlTemplate))
 
 type htmlData struct {
