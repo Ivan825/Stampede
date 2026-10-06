@@ -162,3 +162,58 @@ targets: ["http.p95 < 100ms"]`))
 		}
 	}
 }
+
+func TestStreamStats(t *testing.T) {
+	s, err := scenario.Parse([]byte(`
+metadata: {name: stream}
+target: {baseURL: "http://localhost"}
+journeys: [{name: chat, steps: [{get: /a}, {get: /b}]}]
+load: {vus: 1, duration: 1s}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	prog, _ := scenario.Compile(s)
+	plan, _ := s.Load.Plan()
+	t0 := time.Unix(1_700_000_000, 0)
+	sn := metrics.NewSnapshot(0)
+	phases := map[int]*[metrics.NumPhases]*metrics.Histogram{1: {}}
+	for i := range phases[1] {
+		phases[1][i] = metrics.NewHistogram()
+	}
+	for n := 0; n < 10; n++ {
+		sn.Step(0).Add(&metrics.Sample{Step: 0, Start: t0, End: t0.Add(time.Millisecond), Status: 200, Proto: "HTTP/2.0"})
+		// Each stream: first event after 200ms, then 20 more over 2s.
+		sm := &metrics.Sample{Step: 1, Start: t0, End: t0.Add(2200 * time.Millisecond), Status: 200,
+			Events: 21, StreamTime: 2 * time.Second}
+		sm.Phases[metrics.PhaseFirstEvent] = 200 * time.Millisecond
+		sn.Step(1).Add(sm)
+		phases[1][metrics.PhaseFirstEvent].RecordDuration(sm.Phases[metrics.PhaseFirstEvent])
+	}
+	r := Build(Input{Program: prog, Plan: plan, Started: t0, Ended: t0.Add(time.Second), Snapshots: []*metrics.Snapshot{sn}, Phases: phases})
+	steps := r.Journeys[0].Steps
+	if steps[0].Stream != nil || steps[0].Protocols["HTTP/2.0"] != 10 {
+		t.Errorf("plain step: stream %+v protocols %v", steps[0].Stream, steps[0].Protocols)
+	}
+	if _, ok := steps[0].Phases["firstEvent"]; ok {
+		t.Error("the first-event phase belongs under stream, not phases")
+	}
+	st := steps[1].Stream
+	if st == nil || st.Streams != 10 || st.Events != 210 {
+		t.Fatalf("stream %+v", st)
+	}
+	if st.EventsPerSec != 10 {
+		t.Errorf("events/s = %v, want 10", st.EventsPerSec)
+	}
+	if d := st.FirstEvent.P95 - 0.2; d < -0.002 || d > 0.002 || st.FirstEvent.Mean != 0.2 {
+		t.Errorf("first event %+v, want 200ms", st.FirstEvent)
+	}
+	var buf bytes.Buffer
+	r.WriteText(&buf)
+	if !strings.Contains(buf.String(), "events/s") || !strings.Contains(buf.String(), "10.0") {
+		t.Errorf("text report lacks stream figures:\n%s", buf.String())
+	}
+	buf.Reset()
+	if err := r.WriteHTML(&buf); err != nil || !strings.Contains(buf.String(), "First event p95") {
+		t.Errorf("HTML report lacks the streams table (%v)", err)
+	}
+}

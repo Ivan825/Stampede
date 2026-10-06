@@ -106,6 +106,33 @@ type Step struct {
 	Stats Stats  `json:"stats"`
 	// Phases holds mean and p95 seconds for dns, connect, tls, wait and download.
 	Phases map[string]PhaseStat `json:"phases"`
+	// Protocols counts requests by negotiated protocol (HTTP/1.1, HTTP/2.0).
+	Protocols map[string]uint64 `json:"protocols,omitempty"`
+	// Stream is set for streaming steps (server-sent events, gRPC server
+	// streaming).
+	Stream *StreamStat `json:"stream,omitempty"`
+}
+
+// StreamStat summarises a streaming step. For an LLM API, FirstEvent is
+// the time to first token and EventsPerSec is tokens per second.
+type StreamStat struct {
+	// Streams counts steps that received at least one event.
+	Streams uint64 `json:"streams"`
+	Events  uint64 `json:"events"`
+	// EventsPerSec is the rate of the events after the first, measured
+	// from each stream's first event to its end.
+	EventsPerSec float64 `json:"eventsPerSec"`
+	// FirstEvent is the time from the start of the step to its first
+	// event, in seconds.
+	FirstEvent FirstEventStat `json:"firstEvent"`
+}
+
+// FirstEventStat is a time-to-first-event summary in seconds.
+type FirstEventStat struct {
+	Mean float64 `json:"mean"`
+	P50  float64 `json:"p50"`
+	P95  float64 `json:"p95"`
+	P99  float64 `json:"p99"`
 }
 
 // PhaseStat is a timing phase summary in seconds.
@@ -226,8 +253,13 @@ func Build(in Input) *Report {
 				st = &metrics.StepStats{Latency: metrics.NewHistogram(), Service: metrics.NewHistogram()}
 			}
 			jTotal.Merge(st)
-			sr := Step{ID: cs.ID, Name: cs.Name, Stats: statsOf(st, dur), Phases: map[string]PhaseStat{}}
-			for p := metrics.Phase(0); p < metrics.NumPhases; p++ {
+			sr := Step{ID: cs.ID, Name: cs.Name, Stats: statsOf(st, dur), Phases: map[string]PhaseStat{}, Protocols: st.Protocols}
+			if st.Streams > 0 {
+				sr.Stream = streamOf(st, in.Phases[cs.ID])
+			}
+			// The first-event phase is reported under Stream, and only for
+			// streaming steps.
+			for p := metrics.Phase(0); p < metrics.PhaseFirstEvent; p++ {
 				ps := PhaseStat{}
 				if st.Requests > 0 {
 					ps.Mean = float64(st.PhaseSum[p]) / float64(st.Requests) / 1e6
@@ -319,6 +351,21 @@ func Build(in Input) *Report {
 		r.Notes = append(r.Notes, "Some iterations were dropped because no virtual user was free. Raise maxVUs or reduce the rate; dropped iterations show the generator could not keep the schedule.")
 	}
 	return r
+}
+
+func streamOf(st *metrics.StepStats, ph *[metrics.NumPhases]*metrics.Histogram) *StreamStat {
+	ss := &StreamStat{Streams: st.Streams, Events: st.Events}
+	ss.FirstEvent.Mean = float64(st.PhaseSum[metrics.PhaseFirstEvent]) / float64(st.Streams) / 1e6
+	if st.StreamUs > 0 && st.Events > st.Streams {
+		ss.EventsPerSec = float64(st.Events-st.Streams) / (float64(st.StreamUs) / 1e6)
+	}
+	if ph != nil {
+		h := ph[metrics.PhaseFirstEvent]
+		ss.FirstEvent.P50 = h.QuantileSeconds(0.5)
+		ss.FirstEvent.P95 = h.QuantileSeconds(0.95)
+		ss.FirstEvent.P99 = h.QuantileSeconds(0.99)
+	}
+	return ss
 }
 
 func statsOf(st *metrics.StepStats, dur float64) Stats {

@@ -137,6 +137,18 @@ footer a { color: var(--accent); }
   </tbody>
 </table></div>
 
+{{if .HasStreams}}
+<h2>Streams</h2>
+<div class="table-wrap"><table>
+  <thead><tr><th>Step</th><th>Streams</th><th>Events</th><th>First event p50</th><th>First event p95</th><th>First event p99</th><th>Events/s</th></tr></thead>
+  <tbody>
+  {{range .Journeys}}{{range .Steps}}{{if .Stream}}
+    <tr><td><code>{{.Name}}</code></td><td>{{.Stream.Streams}}</td><td>{{.Stream.Events}}</td><td>{{ms .Stream.FirstEvent.P50}}</td><td>{{ms .Stream.FirstEvent.P95}}</td><td>{{ms .Stream.FirstEvent.P99}}</td><td>{{rate .Stream.EventsPerSec}}</td></tr>
+  {{end}}{{end}}{{end}}
+  </tbody>
+</table></div>
+{{end}}
+
 {{if .Errors}}
 <h2>Errors</h2>
 <div class="table-wrap"><table>

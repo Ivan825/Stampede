@@ -128,6 +128,7 @@ func (r *Report) WriteText(w io.Writer) {
 				Ms(s.Stats.Latency.P50), Ms(s.Stats.Latency.P95), Ms(s.Stats.Latency.P99))
 		}
 	}
+	r.writeStreams(w)
 	if len(r.Errors) > 0 {
 		fmt.Fprintf(w, "\n  top errors\n")
 		for i, e := range r.Errors {
@@ -141,6 +142,31 @@ func (r *Report) WriteText(w io.Writer) {
 		fmt.Fprintf(w, "\n  note: %s\n", n)
 	}
 	fmt.Fprintln(w)
+}
+
+// writeStreams lists time to first event and event rate for streaming
+// steps, the figures that matter for LLM APIs (time to first token,
+// tokens per second).
+func (r *Report) writeStreams(w io.Writer) {
+	header := false
+	for _, j := range r.Journeys {
+		for _, s := range j.Steps {
+			if s.Stream == nil {
+				continue
+			}
+			if !header {
+				fmt.Fprintf(w, "\n  %-44s %8s %9s %9s %9s %10s\n", "stream", "events", "first p50", "first p95", "first p99", "events/s")
+				header = true
+			}
+			name := j.Name + " › " + s.Name
+			if len(name) > 44 {
+				name = name[:43] + "…"
+			}
+			st := s.Stream
+			fmt.Fprintf(w, "  %-44s %8d %9s %9s %9s %10.1f\n", name, st.Events,
+				Ms(st.FirstEvent.P50), Ms(st.FirstEvent.P95), Ms(st.FirstEvent.P99), st.EventsPerSec)
+		}
+	}
 }
 
 func num(f float64) string {

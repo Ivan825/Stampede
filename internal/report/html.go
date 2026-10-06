@@ -31,6 +31,8 @@ type htmlData struct {
 	ErrorChart      template.HTML
 	CurveChart      template.HTML
 	Unit            string
+	// HasStreams shows the streams table.
+	HasStreams bool
 }
 
 // WriteHTML writes a self-contained HTML report with inline SVG charts and
@@ -86,6 +88,11 @@ func (r *Report) WriteHTML(w io.Writer) error {
 			{Name: "completed iterations per second", Class: "s1", Ys: thr, Fmt: rateFmt},
 			{Name: "p95 latency", Class: "s5", Ys: cp95, Fmt: Ms, Right: true},
 		})
+	}
+	for _, j := range r.Journeys {
+		for _, s := range j.Steps {
+			d.HasStreams = d.HasStreams || s.Stream != nil
+		}
 	}
 	return htmlTmpl.Execute(w, d)
 }
