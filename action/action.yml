@@ -1,0 +1,150 @@
+name: Stampede load test
+description: Run a Stampede scenario in CI, publish the summary and reports, and fail when a target fails.
+author: Stampede
+branding:
+  icon: activity
+  color: green
+
+inputs:
+  scenario:
+    description: Path to the scenario file.
+    required: true
+  target-url:
+    description: Base URL of the system under test (overrides target.baseURL).
+    required: false
+    default: ""
+  shape:
+    description: Traffic shape, such as smoke, baseline, stress, spike or breakpoint.
+    required: false
+    default: ""
+  rate:
+    description: Arrival rate, such as 50/s (switches to rate mode).
+    required: false
+    default: ""
+  vus:
+    description: Number of virtual users.
+    required: false
+    default: ""
+  duration:
+    description: Duration, such as 30s or 5m.
+    required: false
+    default: ""
+  version:
+    description: >
+      Stampede version: "latest" (the latest release, or the latest commit
+      when none is published), a release tag such as v1.2.3 (downloads the
+      release binary), any other git ref such as main or a commit SHA
+      (built with go install), or "local" (builds the Stampede repository
+      checked out in the workspace).
+    required: false
+    default: latest
+  extra-args:
+    description: More arguments for stampede run, separated by spaces, such as "-e TOKEN=abc --allow-host api.example.com".
+    required: false
+    default: ""
+  output-dir:
+    description: Directory for the reports.
+    required: false
+    default: stampede-report
+  artifact-name:
+    description: Name of the uploaded report artifact (empty skips the upload).
+    required: false
+    default: stampede-report
+  fail-on-target-failure:
+    description: Fail the step when a target fails (stampede run exits 3).
+    required: false
+    default: "true"
+  token:
+    description: Token for the GitHub API, used to find the latest release.
+    required: false
+    default: ${{ github.token }}
+
+outputs:
+  verdict:
+    description: pass, fail, generator-limited or no-targets.
+    value: ${{ steps.run.outputs.verdict }}
+  p95:
+    description: Overall p95 latency in seconds.
+    value: ${{ steps.run.outputs.p95 }}
+  error-rate:
+    description: Share of failed requests, from 0 to 1.
+    value: ${{ steps.run.outputs.error-rate }}
+  exit-code:
+    description: Exit code of stampede run (0 pass, 3 a target failed, 1 error).
+    value: ${{ steps.run.outputs.exit-code }}
+  report-dir:
+    description: Directory holding report.html, report.json, junit.xml and summary.md.
+    value: ${{ steps.run.outputs.report-dir }}
+
+runs:
+  using: composite
+  steps:
+    - name: Resolve the Stampede version
+      id: resolve
+      shell: bash
+      env:
+        STAMPEDE_VERSION: ${{ inputs.version }}
+        GITHUB_TOKEN: ${{ inputs.token }}
+      run: bash "$GITHUB_ACTION_PATH/resolve.sh"
+
+    - name: Set up Go (build from source)
+      if: steps.resolve.outputs.mode == 'source'
+      uses: actions/setup-go@v5
+      with:
+        go-version: stable
+        cache: false
+
+    - name: Set up Go (build the workspace)
+      if: steps.resolve.outputs.mode == 'local'
+      uses: actions/setup-go@v5
+      with:
+        go-version-file: go.mod
+
+    - name: Install Stampede
+      shell: bash
+      env:
+        STAMPEDE_MODE: ${{ steps.resolve.outputs.mode }}
+        STAMPEDE_REF: ${{ steps.resolve.outputs.ref }}
+      run: bash "$GITHUB_ACTION_PATH/install.sh"
+
+    - name: Run the scenario
+      id: run
+      shell: bash
+      env:
+        INPUT_SCENARIO: ${{ inputs.scenario }}
+        INPUT_TARGET_URL: ${{ inputs.target-url }}
+        INPUT_SHAPE: ${{ inputs.shape }}
+        INPUT_RATE: ${{ inputs.rate }}
+        INPUT_VUS: ${{ inputs.vus }}
+        INPUT_DURATION: ${{ inputs.duration }}
+        INPUT_EXTRA_ARGS: ${{ inputs.extra-args }}
+        INPUT_OUTPUT_DIR: ${{ inputs.output-dir }}
+      run: bash "$GITHUB_ACTION_PATH/run.sh"
+
+    - name: Upload the reports
+      if: always() && inputs.artifact-name != '' && steps.run.outputs.report-dir != ''
+      uses: actions/upload-artifact@v4
+      with:
+        name: ${{ inputs.artifact-name }}
+        path: ${{ steps.run.outputs.report-dir }}
+        if-no-files-found: warn
+
+    - name: Check the verdict
+      shell: bash
+      env:
+        CODE: ${{ steps.run.outputs.exit-code }}
+        VERDICT: ${{ steps.run.outputs.verdict }}
+        FAIL_ON_TARGETS: ${{ inputs.fail-on-target-failure }}
+      run: |
+        case "$CODE" in
+          0) echo "Stampede verdict: ${VERDICT:-unknown}" ;;
+          3)
+            if [ "$FAIL_ON_TARGETS" = "true" ]; then
+              echo "::error title=Stampede::one or more targets failed (verdict ${VERDICT:-fail}); see the job summary"
+              exit 3
+            fi
+            echo "::warning title=Stampede::one or more targets failed (verdict ${VERDICT:-fail})" ;;
+          *)
+            echo "::error title=Stampede::stampede run exited with code ${CODE:-unknown}"
+            exit "${CODE:-1}" ;;
+        esac

@@ -1,0 +1,10 @@
+# Used by the "action" CI job: a target no server can meet, so the action
+# must fail the step.
+metadata: {name: action-failing}
+target: {baseURL: "${env.TARGET_URL}"}
+journeys:
+  - name: echo
+    steps:
+      - get: /
+load: {vus: 1, duration: 2s}
+targets: ["p95 < 1us"]
