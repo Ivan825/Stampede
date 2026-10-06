@@ -1,0 +1,7 @@
+*.md
+data/
+docker-compose*.yml
+Dockerfile
+.dockerignore
+*.test
+*.out
