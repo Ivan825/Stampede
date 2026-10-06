@@ -20,7 +20,7 @@ var httpMethods = map[string]string{
 
 // kindKeys are the step keys that name a step kind, besides HTTP methods,
 // in the order they are listed in error messages.
-var kindKeys = []string{"think", "branch", "loop", "while", "group", "script", "graphql", "sse", "ws", "send", "expect"}
+var kindKeys = []string{"think", "branch", "loop", "while", "group", "script", "graphql", "sse", "ws", "send", "expect", "grpc"}
 
 // requestKeys are the HTTP request parts shared by request-like steps.
 var requestKeys = []string{"headers", "query", "json", "body", "form", "check", "extract", "timeout"}
@@ -40,6 +40,7 @@ var stepKeys = map[string][]string{
 	"ws":      {"headers", "subprotocols", "timeout", "steps"},
 	"send":    nil,
 	"expect":  {"extract"},
+	"grpc":    {"target", "message", "metadata", "protoset", "proto", "importPaths", "check", "extract", "timeout"},
 }
 
 // UnmarshalYAML reads the compact step syntax, for example
@@ -204,6 +205,13 @@ func (s *Step) UnmarshalYAML(n *yaml.Node) error {
 				return err
 			}
 		}
+	case "grpc":
+		out.Kind = StepGRPC
+		g, err := decodeGRPC(fields)
+		if err != nil {
+			return err
+		}
+		out.GRPC = g
 	}
 	*s = out
 	return nil
@@ -388,6 +396,74 @@ func decodeWS(f map[string]*yaml.Node) (*WebSocket, error) {
 	return w, decodeSteps(f, &w.Steps)
 }
 
+func decodeGRPC(f map[string]*yaml.Node) (*GRPC, error) {
+	g := &GRPC{Method: f["grpc"].Value}
+	if v, ok := f["target"]; ok {
+		g.Target = v.Value
+	}
+	if v, ok := f["message"]; ok {
+		var m any
+		if err := v.Decode(&m); err != nil {
+			return nil, err
+		}
+		g.Message = normalizeYAML(m)
+	}
+	if v, ok := f["metadata"]; ok {
+		if err := v.Decode(&g.Metadata); err != nil {
+			return nil, err
+		}
+	}
+	if v, ok := f["protoset"]; ok {
+		g.Protoset = v.Value
+	}
+	if v, ok := f["proto"]; ok {
+		if v.Kind == yaml.ScalarNode {
+			g.Proto = []string{v.Value}
+		} else if err := v.Decode(&g.Proto); err != nil {
+			return nil, err
+		}
+	}
+	if v, ok := f["importPaths"]; ok {
+		if err := v.Decode(&g.ImportPaths); err != nil {
+			return nil, err
+		}
+	}
+	if v, ok := f["check"]; ok {
+		g.Check = &GRPCCheck{}
+		if err := decodeStrict(v, "check", g.Check); err != nil {
+			return nil, err
+		}
+	}
+	if v, ok := f["extract"]; ok {
+		if err := v.Decode(&g.Extract); err != nil {
+			return nil, err
+		}
+	}
+	if v, ok := f["timeout"]; ok {
+		if err := v.Decode(&g.Timeout); err != nil {
+			return nil, err
+		}
+	}
+	return g, nil
+}
+
+// UnmarshalYAML accepts one code name or a list.
+func (c *GRPCCodes) UnmarshalYAML(n *yaml.Node) error {
+	switch n.Kind {
+	case yaml.ScalarNode:
+		*c = GRPCCodes{n.Value}
+		return nil
+	case yaml.SequenceNode:
+		var l []string
+		if err := n.Decode(&l); err != nil {
+			return err
+		}
+		*c = l
+		return nil
+	}
+	return fmt.Errorf("line %d: status must be a code name such as OK or a list of them", n.Line)
+}
+
 // decodeStrict decodes a mapping into the struct v, rejecting keys that
 // v does not define. yaml.v3 ignores KnownFields when a node is decoded on
 // its own, so without this a typo such as "stauts" inside a check would be
@@ -534,6 +610,35 @@ func (s Step) toMap() map[string]any {
 		m["expect"] = s.Expect
 		if len(s.Expect.Extract) > 0 {
 			m["extract"] = s.Expect.Extract
+		}
+	case StepGRPC:
+		g := s.GRPC
+		m["grpc"] = g.Method
+		for k, v := range map[string]string{"target": g.Target, "protoset": g.Protoset} {
+			if v != "" {
+				m[k] = v
+			}
+		}
+		if g.Message != nil {
+			m["message"] = g.Message
+		}
+		if len(g.Metadata) > 0 {
+			m["metadata"] = g.Metadata
+		}
+		if len(g.Proto) > 0 {
+			m["proto"] = g.Proto
+		}
+		if len(g.ImportPaths) > 0 {
+			m["importPaths"] = g.ImportPaths
+		}
+		if g.Check != nil {
+			m["check"] = g.Check
+		}
+		if len(g.Extract) > 0 {
+			m["extract"] = g.Extract
+		}
+		if g.Timeout > 0 {
+			m["timeout"] = g.Timeout
 		}
 	}
 	return m

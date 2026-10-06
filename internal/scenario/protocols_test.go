@@ -96,6 +96,38 @@ func TestProtocolStepErrors(t *testing.T) {
       - ws: /chat
         json: {}
         steps: [{send: hi}]`, `"json" does not apply to ws steps`},
+		"grpc bad method": {`
+      - grpc: shop.v1.Catalog.GetProduct`, "must look like package.Service/Method"},
+		"grpc bad status": {`
+      - grpc: shop.v1.Catalog/Get
+        check: {status: TEAPOT}`, `unknown gRPC status "TEAPOT"`},
+		"grpc status number": {`
+      - grpc: shop.v1.Catalog/Get
+        check: {status: [OK, 404]}`, `unknown gRPC status "404"`},
+		"grpc http check key": {`
+      - grpc: shop.v1.Catalog/Get
+        check: {bodyContains: x}`, `unknown key "bodyContains" in check`},
+		"grpc bad target": {`
+      - grpc: shop.v1.Catalog/Get
+        target: http://localhost:9090`, "must look like grpc://host:port"},
+		"grpc target uses a step variable": {`
+      - get: /x
+        extract: {host: "$.host"}
+      - grpc: shop.v1.Catalog/Get
+        target: "grpc://${host}:9090"`, `undeclared reference to 'host'`},
+		"grpc protoset and proto": {`
+      - grpc: shop.v1.Catalog/Get
+        protoset: a.protoset
+        proto: a.proto`, "set protoset or proto, not both"},
+		"grpc message not a mapping": {`
+      - grpc: shop.v1.Catalog/Get
+        message: "{}"`, "must be a mapping"},
+		"grpc cookie extractor": {`
+      - grpc: shop.v1.Catalog/Get
+        extract: {c: "cookie:sid"}`, "cookie extractors do not apply here"},
+		"grpc json key": {`
+      - grpc: shop.v1.Catalog/Get
+        json: {}`, `"json" does not apply to grpc steps`},
 		"allowErrors on http": {`
       - get: /x
         check: {allowErrors: true}`, "only applies to graphql steps"},
@@ -172,6 +204,38 @@ func TestGraphQLCompile(t *testing.T) {
 	}
 	if !st.GraphQL.Persisted || st.Req.Method != "POST" {
 		t.Errorf("compiled %+v %+v", st.GraphQL, st.Req)
+	}
+}
+
+func TestGRPCPathsResolveAgainstTheScenarioFile(t *testing.T) {
+	dir := t.TempDir()
+	src := protocolScenario(`
+      - grpc: a.B/C
+        protoset: protos/shop.protoset
+      - grpc: a.B/D
+        proto: shop.proto
+      - ws: /chat
+        steps:
+          - grpc: a.B/E
+            proto: [shop.proto]
+            importPaths: [protos, /abs]`)
+	path := filepath.Join(dir, "s.yaml")
+	if err := os.WriteFile(path, []byte(src), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	s, err := LoadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	steps := s.Journeys[0].Steps
+	if got := steps[0].GRPC.Protoset; got != filepath.Join(dir, "protos/shop.protoset") {
+		t.Errorf("protoset %q", got)
+	}
+	if got := steps[1].GRPC.ImportPaths; len(got) != 1 || got[0] != dir {
+		t.Errorf("a .proto without import paths is found next to the scenario: %q", got)
+	}
+	if got := steps[2].WS.Steps[0].GRPC.ImportPaths; len(got) != 2 || got[0] != filepath.Join(dir, "protos") || got[1] != "/abs" {
+		t.Errorf("import paths %q", got)
 	}
 }
 

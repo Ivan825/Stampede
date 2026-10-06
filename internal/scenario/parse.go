@@ -55,16 +55,35 @@ func LoadFile(path string) (*Scenario, error) {
 	return s, nil
 }
 
-// ResolvePaths makes relative feeder file paths relative to dir.
+// ResolvePaths makes relative feeder and gRPC descriptor file paths
+// relative to dir.
 func (s *Scenario) ResolvePaths(dir string) {
+	abs := func(p string) string {
+		if p == "" || filepath.IsAbs(p) {
+			return p
+		}
+		return filepath.Join(dir, p)
+	}
 	for name, f := range s.Data {
-		if f.CSV != "" && !filepath.IsAbs(f.CSV) {
-			f.CSV = filepath.Join(dir, f.CSV)
-		}
-		if f.JSON != "" && !filepath.IsAbs(f.JSON) {
-			f.JSON = filepath.Join(dir, f.JSON)
-		}
+		f.CSV, f.JSON = abs(f.CSV), abs(f.JSON)
 		s.Data[name] = f
+	}
+	for _, j := range s.Journeys {
+		walkSteps(j.Steps, func(st Step) {
+			if g := st.GRPC; g != nil {
+				g.Protoset = abs(g.Protoset)
+				// .proto files are found under the import paths, so only
+				// the import paths move; with none, the file's directory
+				// becomes the import path.
+				if len(g.Proto) > 0 && len(g.ImportPaths) == 0 {
+					g.ImportPaths = []string{dir}
+				} else {
+					for i, p := range g.ImportPaths {
+						g.ImportPaths[i] = abs(p)
+					}
+				}
+			}
+		})
 	}
 }
 

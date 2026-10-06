@@ -45,17 +45,9 @@ var sessionCache = tls.NewLRUClientSessionCache(4096)
 // NewTransport builds a transport. One per virtual user gives browser-like
 // connection behaviour; one shared transport behaves like a service client.
 func NewTransport(o Options) *http.Transport {
-	dial := o.DialContext
-	if dial == nil {
-		d := &net.Dialer{Timeout: 10 * time.Second, KeepAlive: 30 * time.Second}
-		dial = d.DialContext
-		if o.DNS != nil {
-			dial = o.DNS.DialContext(d)
-		}
-	}
 	t := &http.Transport{
 		Proxy:                 nil,
-		DialContext:           dial,
+		DialContext:           Dialer(o),
 		ForceAttemptHTTP2:     o.HTTP2 || o.H2C,
 		DisableKeepAlives:     o.DisableKeepAlive,
 		DisableCompression:    false,
@@ -80,6 +72,20 @@ func NewTransport(o Options) *http.Transport {
 		t.Protocols = p
 	}
 	return t
+}
+
+// Dialer is the dial function the options describe: the test or
+// emulation dialer if set, else a TCP dialer that uses the DNS cache.
+// Other drivers (gRPC) dial through it so they resolve names the same way.
+func Dialer(o Options) func(ctx context.Context, network, addr string) (net.Conn, error) {
+	if o.DialContext != nil {
+		return o.DialContext
+	}
+	d := &net.Dialer{Timeout: 10 * time.Second, KeepAlive: 30 * time.Second}
+	if o.DNS != nil {
+		return o.DNS.DialContext(d)
+	}
+	return d.DialContext
 }
 
 // NewClient wraps a transport with a fresh cookie jar and redirect policy.

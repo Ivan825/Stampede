@@ -1,0 +1,36 @@
+apiVersion: stampede.dev/v1
+kind: Scenario
+metadata:
+  name: catalog-grpc
+target:
+  baseURL: ${env.TARGET_URL}
+vars:
+  grpcTarget: grpc://catalog.internal:9090
+journeys:
+  - name: browse
+    steps:
+      - name: get product
+        grpc: shop.v1.Catalog/GetProduct
+        target: ${grpcTarget}
+        message: { id: "p-${rand(1, 500)}", fields: [name, price] }
+        metadata: { authorization: "Bearer ${secret.TOKEN}" }
+        check:
+          status: [OK, NOT_FOUND]
+          json: { "$.id": exists }
+          maxLatency: 200ms
+        extract: { name: "$.name", region: "header:x-region" }
+        timeout: 2s
+      - name: price feed
+        grpc: shop.v1.Prices/Watch
+        target: grpcs://prices.example.test
+        protoset: protos/shop.protoset
+        message: { productName: "${name}" }
+        check: { json: { "$.length": 10 } }
+        extract: { lastPrice: "$[9].price" }
+      - grpc: grpc.health.v1.Health/Check
+        proto: [health.proto]
+        importPaths: [protos]
+        check: { status: OK, json: { "$.status": SERVING } }
+load: { mode: rate, rate: 200/s, duration: 1m }
+targets:
+  - browse/get product.p99 < 100ms
