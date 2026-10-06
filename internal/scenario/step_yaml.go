@@ -20,7 +20,7 @@ var httpMethods = map[string]string{
 
 // kindKeys are the step keys that name a step kind, besides HTTP methods,
 // in the order they are listed in error messages.
-var kindKeys = []string{"think", "branch", "loop", "while", "group", "script", "graphql"}
+var kindKeys = []string{"think", "branch", "loop", "while", "group", "script", "graphql", "sse"}
 
 // requestKeys are the HTTP request parts shared by request-like steps.
 var requestKeys = []string{"headers", "query", "json", "body", "form", "check", "extract", "timeout"}
@@ -36,6 +36,7 @@ var stepKeys = map[string][]string{
 	"while":   {"steps", "max"},
 	"group":   {"steps"},
 	"graphql": {"query", "variables", "operationName", "persisted", "headers", "check", "extract", "timeout"},
+	"sse":     append([]string{"method", "until"}, requestKeys...),
 }
 
 // UnmarshalYAML reads the compact step syntax, for example
@@ -154,6 +155,13 @@ func (s *Step) UnmarshalYAML(n *yaml.Node) error {
 			return err
 		}
 		out.GraphQL = g
+	case "sse":
+		out.Kind = StepSSE
+		e, err := decodeSSE(fields)
+		if err != nil {
+			return err
+		}
+		out.SSE = e
 	}
 	*s = out
 	return nil
@@ -291,6 +299,30 @@ func decodeGraphQL(f map[string]*yaml.Node) (*GraphQL, error) {
 	return g, nil
 }
 
+func decodeSSE(f map[string]*yaml.Node) (*SSE, error) {
+	e := &SSE{Request: Request{URL: f["sse"].Value}}
+	if err := decodeRequest(&e.Request, f); err != nil {
+		return nil, err
+	}
+	e.Method = "GET"
+	if e.JSON != nil || e.Body != "" || len(e.Form) > 0 {
+		e.Method = "POST"
+	}
+	if v, ok := f["method"]; ok {
+		m, ok := httpMethods[strings.ToLower(v.Value)]
+		if !ok {
+			return nil, fmt.Errorf("line %d: method must be an HTTP method such as GET or POST", v.Line)
+		}
+		e.Method = m
+	}
+	if v, ok := f["until"]; ok {
+		if err := decodeStrict(v, "until", &e.Until); err != nil {
+			return nil, err
+		}
+	}
+	return e, nil
+}
+
 // decodeStrict decodes a mapping into the struct v, rejecting keys that
 // v does not define. yaml.v3 ignores KnownFields when a node is decoded on
 // its own, so without this a typo such as "stauts" inside a check would be
@@ -369,19 +401,7 @@ func (s Step) toMap() map[string]any {
 	case StepRequest:
 		r := s.Request
 		m[strings.ToLower(r.Method)] = r.URL
-		exchangeToMap(m, r)
-		if len(r.Query) > 0 {
-			m["query"] = r.Query
-		}
-		if r.JSON != nil {
-			m["json"] = r.JSON
-		}
-		if r.Body != "" {
-			m["body"] = r.Body
-		}
-		if len(r.Form) > 0 {
-			m["form"] = r.Form
-		}
+		requestToMap(m, r)
 	case StepThink:
 		m["think"] = *s.Think
 	case StepBranch:
@@ -418,8 +438,33 @@ func (s Step) toMap() map[string]any {
 			}
 		}
 		exchangeToMap(m, &g.Request)
+	case StepSSE:
+		e := s.SSE
+		m["sse"] = e.URL
+		requestToMap(m, &e.Request)
+		m["method"] = e.Method
+		if e.Until != (SSEUntil{}) {
+			m["until"] = e.Until
+		}
 	}
 	return m
+}
+
+// requestToMap renders an HTTP request's parts.
+func requestToMap(m map[string]any, r *Request) {
+	exchangeToMap(m, r)
+	if len(r.Query) > 0 {
+		m["query"] = r.Query
+	}
+	if r.JSON != nil {
+		m["json"] = r.JSON
+	}
+	if r.Body != "" {
+		m["body"] = r.Body
+	}
+	if len(r.Form) > 0 {
+		m["form"] = r.Form
+	}
 }
 
 // exchangeToMap renders the parts every request-like step shares.

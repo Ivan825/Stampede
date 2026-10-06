@@ -133,7 +133,7 @@
     },
     "step": {
       "type": "object",
-      "description": "Exactly one action: an HTTP method, graphql, think, branch, loop, while or group.",
+      "description": "Exactly one action: an HTTP method, graphql, sse, think, branch, loop, while or group.",
       "properties": {
         "name": { "type": "string" },
         "if": { "type": "string" },
@@ -171,6 +171,18 @@
             { "type": "boolean" },
             { "type": "object", "additionalProperties": false, "properties": { "sha256": { "type": "string", "pattern": "^[0-9a-fA-F]{64}$" } } }
           ]
+        },
+        "sse": { "type": "string", "description": "Server-sent event stream URL. Records time to first event and events per second." },
+        "method": { "enum": ["GET", "POST", "PUT", "PATCH", "DELETE", "get", "post", "put", "patch", "delete"], "description": "sse: HTTP method (default GET, or POST when a body is set)." },
+        "until": {
+          "type": "object",
+          "additionalProperties": false,
+          "description": "sse: when to stop. events and match must be met; duration caps the stream.",
+          "properties": {
+            "events": { "type": "integer", "minimum": 1 },
+            "match": { "type": "string", "description": "Regex matched against each event's data." },
+            "duration": { "$ref": "#/$defs/duration" }
+          }
         }
       },
       "additionalProperties": false,
@@ -180,7 +192,7 @@
       "oneOf": [
         { "required": ["get"] }, { "required": ["post"] }, { "required": ["put"] }, { "required": ["patch"] },
         { "required": ["delete"] }, { "required": ["head"] }, { "required": ["options"] },
-        { "required": ["graphql"] },
+        { "required": ["graphql"] }, { "required": ["sse"] },
         { "required": ["think"] }, { "required": ["branch"] }, { "required": ["loop", "steps"] },
         { "required": ["while", "steps"] }, { "required": ["group", "steps"] }
       ]

@@ -51,6 +51,22 @@ func TestProtocolStepErrors(t *testing.T) {
       - graphql: /graphql
         query: "{ x }"
         persisted: {sha: abc}`, `unknown key "sha" in persisted`},
+		"sse bad regex": {`
+      - sse: /stream
+        until: {match: "("}`, "invalid regex"},
+		"sse unknown until key": {`
+      - sse: /stream
+        until: {event: 3}`, `unknown key "event" in until`},
+		"sse bad method": {`
+      - sse: /stream
+        method: FETCH`, "method must be an HTTP method"},
+		"sse negative events": {`
+      - sse: /stream
+        until: {events: -1}`, "must be positive"},
+		"sse extract undeclared in check": {`
+      - sse: /stream
+        check: {bodyContains: "${later}"}
+        extract: {later: "$.x"}`, `"later"`},
 		"allowErrors on http": {`
       - get: /x
         check: {allowErrors: true}`, "only applies to graphql steps"},

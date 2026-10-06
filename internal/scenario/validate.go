@@ -133,6 +133,8 @@ func stepURL(st Step) (string, bool) {
 		return st.Request.URL, true
 	case StepGraphQL:
 		return st.GraphQL.URL, true
+	case StepSSE:
+		return st.SSE.URL, true
 	}
 	return "", false
 }

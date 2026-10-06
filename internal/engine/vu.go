@@ -152,6 +152,8 @@ func (v *VU) runStep(ctx context.Context, st *scenario.CStep, intended time.Time
 		return v.request(ctx, st, intended)
 	case scenario.StepGraphQL:
 		return v.graphql(ctx, st, intended)
+	case scenario.StepSSE:
+		return v.sse(ctx, st, intended)
 	case scenario.StepThink:
 		return sleepCtx(ctx, v.think(st.Think))
 	case scenario.StepBranch:

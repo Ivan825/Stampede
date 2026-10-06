@@ -119,6 +119,7 @@ const (
 	StepGroup   StepKind = "group"
 	StepScript  StepKind = "script"
 	StepGraphQL StepKind = "graphql"
+	StepSSE     StepKind = "sse"
 )
 
 // Step is one action within a journey. Exactly one kind-specific field is
@@ -139,6 +140,7 @@ type Step struct {
 	Group   *Group
 	Script  string
 	GraphQL *GraphQL
+	SSE     *SSE
 }
 
 // Request is an HTTP call.
@@ -173,6 +175,23 @@ type GraphQL struct {
 // computed from the query.
 type Persisted struct {
 	SHA256 string `yaml:"sha256,omitempty" json:"sha256,omitempty"`
+}
+
+// SSE reads a server-sent event stream. Request holds the HTTP parts; the
+// method defaults to GET, or POST when a body is set (as LLM APIs expect).
+type SSE struct {
+	Request
+	Until SSEUntil
+}
+
+// SSEUntil says when to stop reading a stream. Events and Match are
+// requirements: the stream must deliver them. Duration caps the stream;
+// on its own, reaching it ends the step successfully. With none set the
+// step reads until the server closes the stream.
+type SSEUntil struct {
+	Events   int      `yaml:"events,omitempty" json:"events,omitempty"`
+	Match    string   `yaml:"match,omitempty" json:"match,omitempty"`
+	Duration Duration `yaml:"duration,omitempty" json:"duration,omitempty"`
 }
 
 // Branch is one weighted alternative inside a branch step.
