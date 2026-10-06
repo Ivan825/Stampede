@@ -240,7 +240,7 @@ similarity. Writing an attempt costs 5ms.
 ## GovLab
 
 A government portal. Results for 100,000 candidates (roll numbers
-`26000001` ... `26100000`; dates of birth in 2008, listed in the pack's
+`26000001` ... `26100000`; dates of birth from 2008 to 2010, sampled in the pack's
 `data/candidates.csv`), PDF marksheets, notices, and applications for a
 scholarship that closes 48 hours after start-up: sign in with a one-time
 code (`POST /api/otp/request`; test mode returns the code as
