@@ -65,7 +65,8 @@ type server struct {
 	nextID  atomic.Int64
 	tokens  sync.Map // token -> user
 	encoded labkit.Counter
-	writes  labkit.Counter
+	// lockedWrites counts socket writes made while holding a room lock.
+	lockedWrites labkit.Counter
 }
 
 // New returns ChatLab's handler.
@@ -282,7 +283,6 @@ func (s *server) send(ctx context.Context, m *member, v any) {
 
 // deliver writes one message to one member.
 func (s *server) deliver(ctx context.Context, m *member, b []byte) {
-	s.writes.Add(1)
 	if m.out != nil {
 		select {
 		case m.out <- b:
@@ -305,6 +305,9 @@ func (s *server) broadcast(ctx context.Context, rm *room, b []byte, skip *member
 		if m != skip {
 			// Bottleneck (without "fanout"): a blocking write per member
 			// while the room lock is held.
+			if m.out == nil {
+				s.lockedWrites.Add(1)
+			}
 			s.deliver(ctx, m, b)
 		}
 	}

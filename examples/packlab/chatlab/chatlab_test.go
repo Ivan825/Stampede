@@ -89,6 +89,26 @@ func TestFanOutAndAck(t *testing.T) {
 	}
 }
 
+func TestFanoutBottleneck(t *testing.T) {
+	for _, fixes := range []string{"", "fanout"} {
+		s, base := start(t, fixes)
+		a := connect(t, base, "alice", "engineering")
+		connect(t, base, "bob", "engineering")
+		connect(t, base, "carol", "engineering")
+		before := s.lockedWrites.Load()
+		a.send(`{"type":"say","text":"hello"}`)
+		a.expect("ack")
+		got := s.lockedWrites.Load() - before
+		// Presence updates for the joins may still be going out, so at least.
+		if fixes == "" && got < 3 {
+			t.Errorf("without the fix each of 3 members is written to under the room lock: %d", got)
+		}
+		if fixes != "" && got != 0 {
+			t.Errorf("with the fix nothing is written under the lock: %d", got)
+		}
+	}
+}
+
 func TestHistoryBottleneck(t *testing.T) {
 	for _, tc := range []struct {
 		fixes   string
