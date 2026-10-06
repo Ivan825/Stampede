@@ -1,0 +1,1162 @@
+openapi: 3.0.3
+info:
+  title: Stampede API
+  version: 1.0.0
+  description: |
+    The public REST API of a Stampede server. The web UI, the CLI and CI
+    integrations all use this API.
+
+    Authenticate with a session cookie (from `POST /auth/login`) or an API
+    token sent as `Authorization: Bearer stp_...`. Requests that use the
+    session cookie and change state must also send `X-Stampede-CSRF: 1`.
+  license:
+    name: Apache-2.0
+    url: https://www.apache.org/licenses/LICENSE-2.0
+servers:
+  - url: /api/v1
+security:
+  - bearer: []
+  - session: []
+
+tags:
+  - name: system
+  - name: auth
+  - name: users
+  - name: tokens
+  - name: projects
+  - name: targets
+  - name: secrets
+  - name: scenarios
+  - name: runs
+  - name: workers
+  - name: audit
+
+paths:
+  /version:
+    get:
+      tags: [system]
+      operationId: getVersion
+      security: []
+      responses:
+        "200":
+          description: Server version and setup state
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/VersionInfo" }
+
+  /setup:
+    post:
+      tags: [system]
+      operationId: setup
+      summary: Create the first organisation and owner account
+      description: Only allowed while the server has no users.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/SetupRequest" }
+      responses:
+        "201":
+          description: Owner created and signed in
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Session" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "422": { $ref: "#/components/responses/Invalid" }
+
+  /auth/login:
+    post:
+      tags: [auth]
+      operationId: login
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/LoginRequest" }
+      responses:
+        "200":
+          description: Signed in; sets the session cookie
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Session" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "429": { $ref: "#/components/responses/TooMany" }
+
+  /auth/logout:
+    post:
+      tags: [auth]
+      operationId: logout
+      responses:
+        "204": { description: Signed out }
+
+  /me:
+    get:
+      tags: [auth]
+      operationId: getMe
+      responses:
+        "200":
+          description: The current user
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Me" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+
+  /me/password:
+    put:
+      tags: [auth]
+      operationId: changePassword
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [current, new]
+              properties:
+                current: { type: string }
+                new: { type: string, minLength: 10 }
+      responses:
+        "204": { description: Changed }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "422": { $ref: "#/components/responses/Invalid" }
+
+  /users:
+    get:
+      tags: [users]
+      operationId: listUsers
+      responses:
+        "200":
+          description: Members of the organisation
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/User" }
+    post:
+      tags: [users]
+      operationId: createUser
+      description: Requires admin.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/UserCreate" }
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/User" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "422": { $ref: "#/components/responses/Invalid" }
+
+  /users/{userId}:
+    parameters:
+      - $ref: "#/components/parameters/userId"
+    patch:
+      tags: [users]
+      operationId: updateUser
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name: { type: string }
+                role: { $ref: "#/components/schemas/Role" }
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/User" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+    delete:
+      tags: [users]
+      operationId: deleteUser
+      responses:
+        "204": { description: Removed }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /tokens:
+    get:
+      tags: [tokens]
+      operationId: listTokens
+      responses:
+        "200":
+          description: The caller's API tokens (secrets are never returned)
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/Token" }
+    post:
+      tags: [tokens]
+      operationId: createToken
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/TokenCreate" }
+      responses:
+        "201":
+          description: Created. The secret is shown only in this response.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/TokenCreated" }
+        "422": { $ref: "#/components/responses/Invalid" }
+
+  /tokens/{tokenId}:
+    parameters:
+      - $ref: "#/components/parameters/tokenId"
+    delete:
+      tags: [tokens]
+      operationId: deleteToken
+      responses:
+        "204": { description: Revoked }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /projects:
+    get:
+      tags: [projects]
+      operationId: listProjects
+      responses:
+        "200":
+          description: Projects
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/Project" }
+    post:
+      tags: [projects]
+      operationId: createProject
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ProjectCreate" }
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Project" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "422": { $ref: "#/components/responses/Invalid" }
+
+  /projects/{projectId}:
+    parameters:
+      - $ref: "#/components/parameters/projectId"
+    get:
+      tags: [projects]
+      operationId: getProject
+      responses:
+        "200":
+          description: Project
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Project" }
+        "404": { $ref: "#/components/responses/NotFound" }
+    patch:
+      tags: [projects]
+      operationId: updateProject
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ProjectCreate" }
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Project" }
+        "404": { $ref: "#/components/responses/NotFound" }
+    delete:
+      tags: [projects]
+      operationId: deleteProject
+      responses:
+        "204": { description: Deleted with everything in it }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /projects/{projectId}/targets:
+    parameters:
+      - $ref: "#/components/parameters/projectId"
+    get:
+      tags: [targets]
+      operationId: listTargets
+      responses:
+        "200":
+          description: Targets
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/Target" }
+    post:
+      tags: [targets]
+      operationId: createTarget
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/TargetCreate" }
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Target" }
+        "422": { $ref: "#/components/responses/Invalid" }
+
+  /targets/{targetId}:
+    parameters:
+      - $ref: "#/components/parameters/targetId"
+    get:
+      tags: [targets]
+      operationId: getTarget
+      responses:
+        "200":
+          description: Target
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Target" }
+        "404": { $ref: "#/components/responses/NotFound" }
+    patch:
+      tags: [targets]
+      operationId: updateTarget
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/TargetCreate" }
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Target" }
+        "404": { $ref: "#/components/responses/NotFound" }
+    delete:
+      tags: [targets]
+      operationId: deleteTarget
+      responses:
+        "204": { description: Deleted }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /targets/{targetId}/verify:
+    parameters:
+      - $ref: "#/components/parameters/targetId"
+    post:
+      tags: [targets]
+      operationId: verifyTarget
+      summary: Check the ownership token for a public target
+      responses:
+        "200":
+          description: Verification state after the check
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Target" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /projects/{projectId}/secrets:
+    parameters:
+      - $ref: "#/components/parameters/projectId"
+    get:
+      tags: [secrets]
+      operationId: listSecrets
+      responses:
+        "200":
+          description: Secret names (values are never returned)
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/Secret" }
+    put:
+      tags: [secrets]
+      operationId: putSecret
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/SecretPut" }
+      responses:
+        "200":
+          description: Stored, encrypted at rest
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Secret" }
+        "422": { $ref: "#/components/responses/Invalid" }
+
+  /projects/{projectId}/secrets/{name}:
+    parameters:
+      - $ref: "#/components/parameters/projectId"
+      - name: name
+        in: path
+        required: true
+        schema: { type: string }
+    delete:
+      tags: [secrets]
+      operationId: deleteSecret
+      responses:
+        "204": { description: Deleted }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /scenarios/validate:
+    post:
+      tags: [scenarios]
+      operationId: validateScenario
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [yaml]
+              properties:
+                yaml: { type: string }
+      responses:
+        "200":
+          description: Validation result
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Validation" }
+
+  /projects/{projectId}/scenarios:
+    parameters:
+      - $ref: "#/components/parameters/projectId"
+    get:
+      tags: [scenarios]
+      operationId: listScenarios
+      parameters:
+        - name: tag
+          in: query
+          schema: { type: string }
+      responses:
+        "200":
+          description: Scenarios with their latest version
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/Scenario" }
+    post:
+      tags: [scenarios]
+      operationId: createScenario
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ScenarioVersionCreate" }
+      responses:
+        "201":
+          description: Created with version 1
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Scenario" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "422": { $ref: "#/components/responses/Invalid" }
+
+  /scenarios/{scenarioId}:
+    parameters:
+      - $ref: "#/components/parameters/scenarioId"
+    get:
+      tags: [scenarios]
+      operationId: getScenario
+      responses:
+        "200":
+          description: Scenario with its latest version
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Scenario" }
+        "404": { $ref: "#/components/responses/NotFound" }
+    delete:
+      tags: [scenarios]
+      operationId: deleteScenario
+      responses:
+        "204": { description: Deleted }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /scenarios/{scenarioId}/versions:
+    parameters:
+      - $ref: "#/components/parameters/scenarioId"
+    get:
+      tags: [scenarios]
+      operationId: listScenarioVersions
+      responses:
+        "200":
+          description: All versions, newest first
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/ScenarioVersion" }
+    post:
+      tags: [scenarios]
+      operationId: createScenarioVersion
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ScenarioVersionCreate" }
+      responses:
+        "201":
+          description: New version saved
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ScenarioVersion" }
+        "422": { $ref: "#/components/responses/Invalid" }
+
+  /scenarios/{scenarioId}/versions/{version}:
+    parameters:
+      - $ref: "#/components/parameters/scenarioId"
+      - name: version
+        in: path
+        required: true
+        schema: { type: integer, minimum: 1 }
+    get:
+      tags: [scenarios]
+      operationId: getScenarioVersion
+      responses:
+        "200":
+          description: The version
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ScenarioVersion" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /projects/{projectId}/runs:
+    parameters:
+      - $ref: "#/components/parameters/projectId"
+    get:
+      tags: [runs]
+      operationId: listRuns
+      parameters:
+        - name: scenarioId
+          in: query
+          schema: { type: string, format: uuid }
+        - name: limit
+          in: query
+          schema: { type: integer, minimum: 1, maximum: 200, default: 50 }
+        - name: before
+          in: query
+          description: Return runs created before this time (pagination).
+          schema: { type: string, format: date-time }
+      responses:
+        "200":
+          description: Runs, newest first
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/Run" }
+    post:
+      tags: [runs]
+      operationId: createRun
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/RunCreate" }
+      responses:
+        "201":
+          description: Run accepted and scheduled
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Run" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "422": { $ref: "#/components/responses/Invalid" }
+
+  /runs/{runId}:
+    parameters:
+      - $ref: "#/components/parameters/runId"
+    get:
+      tags: [runs]
+      operationId: getRun
+      responses:
+        "200":
+          description: Run
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Run" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /runs/{runId}/stop:
+    parameters:
+      - $ref: "#/components/parameters/runId"
+    post:
+      tags: [runs]
+      operationId: stopRun
+      summary: Stop gracefully; in-flight iterations may finish
+      responses:
+        "202": { description: Stopping }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+
+  /runs/{runId}/kill:
+    parameters:
+      - $ref: "#/components/parameters/runId"
+    post:
+      tags: [runs]
+      operationId: killRun
+      summary: Kill switch for one run; all load stops immediately
+      responses:
+        "202": { description: Killed }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /runs/kill-all:
+    post:
+      tags: [runs]
+      operationId: killAllRuns
+      summary: Kill switch for every active run in the organisation
+      responses:
+        "200":
+          description: Runs that were killed
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [killed]
+                properties:
+                  killed:
+                    type: array
+                    items: { type: string, format: uuid }
+
+  /runs/{runId}/live:
+    parameters:
+      - $ref: "#/components/parameters/runId"
+    get:
+      tags: [runs]
+      operationId: streamRun
+      summary: Live metrics as server-sent events
+      description: |
+        Emits `point` events (a timeline Point per interval), `status`
+        events when the run changes state, and `event` events for worker
+        and safety events. Ends after the run completes.
+      responses:
+        "200":
+          description: Event stream
+          content:
+            text/event-stream:
+              schema: { type: string }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /runs/{runId}/timeline:
+    parameters:
+      - $ref: "#/components/parameters/runId"
+    get:
+      tags: [runs]
+      operationId: getRunTimeline
+      responses:
+        "200":
+          description: Per-interval points recorded so far
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/Point" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /runs/{runId}/report:
+    parameters:
+      - $ref: "#/components/parameters/runId"
+    get:
+      tags: [runs]
+      operationId: getRunReport
+      parameters:
+        - name: format
+          in: query
+          schema:
+            type: string
+            enum: [json, html, junit, markdown]
+            default: json
+      responses:
+        "200":
+          description: The report. JSON follows the `stampede run --json` format.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Report" }
+            text/html:
+              schema: { type: string }
+            application/xml:
+              schema: { type: string }
+            text/markdown:
+              schema: { type: string }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+
+  /workers:
+    get:
+      tags: [workers]
+      operationId: listWorkers
+      responses:
+        "200":
+          description: Connected workers
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/Worker" }
+
+  /audit:
+    get:
+      tags: [audit]
+      operationId: listAudit
+      parameters:
+        - name: limit
+          in: query
+          schema: { type: integer, minimum: 1, maximum: 500, default: 100 }
+        - name: before
+          in: query
+          schema: { type: string, format: date-time }
+      responses:
+        "200":
+          description: Audit log, newest first
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/AuditEntry" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+
+components:
+  securitySchemes:
+    bearer:
+      type: http
+      scheme: bearer
+      description: API token, `stp_...`
+    session:
+      type: apiKey
+      in: cookie
+      name: stampede_session
+
+  parameters:
+    userId:
+      name: userId
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+    tokenId:
+      name: tokenId
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+    projectId:
+      name: projectId
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+    targetId:
+      name: targetId
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+    scenarioId:
+      name: scenarioId
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+    runId:
+      name: runId
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+
+  responses:
+    Unauthorized:
+      description: Not signed in or token invalid
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
+    Forbidden:
+      description: The caller's role does not allow this
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
+    NotFound:
+      description: Not found
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
+    Conflict:
+      description: Conflicts with the current state
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
+    Invalid:
+      description: The request is well-formed but invalid
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
+    TooMany:
+      description: Too many attempts
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
+
+  schemas:
+    Error:
+      type: object
+      required: [error]
+      properties:
+        error:
+          type: object
+          required: [code, message]
+          properties:
+            code: { type: string, example: not_found }
+            message: { type: string }
+            details:
+              type: array
+              items: { type: string }
+
+    VersionInfo:
+      type: object
+      required: [version, commit, setupRequired]
+      properties:
+        version: { type: string }
+        commit: { type: string }
+        setupRequired: { type: boolean }
+
+    Role:
+      type: string
+      enum: [owner, admin, editor, runner, viewer]
+
+    SetupRequest:
+      type: object
+      required: [organisation, name, email, password]
+      properties:
+        organisation: { type: string, minLength: 1, maxLength: 100 }
+        name: { type: string, minLength: 1, maxLength: 100 }
+        email: { type: string, format: email }
+        password: { type: string, minLength: 10 }
+
+    LoginRequest:
+      type: object
+      required: [email, password]
+      properties:
+        email: { type: string, format: email }
+        password: { type: string }
+
+    Session:
+      type: object
+      required: [user, expiresAt]
+      properties:
+        user: { $ref: "#/components/schemas/Me" }
+        expiresAt: { type: string, format: date-time }
+
+    Me:
+      type: object
+      required: [id, email, name, role, orgId, orgName]
+      properties:
+        id: { type: string, format: uuid }
+        email: { type: string }
+        name: { type: string }
+        role: { $ref: "#/components/schemas/Role" }
+        orgId: { type: string, format: uuid }
+        orgName: { type: string }
+
+    User:
+      type: object
+      required: [id, email, name, role, createdAt]
+      properties:
+        id: { type: string, format: uuid }
+        email: { type: string }
+        name: { type: string }
+        role: { $ref: "#/components/schemas/Role" }
+        createdAt: { type: string, format: date-time }
+        lastLoginAt: { type: string, format: date-time, nullable: true }
+
+    UserCreate:
+      type: object
+      required: [email, name, role, password]
+      properties:
+        email: { type: string, format: email }
+        name: { type: string, minLength: 1 }
+        role: { $ref: "#/components/schemas/Role" }
+        password: { type: string, minLength: 10 }
+
+    Token:
+      type: object
+      required: [id, name, prefix, role, createdAt]
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string }
+        prefix: { type: string, description: First characters of the token, for recognition }
+        role: { $ref: "#/components/schemas/Role" }
+        createdAt: { type: string, format: date-time }
+        lastUsedAt: { type: string, format: date-time, nullable: true }
+        expiresAt: { type: string, format: date-time, nullable: true }
+
+    TokenCreate:
+      type: object
+      required: [name]
+      properties:
+        name: { type: string, minLength: 1, maxLength: 100 }
+        role:
+          $ref: "#/components/schemas/Role"
+        expiresInDays: { type: integer, minimum: 1, maximum: 3650 }
+
+    TokenCreated:
+      allOf:
+        - $ref: "#/components/schemas/Token"
+        - type: object
+          required: [secret]
+          properties:
+            secret: { type: string, description: The full token. Shown once. }
+
+    Project:
+      type: object
+      required: [id, name, slug, createdAt]
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string }
+        slug: { type: string }
+        description: { type: string }
+        createdAt: { type: string, format: date-time }
+
+    ProjectCreate:
+      type: object
+      required: [name]
+      properties:
+        name: { type: string, minLength: 1, maxLength: 100 }
+        description: { type: string, maxLength: 1000 }
+
+    Caps:
+      type: object
+      properties:
+        maxRate: { type: number, description: Iterations per second }
+        maxVUs: { type: integer }
+        maxDurationSeconds: { type: integer }
+
+    Target:
+      type: object
+      required: [id, projectId, name, baseURL, private, verified, verificationToken, caps, createdAt]
+      properties:
+        id: { type: string, format: uuid }
+        projectId: { type: string, format: uuid }
+        name: { type: string }
+        baseURL: { type: string }
+        private:
+          type: boolean
+          description: Loopback or private network; needs no verification.
+        verified: { type: boolean }
+        verifiedAt: { type: string, format: date-time, nullable: true }
+        verificationMethod: { type: string, nullable: true }
+        verificationToken:
+          type: string
+          description: Publish as a DNS TXT record `stampede-verify=<token>` or at /.well-known/stampede-verify.txt
+        allowHosts:
+          type: array
+          items: { type: string }
+        caps: { $ref: "#/components/schemas/Caps" }
+        createdAt: { type: string, format: date-time }
+
+    TargetCreate:
+      type: object
+      required: [name, baseURL]
+      properties:
+        name: { type: string, minLength: 1 }
+        baseURL: { type: string }
+        allowHosts:
+          type: array
+          items: { type: string }
+        caps: { $ref: "#/components/schemas/Caps" }
+
+    Secret:
+      type: object
+      required: [name, updatedAt]
+      properties:
+        name: { type: string }
+        updatedAt: { type: string, format: date-time }
+
+    SecretPut:
+      type: object
+      required: [name, value]
+      properties:
+        name: { type: string, pattern: "^[A-Za-z_][A-Za-z0-9_]*$" }
+        value: { type: string }
+
+    Validation:
+      type: object
+      required: [valid, problems]
+      properties:
+        valid: { type: boolean }
+        problems:
+          type: array
+          items: { type: string }
+        plan: { $ref: "#/components/schemas/PlanSummary" }
+
+    PlanSummary:
+      type: object
+      required: [executor, mode, peak, durationSeconds, journeys, steps]
+      properties:
+        executor: { type: string }
+        mode: { type: string }
+        shape: { type: string }
+        peak: { type: number }
+        durationSeconds: { type: number }
+        journeys: { type: integer }
+        steps: { type: integer }
+
+    Scenario:
+      type: object
+      required: [id, projectId, name, tags, latestVersion, createdAt, updatedAt]
+      properties:
+        id: { type: string, format: uuid }
+        projectId: { type: string, format: uuid }
+        name: { type: string }
+        description: { type: string }
+        tags:
+          type: array
+          items: { type: string }
+        latestVersion: { $ref: "#/components/schemas/ScenarioVersion" }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+
+    ScenarioVersion:
+      type: object
+      required: [scenarioId, version, yaml, createdAt]
+      properties:
+        scenarioId: { type: string, format: uuid }
+        version: { type: integer }
+        yaml: { type: string }
+        message: { type: string }
+        createdBy: { type: string, nullable: true }
+        createdAt: { type: string, format: date-time }
+        plan: { $ref: "#/components/schemas/PlanSummary" }
+
+    ScenarioVersionCreate:
+      type: object
+      required: [yaml]
+      properties:
+        yaml: { type: string }
+        message: { type: string, maxLength: 500 }
+
+    RunStatus:
+      type: string
+      enum: [scheduling, starting, running, stopping, analyzing, completed, aborted, failed]
+
+    RunOverrides:
+      type: object
+      properties:
+        shape: { type: string }
+        mode: { type: string, enum: [vus, rate] }
+        vus: { type: integer, minimum: 1 }
+        rate: { type: string, example: 100/s }
+        duration: { type: string, example: 5m }
+        start: { type: string }
+        max: { type: string }
+
+    RunCreate:
+      type: object
+      required: [scenarioId, targetId]
+      properties:
+        scenarioId: { type: string, format: uuid }
+        version: { type: integer, minimum: 1, description: Defaults to the latest }
+        targetId: { type: string, format: uuid }
+        overrides: { $ref: "#/components/schemas/RunOverrides" }
+        env:
+          type: object
+          additionalProperties: { type: string }
+        workers: { type: integer, minimum: 0, description: 0 uses every connected worker }
+        note: { type: string, maxLength: 500 }
+
+    Run:
+      type: object
+      required: [id, projectId, scenarioId, scenarioVersion, targetId, status, createdAt]
+      properties:
+        id: { type: string, format: uuid }
+        projectId: { type: string, format: uuid }
+        scenarioId: { type: string, format: uuid }
+        scenarioName: { type: string }
+        scenarioVersion: { type: integer }
+        targetId: { type: string, format: uuid }
+        targetURL: { type: string }
+        status: { $ref: "#/components/schemas/RunStatus" }
+        verdict:
+          type: string
+          nullable: true
+          enum: [pass, fail, generator-limited, no-targets, null]
+        stopReason: { type: string, nullable: true }
+        error: { type: string, nullable: true }
+        overrides: { $ref: "#/components/schemas/RunOverrides" }
+        plan: { $ref: "#/components/schemas/PlanSummary" }
+        workers: { type: integer }
+        note: { type: string }
+        createdBy: { type: string, nullable: true }
+        createdAt: { type: string, format: date-time }
+        startedAt: { type: string, format: date-time, nullable: true }
+        endedAt: { type: string, format: date-time, nullable: true }
+        summary: { $ref: "#/components/schemas/RunSummary" }
+
+    RunSummary:
+      type: object
+      nullable: true
+      properties:
+        requests: { type: integer }
+        errorRate: { type: number }
+        rps: { type: number }
+        p95: { type: number, description: seconds }
+        p99: { type: number, description: seconds }
+
+    Point:
+      type: object
+      required: [t, rps, errorRate, p50, p95, p99, vus, planned, dropped]
+      properties:
+        t: { type: number, description: Seconds since start }
+        rps: { type: number }
+        errorRate: { type: number }
+        p50: { type: number }
+        p95: { type: number }
+        p99: { type: number }
+        vus: { type: integer }
+        planned: { type: number }
+        dropped: { type: integer }
+        iterations: { type: integer }
+        schedLagP99: { type: number }
+
+    Report:
+      type: object
+      description: The full report; same format as `stampede run --json`.
+      additionalProperties: true
+
+    Worker:
+      type: object
+      required: [id, name, region, connectedAt, lastSeenAt, status]
+      properties:
+        id: { type: string }
+        name: { type: string }
+        region: { type: string }
+        version: { type: string }
+        labels:
+          type: object
+          additionalProperties: { type: string }
+        cpus: { type: integer }
+        memoryBytes: { type: integer }
+        status: { type: string, enum: [idle, busy, saturated, lost] }
+        runId: { type: string, nullable: true }
+        connectedAt: { type: string, format: date-time }
+        lastSeenAt: { type: string, format: date-time }
+
+    AuditEntry:
+      type: object
+      required: [id, at, action, actor]
+      properties:
+        id: { type: integer, format: int64 }
+        at: { type: string, format: date-time }
+        actor: { type: string, description: User email or token name }
+        action: { type: string, example: run.start }
+        subject: { type: string }
+        details:
+          type: object
+          additionalProperties: true
+        ip: { type: string }
