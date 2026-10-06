@@ -164,9 +164,11 @@ func (w *Worker) execute(r *activeRun) {
 			return
 		}
 	}
+	// Report times in the worker's clock, like every other time it sends.
+	shift := time.Until(w.cfg.Clock())
 	fin := &workerv1.RunFinished{
 		RunId: r.id, StopReason: res.StopReason, PeakVus: uint32(max(res.PeakVUs, 0)),
-		T0UnixNano: res.T0.UnixNano(), EndUnixNano: res.End.UnixNano(),
+		T0UnixNano: res.T0.Add(shift).UnixNano(), EndUnixNano: res.End.Add(shift).UnixNano(),
 	}
 	if fin.Phases, err = wire.PhasesToProto(res.Phases); err != nil {
 		w.log.Error("cannot encode phase histograms", "run", r.id, "error", err)
