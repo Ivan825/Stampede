@@ -539,6 +539,34 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/compare": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Compare finished runs of version A with runs of version B
+         * @description The same comparison as `stampede compare`. For p50, p95, p99, error
+         *     rate, throughput and (for breakpoint runs) the highest load that
+         *     held, it gives both means, the relative change, a bootstrap 95%
+         *     confidence interval for the change and the noise floor measured
+         *     between repeats of one version. A change is a regression or an
+         *     improvement only when the interval excludes zero and the change is
+         *     larger than the noise floor. Per-step p95 and error rate are
+         *     compared too but do not affect the verdict. Every run must belong
+         *     to the caller's organisation and have finished with a report.
+         */
+        post: operations["compareRuns"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/projects/{projectId}/schedules": {
         parameters: {
             query?: never;
@@ -1313,6 +1341,80 @@ export interface components {
         /** @description The full report; same format as `stampede run --json`. */
         Report: {
             [key: string]: unknown;
+        };
+        CompareRequest: {
+            /** @description Runs of the baseline version */
+            a: string[];
+            /** @description Runs of the new version */
+            b: string[];
+            /** @description Name for the baseline (default A) */
+            labelA?: string;
+            /** @description Name for the new version (default B) */
+            labelB?: string;
+        };
+        /** @enum {string} */
+        CompareVerdict: "regression" | "improvement" | "no-change" | "inconclusive";
+        CompareSide: {
+            label: string;
+            runs: string[];
+        };
+        MetricDelta: {
+            /** @description p50, p95, p99, error rate, throughput or max sustainable load */
+            name: string;
+            higherIsBetter: boolean;
+            /** @description The value from each run of A. Latencies are in seconds, error rates are fractions. */
+            a: number[];
+            b: number[];
+            /** Format: double */
+            meanA: number;
+            /** Format: double */
+            meanB: number;
+            /**
+             * Format: double
+             * @description (meanB - meanA) / meanA; null when meanA is 0 and meanB is not.
+             */
+            change: number | null;
+            /**
+             * Format: double
+             * @description Lower bound of the 95% interval of the change
+             */
+            ciLow: number | null;
+            /**
+             * Format: double
+             * @description Upper bound of the 95% interval of the change
+             */
+            ciHigh: number | null;
+            /**
+             * Format: double
+             * @description Largest relative spread between repeats of one version (at least 0.02)
+             */
+            noiseFloor: number;
+            verdict: components["schemas"]["CompareVerdict"];
+        };
+        StepDelta: {
+            journey: string;
+            step: string;
+            /** @description p95 and error rate */
+            metrics: components["schemas"]["MetricDelta"][];
+        };
+        Comparison: {
+            a: components["schemas"]["CompareSide"];
+            b: components["schemas"]["CompareSide"];
+            /** @description False when the runs differ in scenario */
+            comparable: boolean;
+            /** @description Why the runs are not comparable */
+            problems: string[];
+            metrics: components["schemas"]["MetricDelta"][];
+            /** @description Per-step comparisons; informational, they do not change the verdict */
+            steps: components["schemas"]["StepDelta"][];
+            verdict: components["schemas"]["CompareVerdict"];
+            /**
+             * Format: double
+             * @description Confidence level of the intervals (0.95)
+             */
+            confidence: number;
+            /** @description The comparison as Markdown */
+            markdown: string;
         };
         Worker: {
             id: string;
@@ -2770,6 +2872,32 @@ export interface operations {
             };
             404: components["responses"]["NotFound"];
             409: components["responses"]["Conflict"];
+        };
+    };
+    compareRuns: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CompareRequest"];
+            };
+        };
+        responses: {
+            /** @description The comparison */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Comparison"];
+                };
+            };
+            403: components["responses"]["Forbidden"];
+            422: components["responses"]["Invalid"];
         };
     };
     listSchedules: {

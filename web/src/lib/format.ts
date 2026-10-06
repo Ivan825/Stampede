@@ -135,6 +135,31 @@ export function load(level: number | null | undefined, mode: string | undefined)
   return `${num(level)}${unit(mode)}`;
 }
 
+/**
+ * A relative change with its sign, like report.signed in Go: 0.123 ->
+ * "+12.3%". Null stands for an infinite change (from zero), shown as "+∞".
+ */
+export function signedPct(change: number | null | undefined): string {
+  if (change === null) return '+∞';
+  if (change === undefined || !Number.isFinite(change)) return '–';
+  const s = (change * 100).toFixed(1);
+  return `${change >= 0 && !s.startsWith('-') ? '+' : ''}${s}%`;
+}
+
+/** A compared metric's value in its unit, like report.fmtMetric in Go. */
+export function compareValue(metric: string, v: number): string {
+  switch (metric) {
+    case 'error rate':
+      return pct(v);
+    case 'throughput':
+      return `${v.toFixed(1)}/s`;
+    case 'max sustainable load':
+      return num(v);
+    default:
+      return ms(v);
+  }
+}
+
 /** Formats a target metric value compactly: 0.0123, 12.3, 4.56k, 120M. */
 export function metricValue(f: number): string {
   const a = Math.abs(f);

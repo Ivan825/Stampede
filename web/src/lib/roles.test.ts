@@ -13,6 +13,13 @@ describe('roles', () => {
     expect(p.startRuns).toBe(true);
     expect(p.editScenarios).toBe(false);
     expect(p.manageUsers).toBe(false);
+    expect(p.generateJourneys).toBe(false);
+  });
+
+  it('lets editors generate journeys and admins manage AI providers', () => {
+    expect(permissions('editor').generateJourneys).toBe(true);
+    expect(permissions('editor').manageAIProviders).toBe(false);
+    expect(permissions('admin').manageAIProviders).toBe(true);
   });
 
   it('gives viewers read-only access', () => {

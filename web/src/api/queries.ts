@@ -8,6 +8,11 @@ import {
 } from '@tanstack/react-query';
 import { api, ApiError, unwrap } from './client';
 import type {
+  AIJob,
+  AIJobApprove,
+  AIJobCreate,
+  AIProviderPut,
+  CompareRequest,
   IntegrationCreate,
   LoginRequest,
   NotificationChannelCreate,
@@ -26,7 +31,7 @@ import type {
   TokenCreate,
   UserCreate,
 } from './types';
-import { activeStatuses } from './types';
+import { activeStatuses, isAIJobActive } from './types';
 
 export const keys = {
   version: ['version'] as const,
@@ -58,6 +63,10 @@ export const keys = {
   integrations: ['integrations'] as const,
   channels: ['notification-channels'] as const,
   deliveries: (channelId: string) => ['notification-channels', channelId, 'deliveries'] as const,
+  aiProviders: ['ai-providers'] as const,
+  aiJobs: (projectId: string) => ['projects', projectId, 'ai-jobs'] as const,
+  aiJob: (id: string) => ['ai-jobs', id] as const,
+  compare: (body: CompareRequest) => ['compare', body] as const,
 };
 
 // ---------------------------------------------------------------- system/auth
@@ -719,5 +728,95 @@ export function useWorkers() {
     queryKey: keys.workers,
     queryFn: () => unwrap(api.GET('/workers')),
     refetchInterval: 3_000,
+  });
+}
+
+// ---------------------------------------------------------------- compare
+
+/** Compares finished runs of version A with runs of version B. */
+export function useCompare(body: CompareRequest, enabled = true) {
+  return useQuery({
+    queryKey: keys.compare(body),
+    queryFn: () => unwrap(api.POST('/compare', { body })),
+    enabled: enabled && body.a.length > 0 && body.b.length > 0,
+    staleTime: Infinity,
+    retry: false,
+  });
+}
+
+// ---------------------------------------------------------------- AI
+
+export function useAIProviders() {
+  return useQuery({
+    queryKey: keys.aiProviders,
+    queryFn: () => unwrap(api.GET('/ai/providers')),
+  });
+}
+
+export function usePutAIProvider() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (body: AIProviderPut) => unwrap(api.POST('/ai/providers', { body })),
+    onSuccess: () => qc.invalidateQueries({ queryKey: keys.aiProviders }),
+  });
+}
+
+export function useDeleteAIProvider() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) =>
+      unwrap(api.DELETE('/ai/providers/{providerId}', { params: { path: { providerId: id } } })),
+    onSuccess: () => qc.invalidateQueries({ queryKey: keys.aiProviders }),
+  });
+}
+
+/** Generation jobs, polled while any of them is queued or running. */
+export function useAIJobs(projectId: string) {
+  return useQuery({
+    queryKey: keys.aiJobs(projectId),
+    queryFn: () =>
+      unwrap(
+        api.GET('/projects/{projectId}/ai/jobs', {
+          params: { path: { projectId }, query: { limit: 100 } },
+        }),
+      ),
+    refetchInterval: (q) => (q.state.data?.some((j) => isAIJobActive(j.status)) ? 3_000 : false),
+  });
+}
+
+/** One job, polled every 1.5s while it is queued or running. */
+export function useAIJob(id: string) {
+  return useQuery({
+    queryKey: keys.aiJob(id),
+    queryFn: () => unwrap(api.GET('/ai/jobs/{jobId}', { params: { path: { jobId: id } } })),
+    refetchInterval: (q) => (q.state.data && isAIJobActive(q.state.data.status) ? 1_500 : false),
+  });
+}
+
+export function useCreateAIJob(projectId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (body: AIJobCreate) =>
+      unwrap(api.POST('/projects/{projectId}/ai/jobs', { params: { path: { projectId } }, body })),
+    onSuccess: (job) => {
+      qc.setQueryData(keys.aiJob(job.id), job);
+      void qc.invalidateQueries({ queryKey: keys.aiJobs(projectId) });
+      void qc.invalidateQueries({ queryKey: keys.aiProviders });
+    },
+  });
+}
+
+export function useApproveAIJob(job: AIJob) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (body: AIJobApprove) =>
+      unwrap(api.POST('/ai/jobs/{jobId}/approve', { params: { path: { jobId: job.id } }, body })),
+    onSuccess: (res) => {
+      qc.setQueryData(keys.scenario(res.scenario.id), res.scenario);
+      void qc.invalidateQueries({ queryKey: keys.aiJob(job.id) });
+      void qc.invalidateQueries({ queryKey: keys.aiJobs(job.projectId) });
+      void qc.invalidateQueries({ queryKey: ['projects', job.projectId, 'scenarios'] });
+      void qc.invalidateQueries({ queryKey: keys.versions(res.scenario.id) });
+    },
   });
 }

@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   bytes,
   clock,
+  compareValue,
   count,
   humanDuration,
   load,
@@ -11,6 +12,7 @@ import {
   rate,
   relativeTime,
   secs,
+  signedPct,
 } from './format';
 
 describe('ms (matches report.Ms in Go)', () => {
@@ -98,5 +100,20 @@ describe('rates, counts and durations', () => {
     expect(relativeTime('2026-10-06T09:00:00Z', now)).toBe('3 hours ago');
     expect(relativeTime('2026-10-05T12:00:00Z', now)).toBe('yesterday');
     expect(relativeTime(null, now)).toBe('–');
+  });
+
+  it('signedPct matches report.signed in Go', () => {
+    expect(signedPct(0.1234)).toBe('+12.3%');
+    expect(signedPct(-0.05)).toBe('-5.0%');
+    expect(signedPct(0)).toBe('+0.0%');
+    expect(signedPct(-0.0001)).toBe('-0.0%');
+    expect(signedPct(null)).toBe('+∞');
+  });
+
+  it('compareValue formats each compared metric in its unit', () => {
+    expect(compareValue('p95', 0.1234)).toBe('123.4ms');
+    expect(compareValue('error rate', 0.0123)).toBe('1.23%');
+    expect(compareValue('throughput', 99.95)).toBe('100.0/s');
+    expect(compareValue('max sustainable load', 250)).toBe('250');
   });
 });
