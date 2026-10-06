@@ -123,7 +123,9 @@ host outside it fails the step as `blocked by safety`, and an address the
 engine cannot read is refused rather than allowed. The policy only covers
 marked settings: a plugin is code you install and run, and Stampede cannot
 see what else it connects to (a Kafka client talks to every broker the
-cluster advertises, for example).
+cluster advertises, for example). A scenario made only of plugin steps
+needs no `target.baseURL`; `stampede run` then reaches only private hosts
+and hosts given with `--allow-host`.
 
 ## Writing a plugin
 

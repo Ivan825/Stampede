@@ -83,6 +83,27 @@ func TestPluginCommands(t *testing.T) {
 	}
 }
 
+// A scenario with only plugin steps needs no base URL; without one, only
+// private hosts (and --allow-host) can be reached.
+func TestRunPluginScenarioWithoutBaseURL(t *testing.T) {
+	t.Setenv("STAMPEDE_PLUGIN_DIR", plugintest.EchoDir(t))
+	scn := filepath.Join(t.TempDir(), "s.yaml")
+	src := `metadata: {name: t}
+journeys: [{name: j, steps: [{name: local, plugin: echo.say, with: {text: hi, addr: "127.0.0.1:9"}}, {name: public, plugin: echo.say, with: {text: hi, addr: "93.184.215.14:9"}}]}]
+load: {vus: 1, iterations: 3}
+`
+	if err := os.WriteFile(scn, []byte(src), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	out, errOut, err := stampede(t, "run", scn)
+	if err != nil {
+		t.Fatalf("run: %v\n%s\n%s", err, out, errOut)
+	}
+	if !strings.Contains(errOut, "against private hosts") || !strings.Contains(out, "blocked by safety") {
+		t.Fatalf("output:\n%s\n%s", out, errOut)
+	}
+}
+
 // TestInstallFirstPartyPlugin builds plugins/udp from this checkout, the
 // way `stampede plugin install udp` does in a clone of the repository.
 func TestInstallFirstPartyPlugin(t *testing.T) {
