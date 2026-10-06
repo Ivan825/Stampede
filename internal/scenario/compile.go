@@ -560,3 +560,27 @@ func (j *JSONTemplate) Value(vars interpreter.Activation) (any, error) {
 		return j.lit, nil
 	}
 }
+
+// Source returns every template source in the JSON value, joined by
+// newlines, for static analysis such as finding referenced feeders.
+func (j *JSONTemplate) Source() string {
+	var b strings.Builder
+	var walk func(*JSONTemplate)
+	walk = func(n *JSONTemplate) {
+		switch n.kind {
+		case 't':
+			b.WriteString(n.tmpl.String())
+			b.WriteByte('\n')
+		case 'o':
+			for _, f := range n.obj {
+				walk(f.val)
+			}
+		case 'a':
+			for _, e := range n.arr {
+				walk(e)
+			}
+		}
+	}
+	walk(j)
+	return b.String()
+}
