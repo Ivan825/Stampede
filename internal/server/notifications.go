@@ -48,6 +48,8 @@ type notifier struct {
 	ctx    context.Context
 	cancel context.CancelFunc
 	wg     sync.WaitGroup
+	mu     sync.Mutex
+	closed bool
 }
 
 func newNotifier(s *Server) *notifier {
@@ -69,6 +71,9 @@ func newNotifier(s *Server) *notifier {
 // shutdown lets deliveries in flight finish until ctx ends, then cancels
 // their retries.
 func (n *notifier) shutdown(ctx context.Context) {
+	n.mu.Lock()
+	n.closed = true
+	n.mu.Unlock()
 	done := make(chan struct{})
 	go func() { n.wg.Wait(); close(done) }()
 	select {
@@ -153,6 +158,12 @@ func (n *notifier) publish(org uuid.UUID, ev notify.Event, runID *uuid.UUID) {
 	rows, err := n.s.st.ListNotificationChannelsForEvent(context.Background(), db.ListNotificationChannelsForEventParams{OrgID: org, Event: ev.Type})
 	if err != nil {
 		n.s.log.Error("list notification channels", "event", ev.Type, "error", err)
+		return
+	}
+	n.mu.Lock()
+	defer n.mu.Unlock()
+	if n.closed {
+		n.s.log.Warn("server shutting down; notification not sent", "event", ev.Type)
 		return
 	}
 	for _, row := range rows {
