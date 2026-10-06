@@ -37,7 +37,7 @@ reports where your product breaks.`,
 	}
 	root.AddCommand(newVersionCmd(), newRunCmd(), newValidateCmd(), newTargetCmd(), newServerCmd(), newWorkerCmd(), newKeygenCmd(), newHealthcheckCmd(), newCompareCmd(), newReportCmd(),
 		newLoginCmd(), newStartCmd(), newPushCmd(), newRunsCmd(), newStopCmd(false), newStopCmd(true), newWorkersCmd(),
-		newUpCmd(), newDownCmd(), newDoctorCmd())
+		newUpCmd(), newDownCmd(), newDoctorCmd(), newPackCmd(), newInitCmd())
 	return root
 }
 
