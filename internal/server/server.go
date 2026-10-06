@@ -110,7 +110,7 @@ func (s *Server) Shutdown(ctx context.Context) { s.runs.shutdown(ctx) }
 
 func (s *Server) routes() http.Handler {
 	r := chi.NewRouter()
-	r.Use(trustedProxies(s.cfg.TrustedProxies), middleware.RequestID, s.recoverer, securityHeaders)
+	r.Use(trustedProxies(s.cfg.TrustedProxies), middleware.RequestID, s.recoverer, securityHeaders(contentSecurityPolicy(s.cfg.UI)))
 
 	r.Get("/healthz", func(w http.ResponseWriter, _ *http.Request) { w.Write([]byte("ok\n")) })
 	r.Get("/readyz", func(w http.ResponseWriter, r *http.Request) {
