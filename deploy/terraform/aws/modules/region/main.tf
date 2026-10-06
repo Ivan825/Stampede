@@ -25,7 +25,7 @@ locals {
     }
   EOT
 
-  tls_flag     = var.insecure ? "--insecure" : (var.server_ca_pem != "" ? "--ca /etc/stampede/ca.pem" : "")
+  tls_flag     = var.insecure ? "--insecure" : (var.server_ca_pem != "" ? "--ca /etc/stampede/ca.pem" : (var.mtls ? "--mtls${var.ca_fingerprint != "" ? " --ca-fingerprint ${var.ca_fingerprint}" : ""}" : ""))
   label_flags  = join("", [for k, v in local.labels : " --label ${k}=${v}"])
   max_vus_flag = var.max_vus > 0 ? " --max-vus ${var.max_vus}" : ""
 }

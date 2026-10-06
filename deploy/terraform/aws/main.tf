@@ -27,6 +27,8 @@ locals {
     public_ip        = var.public_ip
     insecure         = var.insecure
     server_ca_pem    = var.server_ca_pem
+    mtls             = var.mtls
+    ca_fingerprint   = var.ca_fingerprint
     worker_labels    = var.worker_labels
     max_vus          = var.max_vus
     name_prefix      = var.name_prefix
@@ -64,6 +66,8 @@ module "us_east_1" {
   public_ip        = local.common.public_ip
   insecure         = local.common.insecure
   server_ca_pem    = local.common.server_ca_pem
+  mtls             = local.common.mtls
+  ca_fingerprint   = local.common.ca_fingerprint
   worker_labels    = local.common.worker_labels
   max_vus          = local.common.max_vus
   name_prefix      = local.common.name_prefix
@@ -85,6 +89,8 @@ module "eu_west_1" {
   public_ip        = local.common.public_ip
   insecure         = local.common.insecure
   server_ca_pem    = local.common.server_ca_pem
+  mtls             = local.common.mtls
+  ca_fingerprint   = local.common.ca_fingerprint
   worker_labels    = local.common.worker_labels
   max_vus          = local.common.max_vus
   name_prefix      = local.common.name_prefix
@@ -106,6 +112,8 @@ module "ap_south_1" {
   public_ip        = local.common.public_ip
   insecure         = local.common.insecure
   server_ca_pem    = local.common.server_ca_pem
+  mtls             = local.common.mtls
+  ca_fingerprint   = local.common.ca_fingerprint
   worker_labels    = local.common.worker_labels
   max_vus          = local.common.max_vus
   name_prefix      = local.common.name_prefix

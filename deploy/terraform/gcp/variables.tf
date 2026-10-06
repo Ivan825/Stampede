@@ -73,6 +73,18 @@ variable "server_ca_pem" {
   default     = ""
 }
 
+variable "mtls" {
+  description = "Enroll with the server's built-in CA and connect with the worker's own certificate (--mtls). Needs a server started with --worker-mtls, the default in Docker Compose and the Helm chart. Ignored when insecure or server_ca_pem is set."
+  type        = bool
+  default     = true
+}
+
+variable "ca_fingerprint" {
+  description = "With mtls, the server CA's fingerprint (sha256:...) from the server log. Pins the CA from the first enrollment."
+  type        = string
+  default     = ""
+}
+
 variable "worker_labels" {
   description = "Extra worker labels (--label KEY=VALUE). cloud=gcp is always set. Also applied as GCE labels, so keep to lowercase letters, digits, - and _."
   type        = map(string)

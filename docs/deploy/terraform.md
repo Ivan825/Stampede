@@ -14,7 +14,7 @@ runs it under systemd as:
 
 ```
 stampede worker --server <server_address> --region <cloud region> --name <host name> \
-  --label cloud=aws|gcp [--label KEY=VALUE ...] [--insecure | --ca /etc/stampede/ca.pem] [--max-vus N]
+  --label cloud=aws|gcp [--label KEY=VALUE ...] [--mtls [--ca-fingerprint sha256:...] | --insecure | --ca /etc/stampede/ca.pem] [--max-vus N]
 ```
 
 The shared startup script is
@@ -28,10 +28,13 @@ The shared startup script is
    inbound firewall rules.
 2. The join token:
    `kubectl -n stampede get secret stampede -o jsonpath='{.data.join-token}' | base64 -d`
-3. TLS on the worker port when it crosses the internet (strongly
-   recommended: with `insecure = true` the join token and scenario secrets
-   travel in clear text). Give the CA with `server_ca_pem` unless the
-   certificate is publicly trusted.
+3. TLS on the worker port. By default (`mtls = true`) workers enroll with
+   the server's built-in CA, which the Helm chart and Docker Compose turn
+   on, and the join token never crosses the network. Set
+   `ca_fingerprint` to the `ca=sha256:...` value the server logs at start,
+   so workers accept only that server. For a certificate from your own CA,
+   set `server_ca_pem` instead. `insecure = true` sends the join token and
+   scenario secrets in clear text.
 4. A published Stampede release (`stampede_version`), since the VMs
    download it from GitHub releases.
 
@@ -66,7 +69,8 @@ terraform init && terraform apply
 | `instance_type` / `architecture` | `c7g.large` / `arm64` | must match each other |
 | `stampede_version` | | release to install, e.g. `0.1.0` |
 | `subnet_ids` | default VPC | per region; set `public_ip = false` behind a NAT gateway |
-| `insecure`, `server_ca_pem` | `false`, `""` | worker-port TLS |
+| `mtls`, `ca_fingerprint` | `true`, `""` | worker mutual TLS with the server's built-in CA |
+| `insecure`, `server_ca_pem` | `false`, `""` | instead of mtls: no TLS, or your own CA (these win over `mtls`) |
 | `worker_labels`, `max_vus`, `tags`, `name_prefix` | | |
 
 Terraform cannot create providers in a loop, so the example has one
@@ -93,7 +97,7 @@ terraform init && terraform apply
 | `machine_type` | `e2-standard-2` | |
 | `image` | `debian-cloud/debian-12` | needs bash, curl, python3, systemd |
 | `public_ip` | `true` | set `false` with Cloud NAT |
-| `insecure`, `server_ca_pem`, `worker_labels`, `max_vus`, `network`, `name_prefix` | | |
+| `mtls`, `ca_fingerprint`, `insecure`, `server_ca_pem`, `worker_labels`, `max_vus`, `network`, `name_prefix` | | |
 
 The google provider is not tied to a region, so GCP regions are a plain
 map. `worker_labels` are also set as GCE labels, so keep them to lowercase
