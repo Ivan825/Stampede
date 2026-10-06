@@ -18,7 +18,7 @@ groups:
       - { name: "Network emulation per user: latency, jitter, bandwidth, packet loss", status: shipped, doc: test-types }
       - { name: Auto-abort on sustained errors or latency, status: shipped, doc: safety }
       - { name: Replay of recorded traffic, status: planned }
-      - { name: Fault injection agent (dependency failures mid-run), status: planned }
+      - { name: "Fault injection agent: slow, cut or kill dependencies mid-run", status: shipped, doc: docs/guides/faults }
   - name: Protocols
     features:
       - { name: HTTP/1.1 and HTTP/2 (TLS and h2c), status: shipped, doc: docs/protocols }

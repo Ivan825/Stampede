@@ -28,6 +28,8 @@ The authoritative definition is the [JSON Schema](../../schema/scenario.schema.j
 | `targets[]` | string | `[scope.]metric op value` |
 | `observe.prometheus` | `{url \| integration, bearerToken?, queries}` | PromQL queries charted in the report after the run; `url` (may use `${env.X}`) for `stampede run`, `integration` (a server integration's name) on the server; up to 20 `name: query` pairs ([integrations](../guides/integrations.md)) |
 | `observe.traces` | `{url \| integration}` | link template containing `{traceId}` for the slowest requests' traces |
+| `faults.agent` | `{url, token}` \| `{integration}` | a `stampede agent`'s control API; `url` and `token` (may use `${env.X}`, `${secret.X}`) for `stampede run`, an agent integration on the server ([fault injection](../guides/faults.md)) |
+| `faults.timeline[]` | | `name`, `at`, `for`, and one of `proxy` (`latency`, `jitter`, `bandwidth`, `reset`, `refuse`, `blackhole`), `container` (`action`: pause, stop, kill, restart) or `deployment` (`replicas`) |
 
 ## Load
 

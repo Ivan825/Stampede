@@ -67,6 +67,13 @@ throughput-against-load curve; per-user network emulation (3G, 4G, slow
 Wi-Fi, or explicit latency, jitter, bandwidth and packet loss); auto-abort
 when a target falls over ([test types](docs/guides/test-types.md)).
 
+**Fault injection.** `stampede agent` sits next to your database, cache or
+downstream services and, on a scenario's timeline, slows, throttles,
+resets or blackholes their connections, pauses or stops containers, or
+scales deployments down. Every fault is time-limited, audited and reverted
+when the run ends, and the report shades the fault windows on its charts
+([fault injection](docs/guides/faults.md)).
+
 **Protocols:** HTTP/1.1, HTTP/2 (TLS and h2c), REST, GraphQL (with
 persisted queries), WebSocket, server-sent events with time to first event
 (for LLM apps), and gRPC unary and server streaming via reflection or proto
@@ -148,8 +155,7 @@ per server and per target; audit log ([safety](docs/safety.md)).
 
 Browser (Playwright) workers, the other 19 product packs (including the
 IoT, event-pipeline, database and gaming packs that use the plugins), AI
-generation from browser crawls, fault injection driven from scenarios (the
-agent itself works today), several
+generation from browser crawls, several
 active server replicas (today extra replicas are hot standbys), scheduled runs, side-by-side benchmarks with k6 and
 wrk2, and the website.
 

@@ -24,6 +24,7 @@ not built yet are marked **planned**.
 - [Comparing releases](guides/comparing.md)
 - [CI integration](guides/ci.md): exit codes, JUnit, the GitHub Action
 - [Integrations](guides/integrations.md): Prometheus target metrics, trace links, notifications
+- [Fault injection](guides/faults.md): break dependencies on purpose during a run
 - [AI journey generation](ai.md)
 - [Product packs](guides/packs.md): using and writing them
 - [Protocols](protocols.md): HTTP/1.1, HTTP/2, GraphQL, WebSocket, SSE, gRPC
