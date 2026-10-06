@@ -5,8 +5,10 @@
 package keyring
 
 import (
+	"bytes"
 	"crypto/aes"
 	"crypto/cipher"
+	"crypto/hkdf"
 	"crypto/rand"
 	"crypto/sha256"
 	"encoding/base64"
@@ -21,6 +23,7 @@ import (
 type Keyring struct {
 	master cipher.AEAD
 	id     string
+	root   []byte // HKDF input for Derive
 }
 
 // ErrNoKey means no master key was configured.
@@ -40,7 +43,7 @@ func New(key []byte) (*Keyring, error) {
 		return nil, err
 	}
 	sum := sha256.Sum256(key)
-	return &Keyring{master: aead, id: hex.EncodeToString(sum[:4])}, nil
+	return &Keyring{master: aead, id: hex.EncodeToString(sum[:4]), root: bytes.Clone(key)}, nil
 }
 
 // FromEnv reads STAMPEDE_MASTER_KEY (base64) or STAMPEDE_MASTER_KEY_FILE.
@@ -81,6 +84,17 @@ func GenerateKey() string {
 		panic(err)
 	}
 	return base64.StdEncoding.EncodeToString(b)
+}
+
+// Derive returns n bytes derived from the master key for one purpose
+// (HKDF-SHA256 with the purpose as info). Different purposes give
+// independent keys, and the master key cannot be recovered from them.
+func (k *Keyring) Derive(purpose string, n int) []byte {
+	b, err := hkdf.Key(sha256.New, k.root, nil, purpose, n)
+	if err != nil {
+		panic(err) // only for n beyond 255*32
+	}
+	return b
 }
 
 // KeyID identifies the master key (a short hash), stored with each secret
