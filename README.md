@@ -29,6 +29,16 @@ runs many of them at once and tells you where your product breaks.
 - **Scenario files** in YAML or JSON: weighted journeys, `${}` expressions,
   extractors (JSONPath, header, cookie, regex, CSS), checks, think times,
   branches, loops, conditions, and CSV/JSON/list/range data feeders.
+- **Protocols** ([docs/protocols.md](docs/protocols.md)), all with checks,
+  extractors, safety and trace context, mixed freely in one journey:
+  - HTTP/1.1 and HTTP/2 (`http2: true` over TLS, `h2c: true` without);
+    reports show the protocol each request actually used.
+  - GraphQL: variables, automatic persisted queries, `errors` fail the step.
+  - Server-sent events: time to first event and events per second (time to
+    first token and tokens per second for LLM APIs).
+  - WebSocket: `ws` blocks with `send` and `expect`; send-to-reply latency.
+  - gRPC: unary and server streaming, descriptors from server reflection or
+    `.protoset`/`.proto` files, no code generation.
 - **Open and closed load models.** Fixed arrival rate (`mode: rate`) or a
   fixed number of users (`mode: vus`), constant or ramping, plus fixed
   iteration counts.
@@ -54,12 +64,12 @@ runs many of them at once and tells you where your product breaks.
 
 ## Planned for v1.0
 
-Control plane with REST API and database, distributed workers over gRPC,
-web UI, terminal UI, AI generation from GraphQL introspection and browser
-crawls, AI report narratives, HTTP/2
-tuning, GraphQL, WebSocket, SSE, gRPC and browser drivers, plugins, product
-packs, Docker Compose stack with the ShopLab demo app, Helm chart and
-operator, comparison of releases, and the website.
+Browser (Playwright) workers, the plugin interface with MQTT, Kafka, Redis,
+SQL and UDP plugins, the other 19 product packs, AI generation from GraphQL
+introspection and browser crawls, AI report narratives, the fault-injection
+agent and network emulation, mutual TLS between server and workers, more
+than one server replica, scheduled runs, side-by-side benchmarks with k6 and
+wrk2, and the website.
 
 ## Quick start
 
@@ -125,6 +135,12 @@ stampede validate smoke.yaml                          # check without running
 | `loop: 3` / `while: expr` | Repeat steps. |
 | `group: name` | Name a set of steps. |
 | `if: expr` | Skip a step unless the expression is true. |
+| `graphql: <path>` | A GraphQL operation: `query`, `variables`, `operationName`, `persisted: true`. A non-empty `errors` array fails the step unless `check: {allowErrors: true}`. |
+| `sse: <path>` | Read a server-sent event stream `until: {events: N, match: regex, duration: 30s}`. Records time to first event and events per second. Takes HTTP request keys. |
+| `ws: <path>` + `steps` | Open a WebSocket for the steps inside; the handshake is the step's latency. |
+| `send: <text or JSON>` | Inside `ws`: send a message. |
+| `expect: <regex>` or `{match, json, timeout}` | Inside `ws`: wait for a matching message; latency runs from the last `send`. |
+| `grpc: pkg.Service/Method` | A unary or server-streaming gRPC call: `target` (`grpc://` or `grpcs://`), `message` (JSON), `metadata`, `protoset`/`proto`, `check: {status: [OK, NOT_FOUND]}`. |
 
 Expressions are [CEL](https://cel.dev) with helpers: `rand(a, b)`,
 `randString(n)`, `randEmail()`, `uuid()`, `pick(list)`, `now()`, `nowMs()`,
