@@ -329,3 +329,23 @@ load: {iterations: 2}`, srv.URL), func(o *Options) {
 		t.Errorf("blocked = %d", n)
 	}
 }
+
+func TestNetworkEmulationAddsLatency(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {}))
+	defer srv.Close()
+	out := run(t, fmt.Sprintf(`
+metadata: {name: netem}
+target:
+  baseURL: %q
+  network: {rtt: 80ms}
+journeys: [{name: a, steps: [{get: /}]}]
+load: {iterations: 4}`, srv.URL), nil)
+	tot := out.total.Totals()
+	if tot.Requests != 4 || tot.Failed != 0 {
+		t.Fatalf("requests %d failed %d", tot.Requests, tot.Failed)
+	}
+	// Every request pays at least one emulated round trip.
+	if p := tot.Latency.Min(); p < 80_000 {
+		t.Errorf("fastest request %dµs, want at least 80ms", p)
+	}
+}

@@ -2,6 +2,13 @@
 // parsing, validation and the templating used inside steps.
 package scenario
 
+import (
+	"fmt"
+	"strings"
+
+	"github.com/Ivan825/Stampede/internal/protocol/netem"
+)
+
 // APIVersion is the scenario format version this build reads and writes.
 const APIVersion = "stampede.dev/v1"
 
@@ -41,6 +48,8 @@ type Target struct {
 	// Timeout is the default per-request timeout (default 30s).
 	Timeout Duration    `yaml:"timeout,omitempty" json:"timeout,omitempty"`
 	HTTP    HTTPOptions `yaml:"http,omitempty" json:"http,omitempty"`
+	// Network emulates a slower network for every virtual user.
+	Network *Network `yaml:"network,omitempty" json:"network,omitempty"`
 }
 
 // HTTPOptions tunes connection behaviour so it resembles real clients.
@@ -64,6 +73,17 @@ type HTTPOptions struct {
 	// MaxRedirects caps followed redirects (default 10, 0 keeps the default,
 	// -1 disables following).
 	MaxRedirects int `yaml:"maxRedirects,omitempty" json:"maxRedirects,omitempty"`
+}
+
+// Network emulates a slower network inside the load generator: a profile
+// (slow-3g, 3g, 4g, slow-wifi) and/or explicit round-trip time and
+// bandwidth in bits per second ("1.6mbps", "768kbps"). Explicit values
+// override the profile's.
+type Network struct {
+	Profile string   `yaml:"profile,omitempty" json:"profile,omitempty"`
+	RTT     Duration `yaml:"rtt,omitempty" json:"rtt,omitempty"`
+	Down    string   `yaml:"down,omitempty" json:"down,omitempty"`
+	Up      string   `yaml:"up,omitempty" json:"up,omitempty"`
 }
 
 // Feeder supplies test data rows to virtual users.
@@ -366,4 +386,36 @@ const (
 type Stage struct {
 	Duration Duration `yaml:"duration" json:"duration"`
 	Target   string   `yaml:"target" json:"target"`
+}
+
+// Resolve turns the network settings into a profile.
+func (n *Network) Resolve() (netem.Profile, error) {
+	var p netem.Profile
+	if n.Profile != "" {
+		base, ok := netem.Profiles[n.Profile]
+		if !ok {
+			return p, fmt.Errorf("unknown network profile %q (use %s)", n.Profile, strings.Join(netem.Names(), ", "))
+		}
+		p = base
+	}
+	if n.RTT > 0 {
+		p.RTT = n.RTT.D()
+	}
+	for _, f := range []struct {
+		src string
+		dst *int64
+	}{{n.Down, &p.Down}, {n.Up, &p.Up}} {
+		if f.src == "" {
+			continue
+		}
+		v, err := netem.ParseBandwidth(f.src)
+		if err != nil {
+			return p, err
+		}
+		*f.dst = v
+	}
+	if p.RTT == 0 && p.Down == 0 && p.Up == 0 {
+		return p, fmt.Errorf("set a profile, rtt, down or up")
+	}
+	return p, nil
 }

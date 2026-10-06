@@ -264,3 +264,14 @@ func TestJSONPath(t *testing.T) {
 		}
 	}
 }
+
+func TestNetworkValidation(t *testing.T) {
+	_, err := Parse([]byte(`
+metadata: {name: t}
+target: {baseURL: "http://localhost", network: {profile: 5g}}
+journeys: [{name: a, steps: [{get: /}]}]
+load: {vus: 1, duration: 1s}`))
+	if err == nil || !strings.Contains(err.Error(), "unknown network profile") {
+		t.Errorf("got %v", err)
+	}
+}

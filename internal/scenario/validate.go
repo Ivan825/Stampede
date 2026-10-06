@@ -44,6 +44,12 @@ func (s *Scenario) Validate() error {
 		}
 	}
 
+	if n := s.Target.Network; n != nil {
+		if _, err := n.Resolve(); err != nil {
+			add("target.network", "%v", err)
+		}
+	}
+
 	for name, f := range s.Data {
 		p := "data." + name
 		if !identRe.MatchString(name) {

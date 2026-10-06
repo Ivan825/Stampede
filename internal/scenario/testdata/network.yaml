@@ -1,0 +1,12 @@
+apiVersion: stampede.dev/v1
+kind: Scenario
+metadata:
+  name: mobile-3g
+target:
+  baseURL: https://staging.example.com
+  network: { profile: 3g, rtt: 250ms }
+journeys:
+  - name: home
+    steps:
+      - get: /
+load: { vus: 20, duration: 1m }

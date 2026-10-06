@@ -39,6 +39,17 @@
             "maxRedirects": { "type": "integer", "description": "0 = default 10, -1 = do not follow." },
             "dnsCacheTTL": { "$ref": "#/$defs/duration", "description": "Reuse DNS answers across connections for this long (default 30s; 0s disables)." }
           }
+        },
+        "network": {
+          "type": "object",
+          "additionalProperties": false,
+          "description": "Emulate a slower network for every virtual user. Explicit values override the profile.",
+          "properties": {
+            "profile": { "enum": ["slow-3g", "3g", "4g", "slow-wifi"] },
+            "rtt": { "$ref": "#/$defs/duration" },
+            "down": { "type": "string", "description": "Download bandwidth, e.g. 1.6mbps" },
+            "up": { "type": "string", "description": "Upload bandwidth, e.g. 768kbps" }
+          }
         }
       }
     },

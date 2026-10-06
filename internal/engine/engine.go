@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"log/slog"
 	"math"
+	"net"
 	"net/http"
 	"net/url"
 	"regexp"
@@ -21,6 +22,7 @@ import (
 	"github.com/Ivan825/Stampede/internal/metrics"
 	"github.com/Ivan825/Stampede/internal/protocol/grpcx"
 	"github.com/Ivan825/Stampede/internal/protocol/httpx"
+	"github.com/Ivan825/Stampede/internal/protocol/netem"
 	"github.com/Ivan825/Stampede/internal/scenario"
 	"github.com/Ivan825/Stampede/internal/version"
 )
@@ -204,6 +206,18 @@ func New(opts Options) (*Engine, error) {
 		if ttl > 0 {
 			e.httpOpts.DNS = httpx.NewDNSCache(ttl)
 		}
+	}
+	if n := s.Target.Network; n != nil && e.httpOpts.DialContext == nil {
+		p, err := n.Resolve()
+		if err != nil {
+			return nil, fmt.Errorf("target.network: %w", err)
+		}
+		d := &net.Dialer{Timeout: 10 * time.Second, KeepAlive: 30 * time.Second}
+		base := d.DialContext
+		if e.httpOpts.DNS != nil {
+			base = e.httpOpts.DNS.DialContext(d)
+		}
+		e.httpOpts.DialContext = netem.Dialer(p, base)
 	}
 	if h.Connections == "shared" {
 		e.sharedTransport = httpx.NewTransport(e.httpOpts)
