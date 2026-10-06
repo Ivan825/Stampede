@@ -57,8 +57,17 @@ type CStep struct {
 	Group       string
 	Steps       []*CStep
 
-	// GraphQL is set for graphql steps, whose HTTP parts are in Req.
+	// GraphQL and SSE are set for their step kinds, whose HTTP parts are
+	// in Req.
 	GraphQL *CGraphQL
+	SSE     *CSSE
+}
+
+// CSSE says when a compiled server-sent events step stops reading.
+type CSSE struct {
+	Events   int
+	Match    *regexp.Regexp
+	Duration Duration
 }
 
 // CGraphQL is a compiled GraphQL operation.
@@ -285,6 +294,9 @@ func (c *compiler) step(path, journey string, st Step, vars []string) (*CStep, [
 	case StepGraphQL:
 		vars = c.graphql(path, scope, cs, st.GraphQL, vars)
 		c.record(cs)
+	case StepSSE:
+		vars = c.sse(path, scope, cs, st.SSE, vars)
+		c.record(cs)
 	case StepThink:
 		cs.Think = st.Think
 	case StepBranch:
@@ -374,6 +386,30 @@ func (c *compiler) graphql(path string, scope *Scope, cs *CStep, g *GraphQL, var
 		}
 	}
 	cs.GraphQL = cg
+	return vars
+}
+
+func (c *compiler) sse(path string, scope *Scope, cs *CStep, e *SSE, vars []string) []string {
+	if cs.Name == "" {
+		cs.Name = "SSE " + e.URL
+	}
+	c.noAllowErrors(path, e.Check)
+	cs.Req, vars = c.request(path, "sse", scope, &e.Request, vars)
+	ce := &CSSE{Events: e.Until.Events, Duration: e.Until.Duration}
+	if e.Until.Events < 0 {
+		c.errf(path+".until.events", "must be positive")
+	}
+	if e.Until.Duration < 0 {
+		c.errf(path+".until.duration", "must be positive")
+	}
+	if e.Until.Match != "" {
+		re, err := regexp.Compile(e.Until.Match)
+		if err != nil {
+			c.errf(path+".until.match", "invalid regex: %v", err)
+		}
+		ce.Match = re
+	}
+	cs.SSE = ce
 	return vars
 }
 
