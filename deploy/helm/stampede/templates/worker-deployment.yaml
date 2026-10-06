@@ -1,0 +1,141 @@
+{{- if .Values.workers.enabled }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "stampede.fullname" . }}-worker
+  labels:
+    {{- include "stampede.labels" . | nindent 4 }}
+    app.kubernetes.io/component: worker
+spec:
+  {{- if not .Values.workers.autoscaling.enabled }}
+  replicas: {{ .Values.workers.replicas }}
+  {{- end }}
+  selector:
+    matchLabels:
+      {{- include "stampede.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: worker
+  template:
+    metadata:
+      labels:
+        {{- include "stampede.selectorLabels" . | nindent 8 }}
+        app.kubernetes.io/component: worker
+        {{- with .Values.commonLabels }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+        {{- with .Values.workers.podLabels }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+      {{- with .Values.workers.podAnnotations }}
+      annotations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+    spec:
+      serviceAccountName: {{ include "stampede.serviceAccountName" . }}
+      automountServiceAccountToken: false
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.workers.priorityClassName }}
+      priorityClassName: {{ . }}
+      {{- end }}
+      terminationGracePeriodSeconds: {{ .Values.workers.terminationGracePeriodSeconds }}
+      securityContext:
+        {{- toYaml .Values.workers.podSecurityContext | nindent 8 }}
+      containers:
+        - name: worker
+          image: {{ include "stampede.image" . }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          args:
+            - worker
+            - --server={{ include "stampede.workerAddress" . }}
+            {{- if .Values.workerTLS.enabled }}
+            - --ca=/etc/stampede/worker-tls/ca.crt
+            {{- else }}
+            - --insecure
+            {{- end }}
+            - --name=$(POD_NAME)
+            - --region={{ .Values.workers.region }}
+            {{- range $k, $v := .Values.workers.labels }}
+            - --label={{ $k }}={{ $v }}
+            {{- end }}
+            {{- if .Values.workers.maxVUs }}
+            - --max-vus={{ .Values.workers.maxVUs }}
+            {{- end }}
+            {{- range .Values.workers.extraArgs }}
+            - {{ . | quote }}
+            {{- end }}
+          env:
+            - name: POD_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
+            - name: STAMPEDE_JOIN_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "stampede.joinTokenSecret" . }}
+                  key: {{ .Values.joinToken.existingSecretKey }}
+            - name: GOMEMLIMIT
+              valueFrom:
+                resourceFieldRef:
+                  resource: limits.memory
+                  divisor: "1"
+            {{- with .Values.workers.extraEnv }}
+            {{- toYaml . | nindent 12 }}
+            {{- end }}
+          # Workers dial out to the server and serve nothing, so there is no
+          # port to probe; a worker that loses the server reconnects by itself.
+          resources:
+            {{- toYaml .Values.workers.resources | nindent 12 }}
+          securityContext:
+            {{- toYaml .Values.workers.securityContext | nindent 12 }}
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
+            {{- if .Values.workerTLS.enabled }}
+            - name: worker-tls
+              mountPath: /etc/stampede/worker-tls
+              readOnly: true
+            {{- end }}
+            {{- with .Values.workers.extraVolumeMounts }}
+            {{- toYaml . | nindent 12 }}
+            {{- end }}
+      volumes:
+        - name: tmp
+          emptyDir: {}
+        {{- if .Values.workerTLS.enabled }}
+        - name: worker-tls
+          secret:
+            secretName: {{ .Values.workerTLS.secretName }}
+            items:
+              - key: ca.crt
+                path: ca.crt
+        {{- end }}
+        {{- with .Values.workers.extraVolumes }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+      {{- with .Values.workers.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.workers.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- if .Values.workers.affinity }}
+      affinity:
+        {{- toYaml .Values.workers.affinity | nindent 8 }}
+      {{- else }}
+      # Spread workers across nodes so one node does not cap a run.
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 100
+              podAffinityTerm:
+                topologyKey: kubernetes.io/hostname
+                labelSelector:
+                  matchLabels:
+                    {{- include "stampede.selectorLabels" . | nindent 20 }}
+                    app.kubernetes.io/component: worker
+      {{- end }}
+{{- end }}

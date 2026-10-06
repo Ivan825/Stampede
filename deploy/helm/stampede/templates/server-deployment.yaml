@@ -1,0 +1,189 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "stampede.fullname" . }}-server
+  labels:
+    {{- include "stampede.labels" . | nindent 4 }}
+    app.kubernetes.io/component: server
+spec:
+  replicas: {{ .Values.server.replicas }}
+  # A starting server marks every unfinished run as failed, so the old and
+  # new server must never overlap: stop the old one (which finishes its runs'
+  # reports) before starting the new one.
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      {{- include "stampede.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: server
+  template:
+    metadata:
+      labels:
+        {{- include "stampede.selectorLabels" . | nindent 8 }}
+        app.kubernetes.io/component: server
+        {{- with .Values.commonLabels }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+        {{- with .Values.server.podLabels }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+      {{- with .Values.server.podAnnotations }}
+      annotations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+    spec:
+      serviceAccountName: {{ include "stampede.serviceAccountName" . }}
+      automountServiceAccountToken: false
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.server.priorityClassName }}
+      priorityClassName: {{ . }}
+      {{- end }}
+      terminationGracePeriodSeconds: {{ .Values.server.terminationGracePeriodSeconds }}
+      securityContext:
+        {{- toYaml .Values.server.podSecurityContext | nindent 8 }}
+      containers:
+        - name: server
+          image: {{ include "stampede.image" . }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          args:
+            - server
+            {{- with .Values.server.caps }}
+            {{- if .maxRate }}
+            - --max-rate={{ .maxRate }}
+            {{- end }}
+            {{- if .maxVUs }}
+            - --max-vus={{ .maxVUs }}
+            {{- end }}
+            {{- if .maxDuration }}
+            - --max-duration={{ .maxDuration }}
+            {{- end }}
+            {{- end }}
+            {{- range .Values.server.extraArgs }}
+            - {{ . | quote }}
+            {{- end }}
+          env:
+            - name: STAMPEDE_ADDR
+              value: ":{{ .Values.service.httpPort }}"
+            - name: STAMPEDE_WORKER_ADDR
+              value: ":{{ .Values.service.workerPort }}"
+            - name: STAMPEDE_EXECUTOR
+              value: {{ .Values.server.executor | quote }}
+            - name: STAMPEDE_LOG_LEVEL
+              value: {{ .Values.server.logLevel | quote }}
+            - name: STAMPEDE_LOG_FORMAT
+              value: {{ .Values.server.logFormat | quote }}
+            {{- if .Values.server.secureCookies }}
+            - name: STAMPEDE_SECURE_COOKIES
+              value: "true"
+            {{- end }}
+            {{- with .Values.server.trustedProxies }}
+            - name: STAMPEDE_TRUSTED_PROXIES
+              value: {{ join "," . | quote }}
+            {{- end }}
+            {{- with .Values.server.dataDir }}
+            - name: STAMPEDE_DATA_DIR
+              value: {{ . | quote }}
+            {{- end }}
+            - name: STAMPEDE_MASTER_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "stampede.masterKeySecret" . }}
+                  key: {{ .Values.masterKey.existingSecretKey }}
+            - name: STAMPEDE_JOIN_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "stampede.joinTokenSecret" . }}
+                  key: {{ .Values.joinToken.existingSecretKey }}
+            {{- if .Values.timescaledb.enabled }}
+            - name: STAMPEDE_DB_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "stampede.dbPasswordSecret" . }}
+                  key: {{ .Values.timescaledb.existingSecretKey }}
+            - name: STAMPEDE_DATABASE_URL
+              value: "postgres://{{ .Values.timescaledb.username }}:$(STAMPEDE_DB_PASSWORD)@{{ include "stampede.dbFullname" . }}:5432/{{ .Values.timescaledb.database }}?sslmode=disable"
+            {{- else }}
+            - name: STAMPEDE_DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: {{ default (include "stampede.secretName" .) .Values.database.external.existingSecret }}
+                  key: {{ .Values.database.external.existingSecretKey }}
+            {{- end }}
+            {{- if .Values.workerTLS.enabled }}
+            - name: STAMPEDE_WORKER_TLS_CERT
+              value: /etc/stampede/worker-tls/tls.crt
+            - name: STAMPEDE_WORKER_TLS_KEY
+              value: /etc/stampede/worker-tls/tls.key
+            {{- end }}
+            - name: GOMEMLIMIT
+              valueFrom:
+                resourceFieldRef:
+                  resource: limits.memory
+                  divisor: "1"
+            {{- with .Values.server.extraEnv }}
+            {{- toYaml . | nindent 12 }}
+            {{- end }}
+          ports:
+            - name: http
+              containerPort: {{ .Values.service.httpPort }}
+              protocol: TCP
+            - name: workers
+              containerPort: {{ .Values.service.workerPort }}
+              protocol: TCP
+          {{- with .Values.server.startupProbe }}
+          startupProbe:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          {{- with .Values.server.livenessProbe }}
+          livenessProbe:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          {{- with .Values.server.readinessProbe }}
+          readinessProbe:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          resources:
+            {{- toYaml .Values.server.resources | nindent 12 }}
+          securityContext:
+            {{- toYaml .Values.server.securityContext | nindent 12 }}
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
+            - name: data
+              mountPath: /data
+            {{- if .Values.workerTLS.enabled }}
+            - name: worker-tls
+              mountPath: /etc/stampede/worker-tls
+              readOnly: true
+            {{- end }}
+            {{- with .Values.server.extraVolumeMounts }}
+            {{- toYaml . | nindent 12 }}
+            {{- end }}
+      volumes:
+        - name: tmp
+          emptyDir: {}
+        - name: data
+          emptyDir: {}
+        {{- if .Values.workerTLS.enabled }}
+        - name: worker-tls
+          secret:
+            secretName: {{ .Values.workerTLS.secretName }}
+        {{- end }}
+        {{- with .Values.server.extraVolumes }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+      {{- with .Values.server.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.server.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.server.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
