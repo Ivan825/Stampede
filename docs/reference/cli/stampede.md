@@ -20,6 +20,7 @@ stampede [flags]
 
 ### SEE ALSO
 
+* [stampede agent](stampede_agent.md)	 - Inject faults into dependencies during a load test
 * [stampede compare](stampede_compare.md)	 - Compare two versions using repeated runs of each
 * [stampede completion](stampede_completion.md)	 - Generate the autocompletion script for the specified shell
 * [stampede doctor](stampede_doctor.md)	 - Check the server, its database, workers and a target
