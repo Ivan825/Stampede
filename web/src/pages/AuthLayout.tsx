@@ -19,7 +19,7 @@ export function AuthLayout({
       </div>
       <div className="w-full max-w-sm">
         <div className="mb-6 flex items-center gap-2.5">
-          <Mark className="h-7 w-8 text-fg" />
+          <Mark className="h-7 w-auto" />
           <span className="text-lg font-semibold tracking-tight">Stampede</span>
         </div>
         <main className="rounded-lg border border-line bg-surface p-6 shadow-sm">

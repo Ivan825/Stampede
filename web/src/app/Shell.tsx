@@ -196,7 +196,7 @@ export function Shell() {
         </a>
         <aside className="flex w-56 shrink-0 flex-col border-r border-line bg-surface">
           <Link to="/" className="flex h-12 items-center gap-2 border-b border-line px-4">
-            <Mark className="h-5 w-6 text-fg" />
+            <Mark className="h-5 w-auto" />
             <span className="text-[15px] font-semibold tracking-tight">Stampede</span>
           </Link>
           <nav className="flex flex-1 flex-col gap-0.5 overflow-y-auto p-2" aria-label="Main">
