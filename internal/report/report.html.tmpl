@@ -58,7 +58,10 @@ td code { font: 12.5px var(--mono); }
 .note { border-left: 3px solid var(--warn); background: var(--surface); padding: 10px 14px; border-radius: 4px; margin: 10px 0; }
 .empty { color: var(--muted); }
 footer { color: var(--muted); font-size: 12.5px; margin-top: 48px; border-top: 1px solid var(--line); padding-top: 16px; }
-footer a { color: var(--accent); }
+footer a, td a { color: var(--accent); }
+.sub { color: var(--muted); font-weight: 400; font-size: 12.5px; }
+.query { margin: 0 0 8px; color: var(--muted); overflow-wrap: anywhere; }
+.query code { font: 12px var(--mono); }
 </style>
 </head>
 <body>
@@ -124,6 +127,18 @@ footer a { color: var(--accent); }
 <div class="card"><h3>Latency (from scheduled send)</h3>{{.LatencyChart}}</div>
 <div class="card"><h3>Error rate</h3>{{.ErrorChart}}</div>
 
+{{if .MetricCharts}}
+<h2>Target metrics</h2>
+{{range .MetricCharts}}
+<div class="card">
+  <h3>{{.Name}}{{if .Last}} <span class="sub">min {{.Min}} · max {{.Max}} · last {{.Last}}</span>{{end}}</h3>
+  <p class="query"><code>{{.Query}}</code></p>
+  {{if .Error}}<div class="note">{{.Error}}</div>{{end}}
+  {{if .Chart}}{{.Chart}}{{else}}<p class="empty">No data returned.</p>{{end}}
+</div>
+{{end}}
+{{end}}
+
 <h2>Journeys and steps</h2>
 <div class="table-wrap"><table>
   <thead><tr><th>Step</th><th>Requests</th><th>Errors</th><th>p50</th><th>p95</th><th>p99</th><th>Max</th><th>Wait (mean)</th><th>Connect (mean)</th></tr></thead>
@@ -145,6 +160,17 @@ footer a { color: var(--accent); }
   {{range .Journeys}}{{range .Steps}}{{if .Stream}}
     <tr><td><code>{{.Name}}</code></td><td>{{.Stream.Streams}}</td><td>{{.Stream.Events}}</td><td>{{ms .Stream.FirstEvent.P50}}</td><td>{{ms .Stream.FirstEvent.P95}}</td><td>{{ms .Stream.FirstEvent.P99}}</td><td>{{rate .Stream.EventsPerSec}}</td></tr>
   {{end}}{{end}}{{end}}
+  </tbody>
+</table></div>
+{{end}}
+
+{{if .SlowRows}}
+<h2>Slowest requests</h2>
+<div class="table-wrap"><table>
+  <thead><tr><th>Step</th><th>Latency</th><th>At</th><th>Status</th><th class="l">Trace</th></tr></thead>
+  <tbody>
+  {{range .SlowRows}}<tr><td><span class="sub">{{.Journey}} ›</span> <code>{{.Step}}</code></td><td>{{ms .Latency}}</td><td>t+{{offset .T}}</td><td class="{{if .Error}}bad{{end}}">{{if .Error}}{{.Error}}{{else if .Status}}{{.Status}}{{else}}–{{end}}</td><td class="l">{{if .TraceURL}}<a href="{{.TraceURL}}" rel="noopener noreferrer"><code>{{.TraceID}}</code></a>{{else if .TraceID}}<code>{{.TraceID}}</code>{{else}}<span class="sub">none</span>{{end}}</td></tr>
+  {{end}}
   </tbody>
 </table></div>
 {{end}}

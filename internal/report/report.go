@@ -46,6 +46,67 @@ type Report struct {
 	// Workers describes each worker of a distributed run (empty for a
 	// single in-process engine).
 	Workers []WorkerRow `json:"workers,omitempty"`
+	// TargetMetrics are the target's own metrics over the run, queried
+	// from Prometheus after it ended (observe.prometheus).
+	TargetMetrics []TargetMetric `json:"targetMetrics,omitempty"`
+}
+
+// TargetMetric is one Prometheus query evaluated over the run.
+type TargetMetric struct {
+	Name   string        `json:"name"`
+	Query  string        `json:"query"`
+	Points []MetricPoint `json:"points"`
+	// Error explains why points are missing or incomplete.
+	Error string `json:"error,omitempty"`
+}
+
+// MetricPoint is one value of a target metric.
+type MetricPoint struct {
+	// T is seconds since the run started, like Point.T.
+	T     float64 `json:"t"`
+	Value float64 `json:"value"`
+}
+
+// Range returns the minimum, maximum and last value; ok is false when
+// there are no points.
+func (m TargetMetric) Range() (lo, hi, last float64, ok bool) {
+	if len(m.Points) == 0 {
+		return 0, 0, 0, false
+	}
+	lo, hi = m.Points[0].Value, m.Points[0].Value
+	for _, p := range m.Points {
+		lo, hi = min(lo, p.Value), max(hi, p.Value)
+	}
+	return lo, hi, m.Points[len(m.Points)-1].Value, true
+}
+
+// SlowRequest is one of a step's slowest requests.
+type SlowRequest struct {
+	// Latency is in seconds, measured from the intended send time.
+	Latency float64 `json:"latency"`
+	// At is when the request was sent; T is the same in seconds since
+	// the run started.
+	At time.Time `json:"at"`
+	T  float64   `json:"t"`
+	// TraceID is the W3C trace ID the request carried in traceparent.
+	TraceID string `json:"traceId,omitempty"`
+	// TraceURL links to the trace when a trace link template is set.
+	TraceURL string `json:"traceUrl,omitempty"`
+	Status   int    `json:"status,omitempty"`
+	Error    string `json:"error,omitempty"`
+}
+
+// SetTraceLinks fills TraceURL for every slow request from a template
+// containing {traceId}. An empty template clears the links.
+func (r *Report) SetTraceLinks(tmpl string) {
+	for ji := range r.Journeys {
+		for si := range r.Journeys[ji].Steps {
+			sl := r.Journeys[ji].Steps[si].Slowest
+			for i := range sl {
+				sl[i].TraceURL = scenario.TraceLink(tmpl, sl[i].TraceID)
+			}
+		}
+	}
 }
 
 // LoadInfo summarises the plan.
@@ -111,6 +172,8 @@ type Step struct {
 	// Stream is set for streaming steps (server-sent events, gRPC server
 	// streaming).
 	Stream *StreamStat `json:"stream,omitempty"`
+	// Slowest lists the step's slowest requests, slowest first.
+	Slowest []SlowRequest `json:"slowest,omitempty"`
 }
 
 // StreamStat summarises a streaming step. For an LLM API, FirstEvent is
@@ -256,6 +319,12 @@ func Build(in Input) *Report {
 			sr := Step{ID: cs.ID, Name: cs.Name, Stats: statsOf(st, dur), Phases: map[string]PhaseStat{}, Protocols: st.Protocols}
 			if st.Streams > 0 {
 				sr.Stream = streamOf(st, in.Phases[cs.ID])
+			}
+			for _, sl := range st.Slowest {
+				sr.Slowest = append(sr.Slowest, SlowRequest{
+					Latency: sl.Latency.Seconds(), At: sl.Start, T: max(sl.Start.Sub(in.Started).Seconds(), 0),
+					TraceID: sl.TraceID, Status: sl.Status, Error: sl.Err,
+				})
 			}
 			// The first-event phase is reported under Stream, and only for
 			// streaming steps.

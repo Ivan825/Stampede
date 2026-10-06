@@ -5,6 +5,7 @@ import (
 	"encoding/xml"
 	"fmt"
 	"io"
+	"math"
 	"sort"
 	"strconv"
 	"strings"
@@ -129,6 +130,8 @@ func (r *Report) WriteText(w io.Writer) {
 		}
 	}
 	r.writeStreams(w)
+	r.writeSlowest(w)
+	r.writeTargetMetrics(w)
 	if len(r.Errors) > 0 {
 		fmt.Fprintf(w, "\n  top errors\n")
 		for i, e := range r.Errors {
@@ -167,6 +170,128 @@ func (r *Report) writeStreams(w io.Writer) {
 				Ms(st.FirstEvent.P50), Ms(st.FirstEvent.P95), Ms(st.FirstEvent.P99), st.EventsPerSec)
 		}
 	}
+}
+
+// writeSlowest lists the slowest requests of the run with their trace
+// IDs (or links), so a slow request can be found in the target's traces.
+func (r *Report) writeSlowest(w io.Writer) {
+	rows := r.SlowestOverall(5)
+	if len(rows) == 0 {
+		return
+	}
+	fmt.Fprintf(w, "\n  slowest requests\n")
+	for _, s := range rows {
+		name := s.Journey + " › " + s.Step
+		if len(name) > 36 {
+			name = name[:35] + "…"
+		}
+		status := "-"
+		if s.Status > 0 {
+			status = strconv.Itoa(s.Status)
+		}
+		if s.Error != "" {
+			status = s.Error
+		}
+		trace := s.TraceURL
+		if trace == "" && s.TraceID != "" {
+			trace = "trace " + s.TraceID
+		}
+		fmt.Fprintf(w, "    %9s  %-36s t+%-7s %-6s %s\n", Ms(s.Latency), name, fmtOffset(s.T), status, trace)
+	}
+}
+
+// writeTargetMetrics summarises the target's own metrics.
+func (r *Report) writeTargetMetrics(w io.Writer) {
+	if len(r.TargetMetrics) == 0 {
+		return
+	}
+	fmt.Fprintf(w, "\n  %-44s %10s %10s %10s\n", "target metrics (Prometheus)", "min", "max", "last")
+	for _, m := range r.TargetMetrics {
+		name := m.Name
+		if len(name) > 42 {
+			name = name[:41] + "…"
+		}
+		lo, hi, last, ok := m.Range()
+		switch {
+		case ok:
+			fmt.Fprintf(w, "    %-42s %10s %10s %10s\n", name, MetricValue(lo), MetricValue(hi), MetricValue(last))
+		default:
+			fmt.Fprintf(w, "    %-42s no data\n", name)
+		}
+		if m.Error != "" {
+			fmt.Fprintf(w, "      %s\n", m.Error)
+		}
+	}
+}
+
+// fmtOffset formats seconds since the start with a tenth of a second
+// under two minutes.
+func fmtOffset(s float64) string {
+	if s < 120 {
+		return strconv.FormatFloat(s, 'f', 1, 64) + "s"
+	}
+	return fmtSecs(s)
+}
+
+// SlowRow is a slow request with the step it belongs to.
+type SlowRow struct {
+	Journey string
+	Step    string
+	SlowRequest
+}
+
+// SlowestOverall returns up to n of the run's slowest requests across all
+// steps, slowest first.
+func (r *Report) SlowestOverall(n int) []SlowRow {
+	rows := r.slowRows()
+	sort.SliceStable(rows, func(i, j int) bool { return rows[i].Latency > rows[j].Latency })
+	if len(rows) > n {
+		rows = rows[:n]
+	}
+	return rows
+}
+
+func (r *Report) slowRows() []SlowRow {
+	var rows []SlowRow
+	for _, j := range r.Journeys {
+		for _, s := range j.Steps {
+			for _, sl := range s.Slowest {
+				rows = append(rows, SlowRow{Journey: j.Name, Step: s.Name, SlowRequest: sl})
+			}
+		}
+	}
+	return rows
+}
+
+// MetricValue formats a target metric value compactly: 0.0123, 12.3,
+// 4.56k, 120M.
+func MetricValue(f float64) string {
+	a := math.Abs(f)
+	switch {
+	case a == 0:
+		return "0"
+	case a >= 1e12:
+		return trimFloat(f/1e12) + "T"
+	case a >= 1e9:
+		return trimFloat(f/1e9) + "G"
+	case a >= 1e6:
+		return trimFloat(f/1e6) + "M"
+	case a >= 1e4:
+		return trimFloat(f/1e3) + "k"
+	case a >= 0.001:
+		return trimFloat(f)
+	default:
+		return strconv.FormatFloat(f, 'e', 2, 64)
+	}
+}
+
+// trimFloat prints three significant digits without trailing zeros.
+func trimFloat(f float64) string {
+	s := strconv.FormatFloat(f, 'f', max(0, 2-int(math.Floor(math.Log10(math.Abs(f))))), 64)
+	if strings.Contains(s, ".") {
+		s = strings.TrimRight(strings.TrimRight(s, "0"), ".")
+	}
+	return s
 }
 
 func num(f float64) string {
