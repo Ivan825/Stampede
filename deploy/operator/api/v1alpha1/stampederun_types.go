@@ -15,8 +15,10 @@ type StampedeRunSpec struct {
 	Server RunServer `json:"server"`
 
 	// APITokenSecretRef selects a Secret key holding a Stampede API token
-	// (stp_..., created under Settings > API tokens) with a role that may run
-	// tests (runner or above).
+	// (stp_..., created under Settings > API tokens). The runner role can
+	// start runs of existing scenarios on existing targets; editor or above
+	// is needed when the operator must create the project, the target or an
+	// inline scenario.
 	APITokenSecretRef corev1.SecretKeySelector `json:"apiTokenSecretRef"`
 
 	// Project is the Stampede project, by ID, slug or name. It is created

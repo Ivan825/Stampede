@@ -66,8 +66,10 @@ spec:
               apiTokenSecretRef:
                 description: |-
                   APITokenSecretRef selects a Secret key holding a Stampede API token
-                  (stp_..., created under Settings > API tokens) with a role that may run
-                  tests (runner or above).
+                  (stp_..., created under Settings > API tokens). The runner role can
+                  start runs of existing scenarios on existing targets; editor or above
+                  is needed when the operator must create the project, the target or an
+                  inline scenario.
                 properties:
                   key:
                     description: The key of the secret to select from.  Must be a

@@ -1,0 +1,66 @@
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: manager-role
+rules:
+- apiGroups:
+  - ""
+  resources:
+  - secrets
+  - services
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - ""
+  - events.k8s.io
+  resources:
+  - events
+  verbs:
+  - create
+  - patch
+- apiGroups:
+  - apps
+  resources:
+  - deployments
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - stampede.dev
+  resources:
+  - stampedeclusters
+  - stampederuns
+  verbs:
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - stampede.dev
+  resources:
+  - stampedeclusters/finalizers
+  - stampederuns/finalizers
+  verbs:
+  - update
+- apiGroups:
+  - stampede.dev
+  resources:
+  - stampedeclusters/status
+  - stampederuns/status
+  verbs:
+  - get
+  - patch
+  - update

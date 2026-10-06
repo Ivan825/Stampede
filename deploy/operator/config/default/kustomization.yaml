@@ -1,0 +1,9 @@
+# Everything the operator needs: CRDs, RBAC and the manager Deployment in
+# the stampede-system namespace.
+#   kubectl apply -k deploy/operator/config/default
+namespace: stampede-system
+namePrefix: stampede-operator-
+resources:
+  - ../crd
+  - ../rbac
+  - ../manager
