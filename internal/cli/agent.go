@@ -81,7 +81,7 @@ func runAgent(ctx context.Context, stderr io.Writer, f *agentFlags) error {
 		return errors.New("set a control API token of at least 16 characters with --token or STAMPEDE_AGENT_TOKEN")
 	}
 	log := slog.New(slog.NewTextHandler(stderr, nil))
-	auditOut := io.Writer(stderr)
+	auditOut := stderr
 	if f.auditFile != "" {
 		af, err := os.OpenFile(f.auditFile, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o600) //nolint:gosec // the operator chooses the file
 		if err != nil {

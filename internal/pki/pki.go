@@ -203,10 +203,21 @@ func WorkerTLS(caDER []byte, cert tls.Certificate) *tls.Config {
 	return &tls.Config{
 		MinVersion:   tls.VersionTLS13,
 		Certificates: []tls.Certificate{cert},
-		// The chain is checked by VerifyPeerCertificate against the pinned
-		// CA instead of the system roots and a host name.
-		InsecureSkipVerify:    true, //nolint:gosec // verified below
-		VerifyPeerCertificate: VerifyServer(caDER),
+		// The chain is checked by VerifyConnection, which also runs on
+		// resumed sessions, against the pinned CA instead of the system
+		// roots and a host name.
+		InsecureSkipVerify: true, //nolint:gosec // verified below
+		VerifyConnection:   verifyConn(VerifyServer(caDER)),
+	}
+}
+
+func verifyConn(check func([][]byte, [][]*x509.Certificate) error) func(tls.ConnectionState) error {
+	return func(cs tls.ConnectionState) error {
+		raw := make([][]byte, len(cs.PeerCertificates))
+		for i, c := range cs.PeerCertificates {
+			raw[i] = c.Raw
+		}
+		return check(raw, nil)
 	}
 }
 
@@ -217,14 +228,14 @@ func WorkerTLS(caDER []byte, cert tls.Certificate) *tls.Config {
 func EnrollTLS(pin string) *tls.Config {
 	cfg := &tls.Config{MinVersion: tls.VersionTLS13, InsecureSkipVerify: true} //nolint:gosec // see the comment above
 	if pin != "" {
-		cfg.VerifyPeerCertificate = func(raw [][]byte, _ [][]*x509.Certificate) error {
+		cfg.VerifyConnection = verifyConn(func(raw [][]byte, _ [][]*x509.Certificate) error {
 			for _, der := range raw {
 				if Fingerprint(der) == pin {
 					return VerifyServer(der)(raw, nil)
 				}
 			}
 			return fmt.Errorf("the server's CA does not match --ca-fingerprint %s", pin)
-		}
+		})
 	}
 	return cfg
 }
