@@ -95,10 +95,10 @@ type Engine struct {
 	activeVUs atomic.Int64
 	peakVUs   atomic.Int64
 
-	stopOnce   sync.Once
-	stopCh     chan struct{}
+	stopOnce sync.Once
+	stopCh   chan struct{}
 	// earlyCh closes when the run is stopped before its planned end.
-	earlyCh chan struct{}
+	earlyCh    chan struct{}
 	stopReason atomic.Value
 	killOnce   sync.Once
 	killCh     chan struct{}
