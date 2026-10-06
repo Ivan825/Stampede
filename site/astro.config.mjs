@@ -11,6 +11,11 @@ export default defineConfig({
       social: [{ icon: 'github', label: 'GitHub', href: 'https://github.com/Ivan825/Stampede' }],
       editLink: { baseUrl: 'https://github.com/Ivan825/Stampede/edit/main/' },
       customCss: ['./src/styles/starlight.css'],
+      head: [
+        { tag: 'link', attrs: { rel: 'preconnect', href: 'https://fonts.googleapis.com' } },
+        { tag: 'link', attrs: { rel: 'preconnect', href: 'https://fonts.gstatic.com', crossorigin: true } },
+        { tag: 'link', attrs: { rel: 'stylesheet', href: 'https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@62..125,400..800&family=IBM+Plex+Sans:ital,wght@0,400;0,500;0,600;1,400&family=JetBrains+Mono:wght@400;600&display=swap' } },
+      ],
       sidebar: [
         { label: 'Start', items: ['docs/quickstart', 'docs/install', 'docs/guides/first-target'] },
         { label: 'Concepts', items: [{ autogenerate: { directory: 'docs/concepts' } }] },

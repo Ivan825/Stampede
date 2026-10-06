@@ -2,7 +2,7 @@
 import Site from '../layouts/Site.astro';
 import Term from '../components/Term.astro';
 import Status from '../components/Status.astro';
-import { GITHUB, packs, isShipped } from '../lib/data';
+import { GITHUB, packs, isShipped, statusOf } from '../lib/data';
 
 const shapes = [
   ['smoke', 'Do the journeys work at all?'],
@@ -19,8 +19,8 @@ const protocols = [
   ['HTTP/1.1', 'Protocols'], ['HTTP/2', 'Protocols'], ['GraphQL', 'Protocols'], ['WebSocket', 'Protocols'],
   ['SSE', 'Protocols'], ['gRPC', 'Protocols'],
 ];
-const browserShipped = isShipped('Browser (Playwright) workers');
-const pluginsShipped = isShipped('Plugins: MQTT, Kafka, Redis, SQL, UDP');
+const browserShipped = isShipped('Browser steps');
+const pluginsShipped = isShipped('Plugins: MQTT');
 const allPacks = packs();
 const stats = [
   {
@@ -225,8 +225,8 @@ const stats = [
         <div class="card"><h3>Weighted mix <Status status="shipped" /></h3><p>Browse 60%, search 20%, checkout 5%, with branches such as abandoned carts.</p></div>
         <div class="card"><h3>Dry-run validation <Status status="shipped" /></h3><p>Every journey proven with one user, by hand or by the AI pipeline.</p></div>
         <div class="card"><h3>Product packs <Status status="shipped" /></h3><p>Ready-made journeys, stresses and targets, detected by <code>stampede init</code>.</p></div>
-        <div class="card"><h3>Endpoint coverage map <Status status="planned" /></h3><p>Which endpoints in your spec no journey touches.</p></div>
-        <div class="card"><h3>Drift detection <Status status="planned" /></h3><p>Scheduled dry runs that flag journeys an API change broke.</p></div>
+        <div class="card"><h3>Endpoint coverage map <Status status={statusOf('Coverage map')} /></h3><p>Which endpoints in your spec no journey touches, with <code>stampede coverage</code>.</p></div>
+        <div class="card"><h3>Drift detection <Status status={statusOf('Coverage map')} /></h3><p><code>stampede drift</code> flags journeys an API change broke, by spec diff and dry run.</p></div>
       </div>
     </div>
   </section>

@@ -32,8 +32,14 @@ export function packReadme(name: string): string {
   return fs.existsSync(p) ? fs.readFileSync(p, 'utf8') : '';
 }
 
-export function isShipped(name: string): boolean {
-  return features().some((g) => g.features.some((f) => f.name === name && f.status === 'shipped'));
+/** Whether the feature whose name starts with prefix is shipped; a missing feature is not. */
+export function isShipped(prefix: string): boolean {
+  return features().some((g) => g.features.some((f) => f.name.startsWith(prefix) && f.status === 'shipped'));
+}
+
+/** The status of the feature whose name starts with prefix. */
+export function statusOf(prefix: string): 'shipped' | 'planned' {
+  return isShipped(prefix) ? 'shipped' : 'planned';
 }
 
 export const GITHUB = 'https://github.com/Ivan825/Stampede';

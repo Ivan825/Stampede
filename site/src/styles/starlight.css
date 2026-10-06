@@ -1,5 +1,8 @@
-/* Starlight docs in the Stampede theme: teal on zinc. */
+/* Starlight docs in the Stampede theme: teal on zinc, with the master
+   plan's type: Archivo headings, IBM Plex Sans text, JetBrains Mono code. */
 :root {
+  --sl-font: 'IBM Plex Sans', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --sl-font-mono: 'JetBrains Mono', ui-monospace, 'SF Mono', Menlo, monospace;
   --sl-color-accent-low: #0f2f2b;
   --sl-color-accent: #14b8a6;
   --sl-color-accent-high: #99f6e4;
@@ -27,3 +30,6 @@
   --sl-color-black: #ffffff;
 }
 .site-title img { image-rendering: pixelated; }
+
+.sl-markdown-content :is(h1, h2, h3, h4), h1#_top { font-family: 'Archivo', 'Arial Narrow', system-ui, sans-serif; }
+.sl-markdown-content h2, h1#_top { font-stretch: 85%; font-weight: 700; }

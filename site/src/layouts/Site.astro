@@ -16,6 +16,9 @@ const full = title ? `${title} · Stampede` : 'Stampede · Your launch-day traff
     <meta property="og:description" content={description} />
     <meta name="theme-color" content="#18181b" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@62..125,400..800&family=IBM+Plex+Sans:ital,wght@0,400;0,500;0,600;1,400&family=JetBrains+Mono:wght@400;600&display=swap" />
   </head>
   <body>
     <nav class="nav" aria-label="Main">
@@ -45,5 +48,49 @@ const full = title ? `${title} · Stampede` : 'Stampede · Your launch-day traff
         </ul>
       </div>
     </footer>
+    <script>
+      // Copy buttons for every command on the page: terminal panels copy
+      // their "$" lines (or everything, if none), command tables their
+      // first-column code.
+      const copyText = async (text: string, btn: HTMLButtonElement) => {
+        try {
+          await navigator.clipboard.writeText(text);
+          btn.textContent = 'Copied';
+        } catch {
+          btn.textContent = 'Press ⌘C';
+        }
+        setTimeout(() => (btn.textContent = 'Copy'), 1600);
+      };
+      const button = (label = 'Copy') => {
+        const b = document.createElement('button');
+        b.type = 'button';
+        b.className = 'copy';
+        b.textContent = label;
+        return b;
+      };
+      document.querySelectorAll<HTMLElement>('.term').forEach((term) => {
+        const pre = term.querySelector('pre');
+        const bar = term.querySelector('.bar');
+        if (!pre || !bar) return;
+        const lines = pre.innerText.split('\n');
+        const cmds = lines.filter((l) => l.startsWith('$ ')).map((l) => l.slice(2));
+        const text = (cmds.length ? cmds : lines.filter((l) => l.trim() && !l.trim().startsWith('#'))).join('\n');
+        const b = button();
+        b.setAttribute('aria-label', 'Copy the commands');
+        b.addEventListener('click', () => copyText(text, b));
+        bar.appendChild(b);
+      });
+      document.querySelectorAll<HTMLTableElement>('table').forEach((table) => {
+        const head = table.querySelector('th');
+        if (!head || !/command/i.test(head.textContent || '')) return;
+        table.querySelectorAll<HTMLElement>('tbody tr td:first-child code').forEach((code) => {
+          const b = button();
+          b.classList.add('copy-inline');
+          b.setAttribute('aria-label', `Copy ${code.textContent}`);
+          b.addEventListener('click', () => copyText(code.textContent || '', b));
+          code.after(b);
+        });
+      });
+    </script>
   </body>
 </html>

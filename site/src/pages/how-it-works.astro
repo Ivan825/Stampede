@@ -56,8 +56,8 @@ const groups = features();
       <div class="grid">
         {groups.map((g) => (
           <div class="card"><h3>{g.name}</h3>
-            <ul style="list-style:none;padding:0;margin:0;display:grid;gap:8px">
-              {g.features.map((f) => <li style="display:flex;justify-content:space-between;gap:10px;font-size:.92rem"><span>{f.name}</span><Status status={f.status} /></li>)}
+            <ul class="features">
+              {g.features.map((f) => <li><span>{f.name}</span><Status status={f.status} /></li>)}
             </ul>
           </div>
         ))}

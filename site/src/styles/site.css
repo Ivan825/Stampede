@@ -2,8 +2,9 @@
   --bg: #18181b; --bg-2: #1f1f23; --surface: #1f1f23; --surface-2: #27272a;
   --line: #2e2e33; --line-strong: #3f3f46; --fg: #f4f4f5; --muted: #a1a1aa;
   --teal: #14b8a6; --teal-2: #2dd4bf; --teal-ink: #0b1513; --pass: #4ade80; --planned: #f5b841;
-  --mono: ui-monospace, "SF Mono", "JetBrains Mono", Menlo, Consolas, monospace;
-  --sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --mono: "JetBrains Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  --sans: "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --display: "Archivo", "Arial Narrow", system-ui, sans-serif;
   color-scheme: dark;
 }
 * { box-sizing: border-box; }
@@ -108,3 +109,21 @@ footer.foot a:hover { color: var(--fg); }
 .prose { max-width: 760px; }
 .prose h2 { margin-top: 48px; }
 .muted { color: var(--muted); }
+
+/* Headings use Archivo, narrowed as in the master plan. */
+h1, h2, h3, .stat b { font-family: var(--display); }
+h1 { font-stretch: 75%; font-weight: 800; }
+h2 { font-stretch: 85%; font-weight: 700; }
+h3 { font-stretch: 100%; font-weight: 650; }
+
+/* Feature lists: the status pill keeps its size and sits beside the first line. */
+.features { list-style: none; padding: 0; margin: 0; display: grid; gap: 10px; }
+.features li { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; font-size: .92rem; line-height: 1.45; }
+.status { flex: none; align-self: flex-start; margin-top: 1px; line-height: 1.6; }
+
+/* Copy buttons. */
+.copy { margin-left: auto; font: 600 11px var(--mono); letter-spacing: .06em; text-transform: uppercase; color: var(--muted);
+  background: transparent; border: 1px solid var(--line-strong); border-radius: 6px; padding: 3px 9px; cursor: pointer; }
+.copy:hover { color: var(--fg); border-color: var(--teal); }
+.copy:focus-visible { outline: 2px solid var(--teal); outline-offset: 2px; }
+.copy-inline { margin-left: 8px; padding: 1px 7px; vertical-align: 1px; }
