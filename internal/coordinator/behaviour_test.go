@@ -4,6 +4,7 @@ import (
 	"context"
 	"net/http"
 	"net/http/httptest"
+	"slices"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -68,7 +69,9 @@ load: {mode: rate, rate: 50/s, duration: 3s, maxVUs: 2, gracefulStop: 2s}`),
 	if len(ws.Saturated) == 0 || ws.Saturated[0].From != 0 || ws.Saturated[0].To < 2 {
 		t.Errorf("saturated windows %+v", ws.Saturated)
 	}
-	if len(ws.SaturationReasons) == 0 || ws.SaturationReasons[0] != "iterations dropped" {
+	// A slow machine may add CPU or scheduling-lag reasons; dropped
+	// iterations must be among them.
+	if !slices.Contains(ws.SaturationReasons, "iterations dropped") {
 		t.Errorf("reasons %v", ws.SaturationReasons)
 	}
 	if !sawInWorkers.Load() {
