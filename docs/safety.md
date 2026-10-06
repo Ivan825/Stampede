@@ -49,5 +49,5 @@ with the reason if any is exceeded.
 Every run start, stop and kill, target and secret change, token and user
 change is in the audit log (Settings → Audit log, admins), with who did it.
 
-**Planned:** typed confirmation for attack-like tests (connection floods,
-slow clients).
+**Planned:** connection-flood and slow-client tests, with typed
+confirmation before they run.

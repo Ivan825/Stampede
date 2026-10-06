@@ -22,7 +22,9 @@ The authoritative definition is the [JSON Schema](../../schema/scenario.schema.j
 | `target.http.dnsCacheTTL` | duration | default 30s, `0s` disables |
 | `target.network` | `{profile, rtt, jitter, loss, down, up}` | emulate a slower network per user; profiles `slow-3g 3g 4g slow-wifi` |
 | `vars` | map | static variables |
-| `data.<name>` | feeder | `csv` \| `json` \| `list` \| `range`, `mode`, `onExhausted` |
+| `data.<name>` | feeder | `csv` \| `json` \| `list` \| `range` \| `generate` \| `sql`, `mode`, `onExhausted` |
+| `data.<name>.generate` | map | field name to kind; a new row for every use (see [test data](../concepts/scenarios.md#test-data)) |
+| `data.<name>.sql` | `{driver, dsn, query, limit}` | `driver` is `postgres` or `mysql`; `dsn` may use `${env.X}`, `${secret.X}`; rows are read when the run starts (at most 1,000,000) |
 | `journeys[]` | | `name`, `weight` (default 1), `tags`, `target` (p50/p90/p95/p99/errors), `steps` |
 | `load` | | see below |
 | `targets[]` | string | `[scope.]metric op value` |

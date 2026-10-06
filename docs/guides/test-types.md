@@ -134,5 +134,30 @@ latency includes the emulated network, which is the point: it shows what
 those users experience. It applies to HTTP, GraphQL, SSE and WebSocket
 steps; gRPC steps are not shaped.
 
-**Planned:** connection floods, slow clients, large payloads, and failing a dependency
-mid-run through an in-environment agent.
+## Large payloads
+
+Upload and download limits, request-body buffering and memory per request
+show up only with big bodies. A `generate` feeder with a `text(size)`
+field makes a body of that size once and reuses it, so the generator
+spends its time sending, not building payloads:
+
+```yaml
+data:
+  upload: { generate: { file: "text(5MB)", name: word } }
+journeys:
+  - name: upload
+    steps:
+      - post: /api/files
+        form: { name: "${data.upload.name}", content: "${data.upload.file}" }
+        check: { status: [201, 413] }   # 413 is the right refusal above your limit
+load: { mode: rate, rate: 5/s, duration: 2m }
+targets:
+  - upload.p95 < 2s
+```
+
+`text(size)` takes sizes such as `512`, `64KB` or `5MB`, up to 64 MB per
+field. Downloads need nothing special: the report records bytes received
+per step, and a step's `timeout` bounds a slow transfer. Fault injection
+(`stampede agent`, above) covers failing a dependency mid-run.
+
+**Planned:** connection floods and slow clients.

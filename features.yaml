@@ -19,6 +19,8 @@ groups:
       - { name: "Auto-abort on sustained errors or latency", status: shipped, doc: safety }
       - { name: "Replay of recorded traffic from access logs and HAR files", status: shipped, doc: docs/guides/test-types }
       - { name: "Fault injection agent: slow, cut or kill dependencies mid-run", status: shipped, doc: docs/guides/faults }
+      - { name: "Test data from CSV, JSON, lists, ranges, generated fake data or a SQL query", status: shipped, doc: docs/concepts/scenarios }
+      - { name: "Large-payload tests with generated bodies up to 64 MB", status: shipped, doc: docs/guides/test-types }
   - name: Protocols
     features:
       - { name: "HTTP/1.1 and HTTP/2 (TLS and h2c)", status: shipped, doc: docs/protocols }

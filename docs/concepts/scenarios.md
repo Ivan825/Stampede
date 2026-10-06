@@ -105,6 +105,57 @@ across workers so two workers never share a row; `onExhausted: stop|wrap`)
 and `per-vu` (each user keeps one row). On a server, file feeders must live
 in the server's data directory; see [configuration](../reference/configuration.md).
 
+### Generated data
+
+A `generate` feeder makes a new row of fake data every time a journey uses
+it, so it never runs out:
+
+```yaml
+data:
+  people:
+    generate:
+      name: name            # "Priya Shah"
+      email: email          # priya.shah.17@example.test, never repeated in a run
+      password: password
+      plan: pick(free|pro|team)
+      seats: int(1,50)
+      avatar: text(200KB)   # a payload of that size
+```
+
+| Kind | Value |
+|---|---|
+| `name`, `firstName`, `lastName` | a person's name; `email` and `username` in the same row match it |
+| `email`, `username`, `seq` | unique across the run, all workers included; emails use the reserved `example.test` domain |
+| `password` | 16 random letters and digits |
+| `phone` | a fictional `555-01xx` number |
+| `uuid` | a random UUID |
+| `company`, `street`, `city`, `country`, `zip` | addresses and organisations |
+| `word`, `sentence`, `paragraph` | filler text |
+| `bool`, `date`, `datetime`, `ipv4` | dates within the last five years; IPs from documentation ranges |
+| `int(min,max)`, `float(min,max)` | a number in the range (floats to two decimals) |
+| `pick(a\|b\|c)` | one of the values |
+| `text(size)` | a string of that many bytes (`512`, `64KB`, `5MB`; at most 64 MB), made once per field |
+
+`mode` and `onExhausted` do not apply to generated rows.
+
+### Rows from a database
+
+```yaml
+data:
+  customers:
+    sql:
+      driver: postgres                     # or mysql
+      dsn: ${secret.STAGING_DB}            # postgres://… or user:pass@tcp(host:3306)/db
+      query: SELECT email, password FROM test_accounts WHERE active
+    mode: unique
+```
+
+The query runs once when the run starts (on each worker, which therefore
+needs to reach the database) and its rows work like a CSV file's: modes,
+splitting across workers and `onExhausted` all apply. The database host
+must pass the same host policy as the run's requests. Keep the DSN in a
+secret.
+
 ## Targets
 
 ```yaml
