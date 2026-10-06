@@ -2,7 +2,13 @@
 package cli
 
 import (
+	"os"
+
 	"github.com/spf13/cobra"
+	"golang.org/x/term"
+
+	"github.com/Ivan825/Stampede/internal/client"
+	"github.com/Ivan825/Stampede/internal/tui"
 
 	"github.com/Ivan825/Stampede/internal/version"
 )
@@ -17,6 +23,17 @@ single user, then runs thousands of them across distributed workers and
 reports where your product breaks.`,
 		SilenceUsage:  true,
 		SilenceErrors: true,
+		// With no subcommand in a terminal, open the interactive console.
+		RunE: func(cmd *cobra.Command, _ []string) error {
+			if !term.IsTerminal(int(os.Stdin.Fd())) || !term.IsTerminal(int(os.Stdout.Fd())) {
+				return cmd.Help()
+			}
+			c, err := client.New()
+			if err != nil {
+				c = nil // local mode: /run works on files
+			}
+			return tui.Run(c)
+		},
 	}
 	root.AddCommand(newVersionCmd(), newRunCmd(), newValidateCmd(), newTargetCmd(), newServerCmd(), newWorkerCmd(), newKeygenCmd(), newHealthcheckCmd(), newCompareCmd(), newReportCmd(),
 		newLoginCmd(), newStartCmd(), newPushCmd(), newRunsCmd(), newStopCmd(false), newStopCmd(true), newWorkersCmd(),
