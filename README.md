@@ -115,9 +115,9 @@ runs a scenario, writes the job summary, uploads the reports and fails the
 step on a failed target; CI exercises it by building from source (release
 downloads are untested until a release is published).
 
-**Scheduled runs.** A project's schedules start a saved scenario against a
-target on a cron expression, in UTC or any IANA time zone, from the web UI,
-`stampede schedules` or the API. Each firing gets the same checks as a run
+**Scheduled runs.** Schedules, managed from the web UI, `stampede schedules`
+or the API, start a saved scenario against a target on a cron expression in
+UTC or any IANA time zone. Each firing gets the same checks as a run
 started by hand, never overlaps the previous run, and fires at most once
 however many replicas or restarts are involved
 ([scheduled runs](docs/guides/schedules.md)).
