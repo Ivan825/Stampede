@@ -33,6 +33,7 @@ not built yet are marked **planned**.
 - [Upgrades, backups and restore](deploy/upgrades.md)
 - [Safety](safety.md): ownership checks, caps, kill switch
 - [Configuration](reference/configuration.md)
+- [Threat model](threat-model.md)
 
 ## Reference
 
