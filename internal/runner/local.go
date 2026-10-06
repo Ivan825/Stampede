@@ -61,6 +61,7 @@ func Run(ctx context.Context, o Options) (*report.Report, error) {
 	if plan.StopOnFail {
 		bp = NewBreakpointTracker(prog, plan)
 	}
+	abort := NewAbortWatcher(o.Scenario.Load.Abort, nil, time.Second)
 	start := time.Now()
 	onSnap := func(s *metrics.Snapshot) {
 		mu.Lock()
@@ -68,6 +69,9 @@ func Run(ctx context.Context, o Options) (*report.Report, error) {
 		mu.Unlock()
 		if bp != nil && bp.Observe(s) && eng != nil {
 			eng.Stop("breakpoint reached")
+		}
+		if reason := abort.Observe(s); reason != "" && eng != nil {
+			eng.Stop(reason)
 		}
 		if o.Progress != nil {
 			o.Progress(Progress{

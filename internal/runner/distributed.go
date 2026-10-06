@@ -29,6 +29,9 @@ type DistributedOptions struct {
 	// OnEvent receives run events: workers joining, saturating, being
 	// lost, finishing.
 	OnEvent func(coordinator.RunEvent)
+	// AbortFloor stops runs that fail badly even when the scenario sets no
+	// abort limits.
+	AbortFloor *scenario.Abort
 	// OnStart receives the run once every worker accepted it, so the
 	// caller can Stop or Kill it.
 	OnStart func(*coordinator.Run)
@@ -95,11 +98,15 @@ func RunDistributed(ctx context.Context, o DistributedOptions) (*report.Report, 
 	if plan.StopOnFail {
 		bp = NewBreakpointTracker(prog, plan)
 	}
+	abort := NewAbortWatcher(sc.Load.Abort, o.AbortFloor, run.Interval())
 	go func() {
 		defer wg.Done()
 		for s := range run.Snapshots() {
 			if bp != nil && bp.Observe(s) {
 				run.StopWithReason("breakpoint reached")
+			}
+			if reason := abort.Observe(s); reason != "" {
+				run.StopWithReason(reason)
 			}
 			if o.Progress != nil {
 				o.Progress(Progress{
