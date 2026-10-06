@@ -124,13 +124,13 @@ func RunDistributed(ctx context.Context, o DistributedOptions) (*report.Report, 
 		in.Breakpoint = bp.Result()
 	}
 	rep := report.Build(in)
-	annotate(rep, res)
+	Annotate(rep, res)
 	return rep, res, werr
 }
 
-// annotate adds the per-worker table and explains losses, failures and
+// Annotate adds the per-worker table and explains losses, failures and
 // saturation in the report's notes.
-func annotate(rep *report.Report, res *coordinator.Result) {
+func Annotate(rep *report.Report, res *coordinator.Result) {
 	secs := res.Interval.Seconds()
 	if secs <= 0 {
 		secs = 1

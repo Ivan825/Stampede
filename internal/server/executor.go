@@ -9,6 +9,7 @@ import (
 
 	"github.com/Ivan825/Stampede/internal/engine"
 	"github.com/Ivan825/Stampede/internal/metrics"
+	"github.com/Ivan825/Stampede/internal/report"
 	"github.com/Ivan825/Stampede/internal/safety"
 	"github.com/Ivan825/Stampede/internal/scenario"
 )
@@ -47,6 +48,10 @@ type ExecResult struct {
 	PeakVUs    int
 	Workers    int
 	Notes      []string
+	// Snapshots, when set, replaces the live snapshots for the report.
+	Snapshots []*metrics.Snapshot
+	// Annotate, when set, adds executor-specific detail to the report.
+	Annotate func(*report.Report)
 }
 
 // Execution is a run in progress.
