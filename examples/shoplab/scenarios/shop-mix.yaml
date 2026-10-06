@@ -1,0 +1,73 @@
+# A weekday mix of ShopLab users: most browse, some search, a few log in
+# to check their orders, and a small share buy something.
+#
+#   stampede run shop-mix.yaml -e TARGET_URL=http://localhost:8090
+apiVersion: stampede.dev/v1
+kind: Scenario
+metadata:
+  name: shoplab-mix
+  description: Weighted browse, search, order-history and checkout journeys.
+  tags: [shoplab, ecommerce]
+target:
+  baseURL: ${env.TARGET_URL}
+data:
+  users: { csv: ../data/users.csv, mode: sequential }
+  queries: { list: [shoe, jacket, socks, lamp, mug, chair, desk], mode: random }
+journeys:
+  - name: browse
+    weight: 60
+    steps:
+      - get: /api/products?page=${rand(1, 50)}&per_page=20
+        check: { status: 200 }
+        extract: { productId: "$.products[0].id" }
+      - think: 1s..3s
+      - get: /api/products/${productId}
+        check: { status: 200, json: { "$.id": exists } }
+  - name: search
+    weight: 20
+    steps:
+      - get: /api/products?q=${data.queries}&per_page=20
+        check: { status: 200 }
+  - name: order-history
+    weight: 15
+    target: { p95: 800ms }
+    steps:
+      - post: /api/login
+        json: { email: "${data.users.email}", password: "${data.users.password}" }
+        check: { status: 200 }
+        extract: { token: "$.token" }
+      - get: /api/orders?page=1
+        headers: { Authorization: "Bearer ${token}" }
+        check: { status: 200 }
+  - name: checkout
+    weight: 5
+    target: { p95: 1s, errors: 2% }
+    steps:
+      - post: /api/login
+        json: { email: "${data.users.email}", password: "${data.users.password}" }
+        check: { status: 200 }
+        extract: { token: "$.token" }
+      - post: /api/cart
+        headers: { Authorization: "Bearer ${token}" }
+        # Products above 100 have plenty of stock, so checkout should succeed.
+        json: { productId: "${rand(101, 9000)}", qty: 1 }
+        check: { status: 200 }
+      - think: 2s..5s
+      - branch:
+          - weight: 70
+            name: buys
+            steps:
+              - post: /api/checkout
+                headers: { Authorization: "Bearer ${token}" }
+                check: { status: 201 }
+          - weight: 30
+            name: abandons cart
+            steps:
+              - think: 5s
+load:
+  mode: rate
+  rate: 50/s
+  duration: 2m
+targets:
+  - http.p95 < 300ms
+  - errors < 1%

@@ -1,0 +1,31 @@
+# Users log in on every iteration for a long time. Without
+# SHOPLAB_FIX_LEAK=1 the session store never evicts expired sessions and the
+# process memory (process_resident_memory_bytes on /metrics) keeps growing.
+# Start ShopLab with SHOPLAB_SESSION_TTL=1m to see eviction quickly.
+apiVersion: stampede.dev/v1
+kind: Scenario
+metadata:
+  name: shoplab-login-soak
+  tags: [shoplab, soak]
+target:
+  baseURL: ${env.TARGET_URL}
+data:
+  users: { csv: ../data/users.csv, mode: random }
+journeys:
+  - name: login
+    steps:
+      - post: /api/login
+        json: { email: "${data.users.email}", password: "${data.users.password}" }
+        check: { status: 200 }
+        extract: { token: "$.token" }
+      - get: /api/me
+        headers: { Authorization: "Bearer ${token}" }
+        check: { status: 200 }
+load:
+  shape: soak
+  mode: rate
+  start: 100/s
+  duration: 30m
+targets:
+  - http.p95 < 100ms
+  - errors < 0.1%
