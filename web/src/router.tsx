@@ -154,6 +154,45 @@ const secretsRoute = createRoute({
   component: lazyRouteComponent(() => import('@/pages/Secrets'), 'SecretsPage'),
 });
 
+const aiStudioRoute = createRoute({
+  getParentRoute: () => projectRoute,
+  path: '/ai',
+  component: lazyRouteComponent(() => import('@/pages/AIStudio'), 'AIStudioPage'),
+});
+
+const aiJobRoute = createRoute({
+  getParentRoute: () => projectRoute,
+  path: '/ai/$jobId',
+  component: lazyRouteComponent(() => import('@/pages/AIJobPage'), 'AIJobPage'),
+});
+
+/** Runs to compare, as comma-separated ids, and the names of both sides. */
+export interface CompareSearch {
+  a: string[];
+  b: string[];
+  labelA?: string;
+  labelB?: string;
+}
+
+const uuidRe = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+function idList(v: unknown): string[] {
+  const parts = Array.isArray(v) ? v.map(String) : typeof v === 'string' ? v.split(',') : [];
+  return parts.map((s) => s.trim()).filter((s) => uuidRe.test(s));
+}
+
+const compareRoute = createRoute({
+  getParentRoute: () => projectRoute,
+  path: '/compare',
+  validateSearch: (s: Record<string, unknown>): CompareSearch => ({
+    a: idList(s.a),
+    b: idList(s.b),
+    ...(typeof s.labelA === 'string' && s.labelA ? { labelA: s.labelA } : {}),
+    ...(typeof s.labelB === 'string' && s.labelB ? { labelB: s.labelB } : {}),
+  }),
+  component: lazyRouteComponent(() => import('@/pages/Compare'), 'ComparePage'),
+});
+
 const runRoute = createRoute({
   getParentRoute: () => appRoute,
   path: '/runs/$runId',
@@ -167,7 +206,7 @@ const workersRoute = createRoute({
 });
 
 export type SettingsTab =
-  'account' | 'tokens' | 'users' | 'audit' | 'integrations' | 'notifications';
+  'account' | 'tokens' | 'users' | 'audit' | 'integrations' | 'notifications' | 'ai';
 
 const settingsTabs: readonly SettingsTab[] = [
   'account',
@@ -176,6 +215,7 @@ const settingsTabs: readonly SettingsTab[] = [
   'audit',
   'integrations',
   'notifications',
+  'ai',
 ];
 
 const settingsRoute = createRoute({
@@ -201,6 +241,9 @@ const routeTree = rootRoute.addChildren([
       schedulesRoute,
       targetsRoute,
       secretsRoute,
+      aiStudioRoute,
+      aiJobRoute,
+      compareRoute,
     ]),
     runRoute,
     workersRoute,

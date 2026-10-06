@@ -14,6 +14,7 @@ import {
   LogOut,
   Server,
   Settings,
+  Sparkles,
   Target as TargetIcon,
 } from 'lucide-react';
 import { useEffect, type ReactNode } from 'react';
@@ -244,6 +245,14 @@ export function Shell() {
                   indent
                 >
                   Scenarios
+                </NavItem>
+                <NavItem
+                  to="/projects/$projectId/ai"
+                  params={{ projectId: project.id }}
+                  icon={<Sparkles />}
+                  indent
+                >
+                  AI studio
                 </NavItem>
                 <NavItem
                   to="/projects/$projectId/targets"

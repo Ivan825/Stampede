@@ -1,10 +1,14 @@
 import { useNavigate, useParams, useSearch } from '@tanstack/react-router';
-import { ChevronLeft, ChevronRight, Play } from 'lucide-react';
+import { ChevronLeft, ChevronRight, GitCompare, Play } from 'lucide-react';
 import { useState } from 'react';
 import { useMe, useRuns, useScenarios } from '@/api/queries';
+import type { Run } from '@/api/types';
+import { hasReport } from '@/api/types';
 import { Button, Card, EmptyState, ErrorAlert, Loading, PageHeader, Select } from '@/components/ui';
+import { CompareDialog } from '@/features/runs/CompareDialog';
+import { MAX_PER_SIDE } from '@/features/runs/compareSides';
 import { NewRunDialog } from '@/features/runs/NewRunDialog';
-import { RunsTable } from '@/features/runs/RunsTable';
+import { RunsTable, type RunSelection } from '@/features/runs/RunsTable';
 import { dateTime } from '@/lib/format';
 import { permissions } from '@/lib/roles';
 
@@ -23,7 +27,26 @@ export function RunsPage() {
     search.before ? undefined : 5_000,
   );
   const [newRun, setNewRun] = useState(false);
+  const [comparing, setComparing] = useState(false);
+  // Selected runs by id; kept across pages so runs from several pages can be compared.
+  const [selected, setSelected] = useState<Map<string, Run>>(new Map());
   const last = runs.data?.[runs.data.length - 1];
+  const selection: RunSelection = {
+    selected: new Set(selected.keys()),
+    toggle: (r) =>
+      setSelected((m) => {
+        const n = new Map(m);
+        if (n.has(r.id)) n.delete(r.id);
+        else n.set(r.id, r);
+        return n;
+      }),
+    blocked: (r) =>
+      !hasReport(r)
+        ? 'Only finished runs with a report can be compared.'
+        : selected.size >= 2 * MAX_PER_SIDE
+          ? `At most ${2 * MAX_PER_SIDE} runs can be compared.`
+          : undefined,
+  };
 
   return (
     <div className="mx-auto max-w-6xl px-6 py-6">
@@ -61,6 +84,27 @@ export function RunsPage() {
         {search.before && (
           <span className="text-xs text-muted">Showing runs before {dateTime(search.before)}</span>
         )}
+        <div className="flex-1" />
+        {selected.size === 0 ? (
+          <span className="text-xs text-muted">Select finished runs to compare them.</span>
+        ) : (
+          <>
+            <span className="text-xs text-muted" role="status">
+              {selected.size} run{selected.size === 1 ? '' : 's'} selected
+            </span>
+            <Button size="sm" variant="ghost" onClick={() => setSelected(new Map())}>
+              Clear
+            </Button>
+            <Button
+              size="sm"
+              variant="primary"
+              disabled={selected.size < 2}
+              onClick={() => setComparing(true)}
+            >
+              <GitCompare className="size-3.5" aria-hidden /> Compare…
+            </Button>
+          </>
+        )}
       </div>
       <Card>
         {runs.isPending ? (
@@ -70,7 +114,7 @@ export function RunsPage() {
         ) : runs.data.length === 0 ? (
           <EmptyState title={search.before ? 'No older runs' : 'No runs match'} />
         ) : (
-          <RunsTable runs={runs.data} />
+          <RunsTable runs={runs.data} selection={selection} />
         )}
       </Card>
       <nav className="mt-3 flex justify-end gap-2" aria-label="Pagination">
@@ -91,6 +135,14 @@ export function RunsPage() {
           Older <ChevronRight className="size-3.5" aria-hidden />
         </Button>
       </nav>
+      {comparing && (
+        <CompareDialog
+          projectId={projectId}
+          runs={[...selected.values()]}
+          open
+          onOpenChange={setComparing}
+        />
+      )}
       {can.startRuns && (
         <NewRunDialog
           projectId={projectId}

@@ -32,6 +32,9 @@ export function permissions(role: Role | undefined) {
     manageUsers: atLeast(role, 'admin'),
     viewAudit: atLeast(role, 'admin'),
     manageIntegrations: atLeast(role, 'admin'),
+    manageAIProviders: atLeast(role, 'admin'),
+    /** Start AI generation jobs and approve their proposals. */
+    generateJourneys: atLeast(role, 'editor'),
   };
 }
 

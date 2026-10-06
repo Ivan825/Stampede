@@ -16,6 +16,7 @@ import {
 } from '@/api/queries';
 import type { Role, TokenCreated } from '@/api/types';
 import { RoleChip } from '@/components/chips';
+import { AIProvidersTab } from '@/features/settings/AIProvidersTab';
 import { IntegrationsTab } from '@/features/settings/IntegrationsTab';
 import { NotificationsTab } from '@/features/settings/NotificationsTab';
 import { Confirm, Modal } from '@/components/dialog';
@@ -615,6 +616,7 @@ export function SettingsPage() {
   if ((tab === 'integrations' || tab === 'notifications') && !can.manageIntegrations) {
     tab = 'account';
   }
+  if (tab === 'ai' && !can.manageAIProviders) tab = 'account';
 
   return (
     <div className="mx-auto max-w-6xl px-6 py-6">
@@ -643,6 +645,11 @@ export function SettingsPage() {
               Notifications
             </Tabs.Trigger>
           )}
+          {can.manageAIProviders && (
+            <Tabs.Trigger value="ai" className={tabTrigger}>
+              AI providers
+            </Tabs.Trigger>
+          )}
           {can.viewAudit && (
             <Tabs.Trigger value="audit" className={tabTrigger}>
               Audit log
@@ -666,6 +673,11 @@ export function SettingsPage() {
         {can.manageIntegrations && (
           <Tabs.Content value="notifications">
             <NotificationsTab />
+          </Tabs.Content>
+        )}
+        {can.manageAIProviders && (
+          <Tabs.Content value="ai">
+            <AIProvidersTab />
           </Tabs.Content>
         )}
         {can.viewAudit && (

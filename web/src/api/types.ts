@@ -52,6 +52,43 @@ export type NotificationChannel = S['NotificationChannel'];
 export type NotificationChannelCreate = S['NotificationChannelCreate'];
 export type NotificationChannelCreated = S['NotificationChannelCreated'];
 export type NotificationDelivery = S['NotificationDelivery'];
+export type AIProviderKind = S['AIProviderKind'];
+export type AIProvider = S['AIProvider'];
+export type AIProviderPut = S['AIProviderPut'];
+export type AIJobCreate = S['AIJobCreate'];
+export type AIJobStatus = S['AIJobStatus'];
+export type AIJobSummary = S['AIJobSummary'];
+export type AIJob = S['AIJob'];
+export type AIJourney = S['AIJourney'];
+export type AITrace = S['AITrace'];
+export type AIStepTrace = S['AIStepTrace'];
+export type AICheck = S['AICheck'];
+export type AIProblem = S['AIProblem'];
+export type AIUsage = S['AIUsage'];
+export type AIJobApprove = S['AIJobApprove'];
+export type AIJobApproval = S['AIJobApproval'];
+export type CompareRequest = S['CompareRequest'];
+export type Comparison = S['Comparison'];
+export type CompareVerdict = S['CompareVerdict'];
+export type MetricDelta = S['MetricDelta'];
+export type StepDelta = S['StepDelta'];
+
+export const aiProviderKinds: readonly AIProviderKind[] = [
+  'anthropic',
+  'openai',
+  'gemini',
+  'ollama',
+  'openai-compatible',
+];
+
+export function isAIJobActive(status: AIJobStatus): boolean {
+  return status === 'queued' || status === 'running';
+}
+
+/** Runs that finished with a report, so they can be compared. */
+export function hasReport(run: Run): boolean {
+  return (run.status === 'completed' || run.status === 'aborted') && run.startedAt != null;
+}
 
 export const notificationEvents: readonly NotificationEvent[] = [
   'run.finished',

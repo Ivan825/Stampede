@@ -1,6 +1,7 @@
 package report
 
 import (
+	"encoding/json"
 	"fmt"
 	"io"
 	"math"
@@ -20,8 +21,19 @@ type Comparison struct {
 	Comparable bool          `json:"comparable"`
 	Problems   []string      `json:"problems,omitempty"`
 	Metrics    []MetricDelta `json:"metrics"`
-	Verdict    string        `json:"verdict"` // regression, improvement, no-change, inconclusive
-	Confidence float64       `json:"confidence"`
+	// Steps compares each request step's p95 and error rate. They are
+	// informational: with many steps some differ by chance, so they do
+	// not change the verdict.
+	Steps      []StepDelta `json:"steps,omitempty"`
+	Verdict    string      `json:"verdict"` // regression, improvement, no-change, inconclusive
+	Confidence float64     `json:"confidence"`
+}
+
+// StepDelta compares one request step across the runs of both versions.
+type StepDelta struct {
+	Journey string        `json:"journey"`
+	Step    string        `json:"step"`
+	Metrics []MetricDelta `json:"metrics"`
 }
 
 // Side describes one version's runs.
@@ -99,11 +111,7 @@ func Compare(a, b []*Report, labelA, labelB string) *Comparison {
 		if len(va) == 0 || len(vb) == 0 {
 			continue
 		}
-		d := MetricDelta{Name: m.name, HigherIsBetter: m.higher, A: va, B: vb, MeanA: mean(va), MeanB: mean(vb)}
-		d.NoiseFloor = math.Max(minNoise, math.Max(spread(va), spread(vb)))
-		d.Change = relChange(d.MeanA, d.MeanB)
-		d.CILow, d.CIHigh = bootstrapCI(rng, va, vb, 0.95, 5000)
-		d.Verdict = judge(d, len(va) >= 2 && len(vb) >= 2)
+		d := delta(rng, m.name, m.higher, va, vb)
 		switch d.Verdict {
 		case CmpRegression:
 			worst = CmpRegression
@@ -123,7 +131,86 @@ func Compare(a, b []*Report, labelA, labelB string) *Comparison {
 	if !c.Comparable && c.Verdict != CmpNoChange {
 		c.Verdict = CmpInconclusive
 	}
+	c.Steps = compareSteps(rng, a, b)
 	return c
+}
+
+// MarshalJSON writes an infinite change (A was zero and B was not) as
+// null, which JSON cannot otherwise represent.
+func (d MetricDelta) MarshalJSON() ([]byte, error) {
+	type plain MetricDelta
+	finite := func(f float64) *float64 {
+		if math.IsInf(f, 0) || math.IsNaN(f) {
+			return nil
+		}
+		return &f
+	}
+	return json.Marshal(struct {
+		plain
+		Change *float64 `json:"change"`
+		CILow  *float64 `json:"ciLow"`
+		CIHigh *float64 `json:"ciHigh"`
+	}{plain(d), finite(d.Change), finite(d.CILow), finite(d.CIHigh)})
+}
+
+func delta(rng *rand.Rand, name string, higher bool, va, vb []float64) MetricDelta {
+	d := MetricDelta{Name: name, HigherIsBetter: higher, A: va, B: vb, MeanA: mean(va), MeanB: mean(vb)}
+	d.NoiseFloor = math.Max(minNoise, math.Max(spread(va), spread(vb)))
+	d.Change = relChange(d.MeanA, d.MeanB)
+	d.CILow, d.CIHigh = bootstrapCI(rng, va, vb, 0.95, 5000)
+	d.Verdict = judge(d, len(va) >= 2 && len(vb) >= 2)
+	return d
+}
+
+type stepKey struct{ journey, step string }
+
+// compareSteps compares the p95 and error rate of every request step that
+// sent requests in runs of both versions, in the order the reports list
+// them.
+func compareSteps(rng *rand.Rand, a, b []*Report) []StepDelta {
+	var order []stepKey
+	seen := map[stepKey]bool{}
+	collect := func(rs []*Report) map[stepKey][]Stats {
+		out := map[stepKey][]Stats{}
+		for _, r := range rs {
+			for _, j := range r.Journeys {
+				for _, st := range j.Steps {
+					if st.Stats.Requests == 0 {
+						continue
+					}
+					k := stepKey{j.Name, st.Name}
+					if !seen[k] {
+						seen[k] = true
+						order = append(order, k)
+					}
+					out[k] = append(out[k], st.Stats)
+				}
+			}
+		}
+		return out
+	}
+	sa, sb := collect(a), collect(b)
+	pick := func(xs []Stats, f func(Stats) float64) []float64 {
+		v := make([]float64, len(xs))
+		for i, x := range xs {
+			v[i] = f(x)
+		}
+		return v
+	}
+	p95 := func(s Stats) float64 { return s.Latency.P95 }
+	errs := func(s Stats) float64 { return s.ErrorRate }
+	var out []StepDelta
+	for _, k := range order {
+		xa, xb := sa[k], sb[k]
+		if len(xa) == 0 || len(xb) == 0 {
+			continue
+		}
+		out = append(out, StepDelta{Journey: k.journey, Step: k.step, Metrics: []MetricDelta{
+			delta(rng, "p95", false, pick(xa, p95), pick(xb, p95)),
+			delta(rng, "error rate", false, pick(xa, errs), pick(xb, errs)),
+		}})
+	}
+	return out
 }
 
 func side(label string, rs []*Report) Side {

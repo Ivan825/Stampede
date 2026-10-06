@@ -1,6 +1,13 @@
 import { clsx } from 'clsx';
 import type { ReactNode } from 'react';
-import type { RunStatus, Verdict, Worker } from '@/api/types';
+import type {
+  AIJobStatus,
+  AIJourney,
+  CompareVerdict,
+  RunStatus,
+  Verdict,
+  Worker,
+} from '@/api/types';
 
 type Tone = 'pass' | 'fail' | 'warn' | 'info' | 'neutral' | 'accent' | 'live';
 
@@ -103,6 +110,50 @@ export function WorkerStatusChip({ status }: { status: Worker['status'] }) {
       {status}
     </Chip>
   );
+}
+
+const aiJobTone: Record<AIJobStatus, Tone> = {
+  queued: 'info',
+  running: 'live',
+  succeeded: 'pass',
+  needs_review: 'warn',
+  failed: 'fail',
+};
+
+export function AIJobStatusChip({ status }: { status: AIJobStatus }) {
+  return (
+    <Chip tone={aiJobTone[status]} dot pulse={status === 'running' || status === 'queued'}>
+      {status === 'needs_review' ? 'needs review' : status}
+    </Chip>
+  );
+}
+
+const journeyTone: Record<AIJourney['status'], Tone> = {
+  passed: 'pass',
+  flagged: 'warn',
+  'not-run': 'neutral',
+};
+
+export function JourneyStatusChip({ status }: { status: AIJourney['status'] }) {
+  return <Chip tone={journeyTone[status]}>{status === 'not-run' ? 'not run' : status}</Chip>;
+}
+
+export const compareVerdictLabels: Record<CompareVerdict, string> = {
+  regression: 'REGRESSION',
+  improvement: 'IMPROVEMENT',
+  'no-change': 'NO SIGNIFICANT CHANGE',
+  inconclusive: 'INCONCLUSIVE',
+};
+
+export const compareVerdictTone: Record<CompareVerdict, Tone> = {
+  regression: 'fail',
+  improvement: 'pass',
+  'no-change': 'neutral',
+  inconclusive: 'warn',
+};
+
+export function CompareVerdictChip({ verdict }: { verdict: CompareVerdict }) {
+  return <Chip tone={compareVerdictTone[verdict]}>{compareVerdictLabels[verdict]}</Chip>;
 }
 
 export function RoleChip({ role }: { role: string }) {
