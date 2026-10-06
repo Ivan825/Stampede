@@ -1,0 +1,30 @@
+# Values for the kind smoke test (.github/workflows/k8s.yml): a locally built
+# image loaded into kind, small requests for a small machine, autoscaling on
+# so the HPA object is exercised.
+image:
+  repository: ghcr.io/ivan825/stampede
+  tag: kind
+  pullPolicy: Never
+server:
+  logFormat: text
+  resources:
+    requests: { cpu: 50m, memory: 64Mi }
+    limits: { memory: 512Mi }
+workers:
+  region: kind
+  labels:
+    cluster: kind
+  resources:
+    requests: { cpu: 50m, memory: 32Mi }
+    limits: { memory: 256Mi }
+  autoscaling:
+    enabled: true
+    minReplicas: 2
+    maxReplicas: 3
+timescaledb:
+  persistence:
+    size: 1Gi
+  resources:
+    requests: { cpu: 50m, memory: 128Mi }
+    limits: { memory: 512Mi }
+  tuneMemory: 256MB
