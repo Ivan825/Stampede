@@ -102,6 +102,15 @@ metadata: {name: t}
 target: {baseURL: "http://localhost"}
 journeys: [{name: a, steps: [{get: /x, chekc: {status: 200}}]}]
 load: {vus: 1, duration: 1s}`, `unknown key "chekc"`},
+		"unknown check key": {`
+metadata: {name: t}
+target: {baseURL: "http://localhost"}
+journeys:
+  - name: a
+    steps:
+      - get: /x
+        check: {stauts: 200}
+load: {vus: 1, duration: 1s}`, `line 8: unknown key "stauts" in check`},
 		"unknown top-level": {`
 metadata: {name: t}
 targte: {baseURL: "http://localhost"}`, "targte"},

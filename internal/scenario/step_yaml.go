@@ -3,6 +3,7 @@ package scenario
 import (
 	"encoding/json"
 	"fmt"
+	"reflect"
 	"sort"
 	"strconv"
 	"strings"
@@ -196,7 +197,7 @@ func decodeRequest(r *Request, f map[string]*yaml.Node) error {
 	}
 	if v, ok := f["check"]; ok {
 		r.Check = &Check{}
-		if err := v.Decode(r.Check); err != nil {
+		if err := decodeStrict(v, "check", r.Check); err != nil {
 			return err
 		}
 	}
@@ -211,6 +212,46 @@ func decodeRequest(r *Request, f map[string]*yaml.Node) error {
 		}
 	}
 	return nil
+}
+
+// decodeStrict decodes a mapping into the struct v, rejecting keys that
+// v does not define. yaml.v3 ignores KnownFields when a node is decoded on
+// its own, so without this a typo such as "stauts" inside a check would be
+// silently dropped and the check would pass vacuously.
+func decodeStrict(n *yaml.Node, what string, v any) error {
+	if n.Kind == yaml.MappingNode {
+		known := yamlKeys(reflect.TypeOf(v))
+		for i := 0; i+1 < len(n.Content); i += 2 {
+			k := n.Content[i]
+			if !known[k.Value] {
+				return fmt.Errorf("line %d: unknown key %q in %s", k.Line, k.Value, what)
+			}
+		}
+	}
+	return n.Decode(v)
+}
+
+// yamlKeys lists the YAML keys a struct type (or pointer to one) accepts.
+func yamlKeys(t reflect.Type) map[string]bool {
+	for t.Kind() == reflect.Pointer {
+		t = t.Elem()
+	}
+	out := map[string]bool{}
+	if t.Kind() != reflect.Struct {
+		return out
+	}
+	for i := 0; i < t.NumField(); i++ {
+		f := t.Field(i)
+		name, _, _ := strings.Cut(f.Tag.Get("yaml"), ",")
+		switch {
+		case name == "-":
+		case name != "":
+			out[name] = true
+		case f.IsExported():
+			out[strings.ToLower(f.Name)] = true
+		}
+	}
+	return out
 }
 
 // normalizeYAML converts map[string]any trees produced by yaml.v3 into
