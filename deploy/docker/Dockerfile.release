@@ -1,0 +1,18 @@
+# Release image, built by GoReleaser (dockers_v2) from prebuilt binaries.
+# The build context holds linux/amd64/stampede and linux/arm64/stampede.
+# For a build from source use the Dockerfile at the repository root.
+
+# /data must exist and belong to the nonroot user (65532) so a volume mounted
+# there is writable. distroless has no shell, so the directory is made in a
+# small stage that runs on the build host's own platform (no emulation).
+FROM --platform=$BUILDPLATFORM alpine:3.22 AS data
+RUN mkdir -p /out/data
+
+FROM gcr.io/distroless/static-debian12:nonroot
+ARG TARGETPLATFORM
+COPY $TARGETPLATFORM/stampede /usr/local/bin/stampede
+COPY --from=data --chown=65532:65532 /out/data /data
+USER nonroot:nonroot
+EXPOSE 8080 8081
+ENTRYPOINT ["/usr/local/bin/stampede"]
+CMD ["server"]
