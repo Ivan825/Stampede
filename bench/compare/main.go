@@ -116,7 +116,7 @@ func main() {
 	defer os.RemoveAll(dir)
 	serverBin = filepath.Join(dir, "echoserver")
 	if b, err := exec.Command("go", "build", "-o", serverBin, "github.com/Ivan825/Stampede/bench/echoserver").CombinedOutput(); err != nil {
-		fatal(fmt.Errorf("build echo server: %v\n%s", err, b))
+		fatal(fmt.Errorf("build echo server: %w\n%s", err, b))
 	}
 	res := results{Stampede: version.Version, Date: time.Now().UTC(), GOOS: runtime.GOOS, GOARCH: runtime.GOARCH,
 		CPUs: runtime.NumCPU(), Rule: "|tool - truth| <= max(2% of truth, 1ms)"}
