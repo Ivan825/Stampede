@@ -1,0 +1,69 @@
+# The everyday mix: most users browse, some search, a few check orders and
+# a small share buy something.
+apiVersion: stampede.dev/v1
+kind: Scenario
+metadata:
+  name: ecommerce-mix
+  description: Weighted browse, search, order-history and checkout journeys.
+  tags: [pack:ecommerce]
+target:
+  baseURL: ${env.TARGET_URL}
+data:
+  users: { csv: ../data/users.csv, mode: sequential }
+  queries: { list: [shoe, jacket, socks, lamp, mug, chair, desk], mode: random }
+journeys:
+  - name: browse
+    weight: 60
+    steps:
+      - get: /api/products?page=${rand(1, 50)}&per_page=20
+        check: { status: 200 }
+        extract: { productId: "$.products[0].id" }
+      - think: 1s..3s
+      - get: /api/products/${productId}
+        check: { status: 200 }
+  - name: search
+    weight: 20
+    steps:
+      - get: /api/products?q=${data.queries}&per_page=20
+        check: { status: 200 }
+  - name: order-history
+    weight: 15
+    steps:
+      - post: /api/login
+        json: { email: "${data.users.email}", password: "${data.users.password}" }
+        check: { status: 200 }
+        extract: { token: "$.token" }
+      - get: /api/orders?page=1
+        headers: { Authorization: "Bearer ${token}" }
+        check: { status: 200 }
+  - name: checkout
+    weight: 5
+    steps:
+      - post: /api/login
+        json: { email: "${data.users.email}", password: "${data.users.password}" }
+        check: { status: 200 }
+        extract: { token: "$.token" }
+      - post: /api/cart
+        headers: { Authorization: "Bearer ${token}" }
+        json: { productId: "${rand(101, 9000)}", qty: 1 }
+        check: { status: 200 }
+      - think: 2s..5s
+      - branch:
+          - weight: 70
+            name: buys
+            steps:
+              - post: /api/checkout
+                headers: { Authorization: "Bearer ${token}" }
+                check: { status: 201 }
+          - weight: 30
+            name: abandons cart
+            steps:
+              - think: 5s
+load:
+  mode: rate
+  rate: 20/s
+  duration: 5m
+targets:
+  - http.p95 < 500ms
+  - errors < 1%
+  - checkout.p95 < 1s

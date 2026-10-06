@@ -1,0 +1,20 @@
+apiVersion: stampede.dev/v1
+kind: Pack
+name: ecommerce
+title: E-commerce and marketplaces
+description: >
+  Browsing, search, cart and checkout journeys with a flash-sale spike and a
+  last-item contention test. Built for JSON shop APIs shaped like ShopLab;
+  adjust paths and field names in the journeys to match your API.
+status: shipped
+protocols: [http]
+referenceApp: examples/shoplab
+detect:
+  # Evidence that a target is a shop. Each match adds its weight.
+  paths: ["/api/products", "/products", "/api/cart", "/cart", "/api/checkout", "/checkout", "/api/orders"]
+  openapiTags: [products, cart, checkout, orders, catalog]
+  htmlMeta: ['og:type" content="product', 'itemtype="https://schema.org/Product"']
+  headers: {}
+variables:
+  # Values init asks for or fills in; used by the journeys as ${env.NAME}.
+  TARGET_URL: { description: Base URL of the shop API }
