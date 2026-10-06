@@ -36,6 +36,7 @@ stampede [flags]
 * [stampede report](stampede_report.md)	 - Render a saved JSON report as HTML, JUnit, Markdown or a summary
 * [stampede run](stampede_run.md)	 - Run a scenario in-process and write a report (no server needed)
 * [stampede runs](stampede_runs.md)	 - List recent runs on the server
+* [stampede schedules](stampede_schedules.md)	 - List and manage scheduled runs on the server
 * [stampede server](stampede_server.md)	 - Run the control plane: REST API, run manager and web UI
 * [stampede start](stampede_start.md)	 - Start a run on a Stampede server and follow it live
 * [stampede stop](stampede_stop.md)	 - Stop a run gracefully (in-flight iterations may finish)
