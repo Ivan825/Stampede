@@ -11,12 +11,33 @@ function runDuration(r: Run): number | null {
   return (end - Date.parse(r.startedAt)) / 1000;
 }
 
-export function RunsTable({ runs, showScenario = true }: { runs: Run[]; showScenario?: boolean }) {
+/** Checkbox selection of runs, for comparing them. */
+export interface RunSelection {
+  selected: ReadonlySet<string>;
+  toggle: (run: Run) => void;
+  /** Why a run cannot be selected, or undefined when it can. */
+  blocked: (run: Run) => string | undefined;
+}
+
+export function RunsTable({
+  runs,
+  showScenario = true,
+  selection,
+}: {
+  runs: Run[];
+  showScenario?: boolean;
+  selection?: RunSelection;
+}) {
   const navigate = useNavigate();
   return (
     <Table>
       <thead>
         <tr>
+          {selection && (
+            <th className="w-8">
+              <span className="sr-only">Select</span>
+            </th>
+          )}
           <th>Status</th>
           {showScenario && <th>Scenario</th>}
           <th>Target</th>
@@ -36,10 +57,29 @@ export function RunsTable({ runs, showScenario = true }: { runs: Run[]; showScen
               key={r.id}
               className="cursor-pointer hover:bg-surface-2/60"
               onClick={(e) => {
-                if ((e.target as HTMLElement).closest('a')) return;
+                if ((e.target as HTMLElement).closest('a, [data-select]')) return;
                 void navigate({ to: '/runs/$runId', params: { runId: r.id } });
               }}
             >
+              {selection && (
+                <td data-select className="!pr-0">
+                  {(() => {
+                    const why = selection.blocked(r);
+                    const checked = selection.selected.has(r.id);
+                    return (
+                      <input
+                        type="checkbox"
+                        className="size-3.5 cursor-pointer align-middle disabled:cursor-not-allowed"
+                        aria-label={`Select run ${r.id.slice(0, 8)} (${r.scenarioName ?? 'scenario'} v${r.scenarioVersion})`}
+                        title={why}
+                        checked={checked}
+                        disabled={!!why && !checked}
+                        onChange={() => selection.toggle(r)}
+                      />
+                    );
+                  })()}
+                </td>
+              )}
               <td>
                 <StatusChip status={r.status} />
               </td>

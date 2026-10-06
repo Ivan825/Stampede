@@ -1,5 +1,13 @@
 import { delay, http, HttpResponse, type JsonBodyType } from 'msw';
 import type {
+  AIJob,
+  AIJobApprove,
+  AIJobCreate,
+  AIJobSummary,
+  AIProvider,
+  AIProviderPut,
+  CompareRequest,
+  Scenario,
   ApiErrorBody,
   Integration,
   IntegrationCreate,
@@ -37,6 +45,8 @@ import {
   type MockOptions,
 } from './db';
 import { checkZone, nextTimes, parseCron } from './cron';
+import { advanceAIJob, type MockAIJob } from './ai';
+import { compareReports } from './compare';
 import { analyse, simulatePoint, simulateTimeline } from './sim';
 
 const B = '*/api/v1';
@@ -92,6 +102,32 @@ export function createHandlers(initial: MockOptions, opts: MockHandlerOptions = 
     rank[role()] >= rank[min]
       ? null
       : err(403, 'forbidden', `Your role (${role()}) cannot do this; it needs ${min} or above.`);
+
+  /** Moves an AI job along the pipeline according to the wall clock. */
+  const advance = (j: MockAIJob) =>
+    advanceAIJob(
+      j,
+      db.targets.find((t) => t.id === j.targetId)?.baseURL ?? 'http://localhost:8090',
+    );
+  const aiPublic = (j: MockAIJob): AIJob => {
+    const { maxRepairs: _m, ...rest } = j;
+    return rest;
+  };
+  const aiSummary = (j: MockAIJob): AIJobSummary => ({
+    id: j.id,
+    projectId: j.projectId,
+    status: j.status,
+    stage: j.stage,
+    providerKind: j.providerKind,
+    model: j.model,
+    usage: j.usage,
+    dryRun: j.dryRun,
+    ...(j.error ? { error: j.error } : {}),
+    createdBy: j.createdBy ?? null,
+    createdAt: j.createdAt,
+    finishedAt: j.finishedAt ?? null,
+    approvedAt: j.approvedAt ?? null,
+  });
 
   /** A schedule with its last run's state filled in from the runs. */
   const scheduleView = (sc: Schedule): Schedule => {
@@ -1028,6 +1064,281 @@ export function createHandlers(initial: MockOptions, opts: MockHandlerOptions = 
       if (a) return a;
       if (!db.channels.some((c) => c.id === params.id)) return notFound('Notification channel');
       return ok(db.deliveries[params.id as string] ?? []);
+    }),
+
+    // ------------------------------------------------------------ compare
+    http.post(`${B}/compare`, async ({ request }) => {
+      const a = await auth();
+      if (a) return a;
+      const body = (await request.json()) as CompareRequest;
+      for (const [side, ids] of [
+        ['a', body.a],
+        ['b', body.b],
+      ] as const)
+        if (!Array.isArray(ids) || ids.length < 1 || ids.length > 20)
+          return err(422, 'invalid', `${side} must list 1 to 20 runs`);
+      const seen = new Set<string>();
+      const problems: string[] = [];
+      const load = (ids: string[]) =>
+        ids.flatMap((id) => {
+          if (seen.has(id)) {
+            problems.push(`run ${id} is listed more than once`);
+            return [];
+          }
+          seen.add(id);
+          const r = db.runs.find((x) => x.id === id);
+          const rep = db.reports[id];
+          if (!r) problems.push(`run ${id} not found`);
+          else if (r.status === 'failed')
+            problems.push(`run ${id.slice(0, 8)} failed before producing a report`);
+          else if (!isTerminal(r.status))
+            problems.push(`run ${id.slice(0, 8)} has not finished (${r.status})`);
+          else if (!rep) problems.push(`run ${id.slice(0, 8)} has no report`);
+          return r && rep && isTerminal(r.status) ? [rep] : [];
+        });
+      const ra = load(body.a);
+      const rb = load(body.b);
+      if (problems.length)
+        return err(
+          422,
+          'invalid',
+          'every run must be in your organisation and have finished with a report',
+          problems,
+        );
+      return ok(compareReports(ra, rb, body.labelA?.trim() || 'A', body.labelB?.trim() || 'B'));
+    }),
+
+    // ------------------------------------------------------------ AI
+    http.get(`${B}/ai/providers`, async () => (await auth()) ?? ok(db.aiProviders)),
+    http.post(`${B}/ai/providers`, async ({ request }) => {
+      const a = (await auth()) ?? need('admin');
+      if (a) return a;
+      const b = (await request.json()) as AIProviderPut;
+      const name = (b.name ?? 'default').trim();
+      if (!name || name.length > 100)
+        return err(422, 'invalid', 'name must be 1 to 100 characters');
+      const model = b.model?.trim() || (b.kind === 'anthropic' ? 'claude-sonnet-5-5' : '');
+      if (!model) return err(422, 'invalid', `model is required for ${b.kind}`);
+      const baseURL = b.baseURL?.trim().replace(/\/+$/, '') ?? '';
+      if (baseURL && !/^https?:\/\/[^/\s]+/.test(baseURL))
+        return err(422, 'invalid', 'baseURL must be an absolute http(s) URL');
+      if (b.kind === 'openai-compatible' && !baseURL)
+        return err(
+          422,
+          'invalid',
+          'baseURL is required for openai-compatible providers, for example http://llm.internal:8000/v1',
+        );
+      if (b.monthlyTokenCap != null && b.monthlyTokenCap <= 0)
+        return err(422, 'invalid', 'monthlyTokenCap must be positive');
+      const existing = db.aiProviders.find((p) => p.name === name);
+      const hasKey = !!b.apiKey?.trim() || !!existing?.hasKey;
+      if (['anthropic', 'openai', 'gemini'].includes(b.kind) && !hasKey)
+        return err(422, 'invalid', `apiKey is required for ${b.kind}`);
+      const now = new Date().toISOString();
+      const p: AIProvider = {
+        id: existing?.id ?? uuid(),
+        name,
+        kind: b.kind,
+        model,
+        ...(baseURL ? { baseURL } : {}),
+        hasKey,
+        monthlyTokenCap: b.monthlyTokenCap ?? existing?.monthlyTokenCap ?? 2_000_000,
+        usedTokensThisMonth: db.aiProviders[0]?.usedTokensThisMonth ?? 0,
+        createdAt: existing?.createdAt ?? now,
+        updatedAt: now,
+      };
+      if (existing) db.aiProviders = db.aiProviders.map((x) => (x.id === p.id ? p : x));
+      else db.aiProviders.push(p);
+      return ok(p, existing ? 200 : 201);
+    }),
+    http.delete(`${B}/ai/providers/:id`, async ({ params }) => {
+      const a = (await auth()) ?? need('admin');
+      if (a) return a;
+      if (!db.aiProviders.some((p) => p.id === params.id)) return notFound('AI provider');
+      db.aiProviders = db.aiProviders.filter((p) => p.id !== params.id);
+      return noContent();
+    }),
+    http.get(`${B}/projects/:id/ai/jobs`, async ({ params }) => {
+      const a = await auth();
+      if (a) return a;
+      return ok(
+        db.aiJobs
+          .filter((j) => j.projectId === params.id)
+          .map((j) => {
+            advance(j);
+            return aiSummary(j);
+          })
+          .sort((x, y) => Date.parse(y.createdAt) - Date.parse(x.createdAt)),
+      );
+    }),
+    http.post(`${B}/projects/:id/ai/jobs`, async ({ request, params }) => {
+      const a = (await auth()) ?? need('editor');
+      if (a) return a;
+      const projectId = String(params.id);
+      const b = (await request.json()) as AIJobCreate;
+      const len = (s?: string) => new TextEncoder().encode(s ?? '').length;
+      if (!b.description?.trim() && !b.openapi && !b.har && !b.accessLog)
+        return err(
+          422,
+          'invalid',
+          'give at least one input: description, openapi, har or accessLog',
+        );
+      if (len(b.description?.trim()) > 20_000)
+        return err(422, 'invalid', 'description is longer than 20,000 characters');
+      if (len(b.openapi) > 5 << 20) return err(422, 'invalid', 'openapi is larger than 5 MiB');
+      if (len(b.har) > 20 << 20 || len(b.accessLog) > 20 << 20)
+        return err(422, 'invalid', 'har and accessLog are limited to 20 MiB each');
+      const dryRun = b.dryRun ?? true;
+      const t = b.targetId
+        ? db.targets.find((x) => x.id === b.targetId && x.projectId === projectId)
+        : undefined;
+      if (b.targetId && !t) return err(422, 'invalid', 'target not found in this project');
+      if (!t && dryRun)
+        return err(422, 'invalid', 'targetId is required for the dry run (or set dryRun to false)');
+      if (
+        b.scenarioId &&
+        !db.scenarios.some((s) => s.id === b.scenarioId && s.projectId === projectId)
+      )
+        return err(422, 'invalid', 'scenario not found in this project');
+      let prov = b.providerId ? db.aiProviders.find((p) => p.id === b.providerId) : undefined;
+      if (b.providerId && !prov) return err(422, 'invalid', 'AI provider not found');
+      if (!prov) {
+        if (db.aiProviders.length === 0)
+          return err(
+            409,
+            'conflict',
+            'no AI provider is configured; an admin can add one with POST /ai/providers',
+          );
+        prov =
+          db.aiProviders.length === 1
+            ? db.aiProviders[0]
+            : db.aiProviders.find((p) => p.name === 'default');
+        if (!prov)
+          return err(
+            422,
+            'invalid',
+            'several AI providers are configured; choose one with providerId',
+          );
+      }
+      if (prov.usedTokensThisMonth >= prov.monthlyTokenCap)
+        return err(
+          429,
+          'ai_token_cap',
+          `the organisation used ${prov.usedTokensThisMonth} AI tokens this month, which reaches the cap of ${prov.monthlyTokenCap} for provider ${prov.name}`,
+        );
+      const job: MockAIJob = {
+        id: uuid(),
+        projectId,
+        status: 'queued',
+        stage: '',
+        providerKind: prov.kind,
+        model: prov.model,
+        usage: { inputTokens: 0, outputTokens: 0 },
+        dryRun,
+        createdBy: me(db)!.email,
+        createdAt: new Date().toISOString(),
+        finishedAt: null,
+        approvedAt: null,
+        startedAt: null,
+        round: 0,
+        targetId: t?.id ?? null,
+        scenarioId: b.scenarioId ?? null,
+        problems: [],
+        journeys: [],
+        approvedScenarioId: null,
+        approvedVersion: null,
+        maxRepairs: b.maxRepairs ?? 3,
+      };
+      db.aiJobs.unshift(job);
+      return ok(aiPublic(job), 202);
+    }),
+    http.get(`${B}/ai/jobs/:id`, async ({ params }) => {
+      const a = await auth();
+      if (a) return a;
+      const j = db.aiJobs.find((x) => x.id === params.id);
+      if (!j) return notFound('AI job');
+      advance(j);
+      return ok(aiPublic(j));
+    }),
+    http.post(`${B}/ai/jobs/:id/approve`, async ({ params, request }) => {
+      const a = (await auth()) ?? need('editor');
+      if (a) return a;
+      const j = db.aiJobs.find((x) => x.id === params.id);
+      if (!j) return notFound('AI job');
+      advance(j);
+      const b = (await request.json()) as AIJobApprove;
+      if (j.approvedAt) return err(409, 'conflict', 'this job was already approved');
+      if (j.status === 'queued' || j.status === 'running')
+        return err(409, 'conflict', 'the job has not finished yet');
+      if (j.status === 'failed' || !j.yaml)
+        return err(409, 'conflict', 'the job failed and has no usable proposal');
+      if (j.status === 'needs_review' && !b.allowUnvalidated) {
+        const flagged = j.journeys.filter((x) => x.status === 'flagged').map((x) => x.name);
+        return err(
+          409,
+          'conflict',
+          `some journeys did not pass their dry run (${flagged.join(', ')}); review them and approve with allowUnvalidated`,
+        );
+      }
+      const targetId = b.scenarioId ?? j.scenarioId ?? undefined;
+      const msg = b.message?.trim() || `generated by AI job ${j.id} (${j.providerKind}/${j.model})`;
+      const an = analyse(j.yaml);
+      const now = new Date().toISOString();
+      let scenario: Scenario;
+      let version: number;
+      if (targetId) {
+        const s = db.scenarios.find((x) => x.id === targetId && x.projectId === j.projectId);
+        if (!s) return err(422, 'invalid', "scenario not found in the job's project");
+        version = s.latestVersion.version + 1;
+        const v = {
+          scenarioId: s.id,
+          version,
+          yaml: j.yaml,
+          message: msg,
+          createdBy: me(db)!.email,
+          createdAt: now,
+          ...(an.validation.plan ? { plan: an.validation.plan } : {}),
+        };
+        db.versions[s.id]!.unshift(v);
+        Object.assign(s, { latestVersion: v, updatedAt: now, tags: an.tags });
+        scenario = s;
+      } else {
+        if (db.scenarios.some((s) => s.projectId === j.projectId && s.name === an.name))
+          return err(
+            409,
+            'conflict',
+            `A scenario named ${an.name} already exists in this project.`,
+          );
+        const id = uuid();
+        version = 1;
+        const v = {
+          scenarioId: id,
+          version,
+          yaml: j.yaml,
+          message: msg,
+          createdBy: me(db)!.email,
+          createdAt: now,
+          ...(an.validation.plan ? { plan: an.validation.plan } : {}),
+        };
+        scenario = {
+          id,
+          projectId: j.projectId,
+          name: an.name ?? 'shop-generated',
+          ...(an.description ? { description: an.description } : {}),
+          tags: an.tags,
+          latestVersion: v,
+          createdAt: now,
+          updatedAt: now,
+        };
+        db.scenarios.push(scenario);
+        db.versions[id] = [v];
+      }
+      Object.assign(j, {
+        approvedAt: now,
+        approvedScenarioId: scenario.id,
+        approvedVersion: version,
+      });
+      return ok({ scenario, version }, 201);
     }),
   ];
 
