@@ -213,6 +213,18 @@ export interface Report {
   targetMetrics?: TargetMetric[];
   /** AI-written summary; every claim cites report figures. */
   narrative?: Narrative;
+  /** Faults a stampede agent injected during the run. */
+  faults?: FaultEvent[];
+}
+
+/** A fault injected during the run; start and end are seconds since it started. */
+export interface FaultEvent {
+  label: string;
+  kind: 'proxy' | 'container' | 'deployment';
+  target: string;
+  start: number;
+  end: number;
+  error?: string;
 }
 
 export const shapes = [

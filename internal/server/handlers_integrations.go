@@ -8,10 +8,12 @@ import (
 
 	"github.com/google/uuid"
 
+	"github.com/Ivan825/Stampede/internal/agent"
 	"github.com/Ivan825/Stampede/internal/api/gen"
 	"github.com/Ivan825/Stampede/internal/auth"
 	"github.com/Ivan825/Stampede/internal/keyring"
 	"github.com/Ivan825/Stampede/internal/observe"
+	"github.com/Ivan825/Stampede/internal/runner"
 	"github.com/Ivan825/Stampede/internal/scenario"
 	"github.com/Ivan825/Stampede/internal/store"
 	"github.com/Ivan825/Stampede/internal/store/db"
@@ -21,6 +23,7 @@ import (
 const (
 	integrationPrometheus = "prometheus"
 	integrationTraces     = "traces"
+	integrationAgent      = "agent"
 )
 
 func integrationAAD(org, id uuid.UUID) []byte {
@@ -84,8 +87,17 @@ func (h *handlers) CreateIntegration(ctx context.Context, req gen.CreateIntegrat
 		if token != "" {
 			return nil, errInvalid("a traces integration only builds links; it takes no bearerToken")
 		}
+	case integrationAgent:
+		raw = strings.TrimRight(raw, "/")
+		u, err := url.Parse(raw)
+		if err != nil || (u.Scheme != "http" && u.Scheme != "https") || u.Host == "" || u.User != nil {
+			return nil, errInvalid("url must be the agent's control API, for example http://agent.shop.svc:7070")
+		}
+		if token == "" {
+			return nil, errInvalid("an agent integration needs bearerToken: the agent's --token")
+		}
 	default:
-		return nil, errInvalid("kind must be prometheus or traces")
+		return nil, errInvalid("kind must be prometheus, traces or agent")
 	}
 
 	id := uuid.New()
@@ -198,4 +210,44 @@ func (h *handlers) observeFor(ctx context.Context, org uuid.UUID, o *scenario.Ob
 		}
 	}
 	return c, nil
+}
+
+// faultsFor resolves a server run's faults block. The agent must be an
+// agent integration: the server never contacts a URL written in a
+// scenario. The plan is checked against the agent before the run is
+// created, so a missing proxy or permission fails the request, not the run.
+func (h *handlers) faultsFor(ctx context.Context, org uuid.UUID, fs *scenario.Faults) (*runner.FaultPlan, error) {
+	if fs == nil {
+		return nil, nil
+	}
+	if fs.Agent.URL != "" || fs.Agent.Token != "" || fs.Agent.Integration == "" {
+		return nil, errInvalid("faults.agent: on the server, name an agent integration (faults.agent.integration) instead of a URL and token; the server only contacts URLs an admin configured")
+	}
+	row, err := h.st.GetIntegrationByName(ctx, db.GetIntegrationByNameParams{OrgID: org, Name: fs.Agent.Integration})
+	if store.IsNotFound(err) {
+		return nil, errInvalid(fmt.Sprintf("faults.agent.integration: no integration named %q; an admin adds integrations under Settings → Integrations", fs.Agent.Integration))
+	}
+	if err != nil {
+		return nil, err
+	}
+	if row.Kind != integrationAgent {
+		return nil, errInvalid(fmt.Sprintf("faults.agent.integration: integration %q is a %s integration, not agent", row.Name, row.Kind))
+	}
+	kr, err := h.keyring()
+	if err != nil {
+		return nil, err
+	}
+	sealed := keyring.Sealed{Ciphertext: row.Ciphertext, WrappedKey: row.WrappedKey}
+	if row.KeyID != nil {
+		sealed.KeyID = *row.KeyID
+	}
+	tok, err := kr.Open(sealed, integrationAAD(org, row.ID))
+	if err != nil {
+		return nil, fmt.Errorf("decrypt integration %q token: %w", row.Name, err)
+	}
+	plan := &runner.FaultPlan{Client: &agent.Client{BaseURL: row.Url, Token: string(tok)}, Steps: fs.Timeline}
+	if err := plan.Check(ctx); err != nil {
+		return nil, errInvalid(err.Error())
+	}
+	return plan, nil
 }

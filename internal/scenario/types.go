@@ -41,11 +41,14 @@ type Faults struct {
 	Timeline []FaultStep `yaml:"timeline" json:"timeline"`
 }
 
-// FaultAgent is where the agent's control API is. URL and Token may be
-// templated, for example ${env.AGENT_URL} and ${secret.AGENT_TOKEN}.
+// FaultAgent is where the agent's control API is. With stampede run, set
+// URL and Token (both may be templated, for example ${env.AGENT_URL} and
+// ${secret.AGENT_TOKEN}). On a server, name an agent integration instead:
+// the server only contacts URLs an admin configured.
 type FaultAgent struct {
-	URL   string `yaml:"url" json:"url"`
-	Token string `yaml:"token" json:"token"`
+	URL         string `yaml:"url,omitempty" json:"url,omitempty"`
+	Token       string `yaml:"token,omitempty" json:"token,omitempty"`
+	Integration string `yaml:"integration,omitempty" json:"integration,omitempty"`
 }
 
 // FaultStep is one fault: what to break, from At (after the load starts)

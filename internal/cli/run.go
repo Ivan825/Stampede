@@ -305,6 +305,9 @@ func faultPlan(s *scenario.Scenario, env, secrets map[string]string) (*runner.Fa
 	if fs == nil {
 		return nil, nil
 	}
+	if fs.Agent.Integration != "" {
+		return nil, fmt.Errorf("faults.agent.integration %q names a server integration; for stampede run set faults.agent.url and token instead", fs.Agent.Integration)
+	}
 	u, err := renderField(s, fs.Agent.URL, env, secrets)
 	if err != nil {
 		return nil, fmt.Errorf("faults.agent.url: %w (set it with -e)", err)

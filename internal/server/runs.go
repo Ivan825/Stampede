@@ -49,6 +49,8 @@ type activeRun struct {
 	done     chan struct{}
 	// obs is the run's resolved observe block (target metrics, trace links).
 	obs *observe.Config
+	// faults is the run's fault timeline, injected through an agent.
+	faults *runner.FaultPlan
 	// link ties the run's span to the request that started it.
 	link trace.Link
 }
@@ -193,6 +195,14 @@ func (m *runManager) execute(r *activeRun, spec ExecSpec, prog *scenario.Program
 		exec.Kill()
 	}
 	span.AddEvent("load started")
+	var faults *runner.FaultRun
+	if r.faults != nil {
+		t0 := time.Now()
+		if s, ok := exec.(interface{ T0() time.Time }); ok {
+			t0 = s.T0()
+		}
+		faults = r.faults.Start(context.WithoutCancel(ctx), t0, r.id.String(), m.s.log.With("run", r.id))
+	}
 	if err := m.s.st.MarkRunStarted(ctx, db.MarkRunStartedParams{ID: r.id, StartedAt: ptr(time.Now())}); err != nil {
 		m.s.log.Error("mark started", "run", r.id, "error", err)
 	}
@@ -227,6 +237,10 @@ func (m *runManager) execute(r *activeRun, spec ExecSpec, prog *scenario.Program
 	<-evDone
 
 	res, err := exec.Wait(ctx)
+	var faultEvents []report.FaultEvent
+	if faults != nil {
+		faultEvents = faults.Stop(time.Now())
+	}
 	if err != nil {
 		fail(err)
 		return
@@ -251,6 +265,7 @@ func (m *runManager) execute(r *activeRun, spec ExecSpec, prog *scenario.Program
 	}
 	rep := report.Build(in)
 	rep.Notes = append(rep.Notes, res.Notes...)
+	rep.Faults = faultEvents
 	if res.Annotate != nil {
 		res.Annotate(rep)
 	}

@@ -283,6 +283,40 @@ export function ReportView({
         </>
       )}
 
+      {report.faults && report.faults.length > 0 && (
+        <>
+          <SectionTitle>Injected faults</SectionTitle>
+          <Card>
+            <Table>
+              <thead>
+                <tr>
+                  <th>Fault</th>
+                  <th>Target</th>
+                  <th className="!text-right">From</th>
+                  <th className="!text-right">To</th>
+                  <th>Result</th>
+                </tr>
+              </thead>
+              <tbody>
+                {report.faults.map((f, i) => (
+                  <tr key={i}>
+                    <td>
+                      {f.label} <span className="text-xs text-muted">· {f.kind}</span>
+                    </td>
+                    <td className="font-mono text-xs">{f.target}</td>
+                    <td className="num text-right">{secs(f.start)}</td>
+                    <td className="num text-right">{secs(f.end)}</td>
+                    <td className={clsx('text-xs', f.error ? 'text-fail' : 'text-muted')}>
+                      {f.error ?? 'applied, then reverted'}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </Table>
+          </Card>
+        </>
+      )}
+
       <SectionTitle>Journeys and steps</SectionTitle>
       <Card>
         <Table className="[&_td]:text-right [&_td:first-child]:text-left [&_th]:text-right [&_th:first-child]:text-left">

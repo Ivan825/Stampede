@@ -100,6 +100,7 @@ type localExec struct {
 	done   chan struct{}
 	res    *engine.Result
 	err    error
+	t0     time.Time
 }
 
 // Start compiles the scenario and runs it on an in-process engine.
@@ -117,6 +118,7 @@ func (l *LocalExecutor) Start(ctx context.Context, spec ExecSpec) (Execution, er
 		snaps:  make(chan *metrics.Snapshot, 256),
 		events: make(chan ExecEvent, 16),
 		done:   make(chan struct{}),
+		t0:     time.Now(),
 	}
 	log := l.Logger
 	if log == nil {
@@ -127,7 +129,7 @@ func (l *LocalExecutor) Start(ctx context.Context, spec ExecSpec) (Execution, er
 		Env: spec.Env, Secrets: spec.Secrets,
 		AllowHost:  func(u *url.URL) bool { return policy.Allow(u) },
 		OnSnapshot: func(s *metrics.Snapshot) { x.snaps <- s },
-		Logger:     log.With("run", spec.RunID),
+		Logger:     log.With("run", spec.RunID), T0: x.t0,
 	})
 	if err != nil {
 		return nil, err
@@ -149,6 +151,9 @@ func (x *localExec) Snapshots() <-chan *metrics.Snapshot { return x.snaps }
 func (x *localExec) Events() <-chan ExecEvent            { return x.events }
 func (x *localExec) Stop(reason string)                  { x.eng.Stop(reason) }
 func (x *localExec) Kill()                               { x.eng.Kill() }
+
+// T0 is when load starts.
+func (x *localExec) T0() time.Time { return x.t0 }
 
 func (x *localExec) Wait(ctx context.Context) (*ExecResult, error) {
 	select {

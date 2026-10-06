@@ -115,10 +115,10 @@
         "agent": {
           "type": "object",
           "additionalProperties": false,
-          "required": ["url", "token"],
           "properties": {
-            "url": { "type": "string", "description": "The agent's control API, e.g. ${env.AGENT_URL}." },
-            "token": { "type": "string", "description": "The agent's token, e.g. ${secret.AGENT_TOKEN}." }
+            "url": { "type": "string", "description": "The agent's control API, e.g. ${env.AGENT_URL} (stampede run)." },
+            "token": { "type": "string", "description": "The agent's token, e.g. ${secret.AGENT_TOKEN} (stampede run)." },
+            "integration": { "type": "string", "description": "On a server: the name of an agent integration configured by an admin." }
           }
         },
         "timeline": {

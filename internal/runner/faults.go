@@ -82,8 +82,8 @@ func (p *FaultPlan) Check(ctx context.Context) error {
 	return nil
 }
 
-// faultRun applies a plan's steps on time during one run.
-type faultRun struct {
+// FaultRun applies a plan's steps on time during one run.
+type FaultRun struct {
 	plan   *FaultPlan
 	runID  string
 	t0     time.Time
@@ -95,9 +95,11 @@ type faultRun struct {
 	events []report.FaultEvent
 }
 
-func (p *FaultPlan) start(ctx context.Context, t0 time.Time, runID string, log *slog.Logger) *faultRun {
+// Start applies each step at t0 plus its offset. t0 may be in the future
+// (a distributed run starts a few seconds after it is scheduled).
+func (p *FaultPlan) Start(ctx context.Context, t0 time.Time, runID string, log *slog.Logger) *FaultRun {
 	ctx, cancel := context.WithCancel(ctx)
-	fr := &faultRun{plan: p, runID: runID, t0: t0, log: log, cancel: cancel}
+	fr := &FaultRun{plan: p, runID: runID, t0: t0, log: log, cancel: cancel}
 	for _, step := range p.Steps {
 		fr.wg.Add(1)
 		go func() {
@@ -113,7 +115,7 @@ func (p *FaultPlan) start(ctx context.Context, t0 time.Time, runID string, log *
 	return fr
 }
 
-func (fr *faultRun) apply(ctx context.Context, step scenario.FaultStep) {
+func (fr *FaultRun) apply(ctx context.Context, step scenario.FaultStep) {
 	req, err := request(step, fr.runID)
 	ev := report.FaultEvent{Label: step.Label(), Kind: string(req.Kind), Target: req.Target}
 	at := time.Since(fr.t0).Seconds()
@@ -132,10 +134,10 @@ func (fr *faultRun) apply(ctx context.Context, step scenario.FaultStep) {
 	fr.mu.Unlock()
 }
 
-// stop cancels faults not yet started, clears every fault of the run on
+// Stop cancels faults not yet started, clears every fault of the run on
 // the agent and returns what happened, in start order. Faults that would
 // have outlasted the run end when it ends.
-func (fr *faultRun) stop(end time.Time) []report.FaultEvent {
+func (fr *FaultRun) Stop(end time.Time) []report.FaultEvent {
 	fr.cancel()
 	fr.wg.Wait()
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)

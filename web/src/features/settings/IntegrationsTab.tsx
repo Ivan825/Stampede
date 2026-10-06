@@ -24,6 +24,7 @@ const nameRe = /^[A-Za-z0-9][A-Za-z0-9_.-]{0,99}$/;
 const urlHints: Record<IntegrationKind, string> = {
   prometheus: 'The Prometheus base URL, e.g. http://prometheus:9090.',
   traces: 'A link template containing {traceId}, e.g. https://jaeger.example.com/trace/{traceId}.',
+  agent: "A stampede agent's control API, e.g. http://agent.shop.svc:7070.",
 };
 
 function NewIntegrationDialog({
@@ -51,6 +52,10 @@ function NewIntegrationDialog({
       : form.kind === 'traces' && !form.url.includes('{traceId}')
         ? 'The template must contain {traceId}.'
         : undefined,
+    token:
+      form.kind === 'agent' && !form.token.trim()
+        ? "Enter the agent's token (its --token or STAMPEDE_AGENT_TOKEN)."
+        : undefined,
   };
   const show = (k: keyof typeof errors) => (touched ? errors[k] : undefined);
   const reset = () => {
@@ -67,9 +72,7 @@ function NewIntegrationDialog({
         name: form.name.trim(),
         kind: form.kind,
         url: form.url.trim(),
-        ...(form.kind === 'prometheus' && form.token.trim()
-          ? { bearerToken: form.token.trim() }
-          : {}),
+        ...(form.kind !== 'traces' && form.token.trim() ? { bearerToken: form.token.trim() } : {}),
       },
       {
         onSuccess: (i) => {
@@ -125,6 +128,7 @@ function NewIntegrationDialog({
               >
                 <option value="prometheus">Prometheus</option>
                 <option value="traces">Traces (link template)</option>
+                <option value="agent">Fault agent (stampede agent)</option>
               </Select>
             )}
           </Field>
@@ -139,8 +143,12 @@ function NewIntegrationDialog({
             />
           )}
         </Field>
-        {form.kind === 'prometheus' && (
-          <Field label="Bearer token (optional)" hint="Stored encrypted and never shown again.">
+        {form.kind !== 'traces' && (
+          <Field
+            label={form.kind === 'agent' ? 'Agent token' : 'Bearer token (optional)'}
+            error={show('token')}
+            hint="Stored encrypted and never shown again."
+          >
             {(p) => (
               <Input
                 {...p}
@@ -169,10 +177,15 @@ export function IntegrationsTab() {
         title="Integrations"
         description={
           <>
-            Prometheus to chart the target&apos;s own metrics in reports, and trace link templates
-            for the slowest requests. Reference them in a scenario with{' '}
+            Prometheus to chart the target&apos;s own metrics in reports, trace link templates for
+            the slowest requests, and fault agents that break dependencies during a run. Reference
+            them in a scenario with{' '}
             <code className="font-mono text-xs">
               observe: {'{'} prometheus: {'{'} integration: name, queries: … {'}'} {'}'}
+            </code>{' '}
+            or{' '}
+            <code className="font-mono text-xs">
+              faults: {'{'} agent: {'{'} integration: name {'}'}, timeline: … {'}'}
             </code>
             .
           </>
@@ -208,7 +221,11 @@ export function IntegrationsTab() {
               <tr key={i.id}>
                 <td className="font-mono text-xs font-medium">{i.name}</td>
                 <td>
-                  <Chip tone={i.kind === 'prometheus' ? 'info' : 'accent'}>{i.kind}</Chip>
+                  <Chip
+                    tone={i.kind === 'prometheus' ? 'info' : i.kind === 'agent' ? 'warn' : 'accent'}
+                  >
+                    {i.kind}
+                  </Chip>
                 </td>
                 <td className="max-w-80 truncate font-mono text-xs text-muted" title={i.url}>
                   {i.url}

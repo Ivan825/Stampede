@@ -101,14 +101,14 @@ func Run(ctx context.Context, o Options) (*report.Report, error) {
 	if err != nil {
 		return nil, err
 	}
-	var faults *faultRun
+	var faults *FaultRun
 	if o.Faults != nil {
-		faults = o.Faults.start(ctx, start, o.RunID, logger)
+		faults = o.Faults.Start(ctx, start, o.RunID, logger)
 	}
 	res, err := eng.Run(ctx)
 	var events []report.FaultEvent
 	if faults != nil {
-		events = faults.stop(time.Now())
+		events = faults.Stop(time.Now())
 	}
 	if err != nil {
 		return nil, err

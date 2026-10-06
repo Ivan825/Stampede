@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"strings"
+	"time"
 
 	"github.com/Ivan825/Stampede/internal/coordinator"
 	"github.com/Ivan825/Stampede/internal/metrics"
@@ -49,6 +50,9 @@ func (x *distExec) Snapshots() <-chan *metrics.Snapshot { return x.run.Snapshots
 func (x *distExec) Events() <-chan ExecEvent            { return x.events }
 func (x *distExec) Stop(reason string)                  { x.run.StopWithReason(reason) }
 func (x *distExec) Kill()                               { x.run.Kill() }
+
+// T0 is when the workers start load, a few seconds after scheduling.
+func (x *distExec) T0() time.Time { return x.run.T0() }
 
 func (x *distExec) Wait(ctx context.Context) (*ExecResult, error) {
 	res, err := x.run.Wait(ctx)

@@ -1384,13 +1384,13 @@ export interface components {
             version: number;
         };
         /** @enum {string} */
-        IntegrationKind: "prometheus" | "traces";
+        IntegrationKind: "prometheus" | "traces" | "agent";
         Integration: {
             /** Format: uuid */
             id: string;
             name: string;
             kind: components["schemas"]["IntegrationKind"];
-            /** @description Prometheus base URL, or for traces a link template containing {traceId}. */
+            /** @description Prometheus base URL, for traces a link template containing {traceId}, or a stampede agent's control API. */
             url: string;
             /** @description Whether a bearer token is stored. The token itself is never returned. */
             hasToken: boolean;
@@ -1405,9 +1405,10 @@ export interface components {
             /**
              * @description prometheus: the base URL, e.g. http://prometheus:9090. traces: a link
              *     template containing {traceId}, e.g. https://jaeger.example.com/trace/{traceId}.
+             *     agent: a stampede agent's control API, e.g. http://agent.shop.svc:7070.
              */
             url: string;
-            /** @description Prometheus only. Stored encrypted. */
+            /** @description Prometheus (optional) and agent (required). Stored encrypted. */
             bearerToken?: string;
         };
         /** @enum {string} */

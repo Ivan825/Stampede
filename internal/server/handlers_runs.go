@@ -149,6 +149,12 @@ func (h *handlers) CreateRun(ctx context.Context, req gen.CreateRunRequestObject
 	// Workers never need the observe block: the server queries and links
 	// after the run, so it is not sent to them.
 	s.Observe = nil
+	faults, err := h.faultsFor(ctx, p.OrgID, s.Faults)
+	if err != nil {
+		return nil, err
+	}
+	// Faults are injected by the server through the agent, never by workers.
+	s.Faults = nil
 
 	secrets, err := h.projectSecrets(ctx, pr.ID)
 	if err != nil {
@@ -185,7 +191,7 @@ func (h *handlers) CreateRun(ctx context.Context, req gen.CreateRunRequestObject
 		"run": id, "version": ver.Version, "peak": plan.Peak(), "mode": plan.Mode, "duration": plan.TotalDuration().String(),
 	})
 
-	h.runs.launch(&activeRun{id: id, org: p.OrgID, project: pr.ID, target: tg.ID, scenario: sc.ID, obs: obs, link: trace.LinkFromContext(ctx)},
+	h.runs.launch(&activeRun{id: id, org: p.OrgID, project: pr.ID, target: tg.ID, scenario: sc.ID, obs: obs, faults: faults, link: trace.LinkFromContext(ctx)},
 		ExecSpec{
 			RunID: id.String(), Scenario: s, YAML: yamlOut, Env: env, Secrets: secrets,
 			AllowHosts: tg.AllowHosts, TargetHost: tg.Host, Workers: workers,

@@ -181,15 +181,21 @@ func walkSteps(steps []Step, fn func(Step)) {
 
 func (s *Scenario) validateFaults(add func(path, format string, args ...any)) {
 	fs := s.Faults
-	if strings.TrimSpace(fs.Agent.URL) == "" {
-		add("faults.agent.url", "required: the agent's control API, e.g. ${env.AGENT_URL}")
-	} else if !strings.Contains(fs.Agent.URL, "${") {
-		if u, err := url.Parse(fs.Agent.URL); err != nil || (u.Scheme != "http" && u.Scheme != "https") || u.Host == "" {
-			add("faults.agent.url", "must be an absolute http(s) URL, got %q", fs.Agent.URL)
+	switch ag := fs.Agent; {
+	case ag.Integration != "" && (ag.URL != "" || ag.Token != ""):
+		add("faults.agent", "set either integration (on a server) or url and token (with stampede run), not both")
+	case ag.Integration != "":
+	case strings.TrimSpace(ag.URL) == "":
+		add("faults.agent.url", "required: the agent's control API, e.g. ${env.AGENT_URL} (or name an integration on a server)")
+	default:
+		if !strings.Contains(ag.URL, "${") {
+			if u, err := url.Parse(ag.URL); err != nil || (u.Scheme != "http" && u.Scheme != "https") || u.Host == "" {
+				add("faults.agent.url", "must be an absolute http(s) URL, got %q", ag.URL)
+			}
 		}
-	}
-	if strings.TrimSpace(fs.Agent.Token) == "" {
-		add("faults.agent.token", "required, e.g. ${secret.AGENT_TOKEN}")
+		if strings.TrimSpace(ag.Token) == "" {
+			add("faults.agent.token", "required with url, e.g. ${secret.AGENT_TOKEN}")
+		}
 	}
 	if len(fs.Timeline) == 0 {
 		add("faults.timeline", "add at least one fault")

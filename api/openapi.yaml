@@ -1748,8 +1748,8 @@ components:
 
     IntegrationKind:
       type: string
-      enum: [prometheus, traces]
-      x-enum-varnames: [IntegrationPrometheus, IntegrationTraces]
+      enum: [prometheus, traces, agent]
+      x-enum-varnames: [IntegrationPrometheus, IntegrationTraces, IntegrationAgent]
 
     Integration:
       type: object
@@ -1760,7 +1760,7 @@ components:
         kind: { $ref: "#/components/schemas/IntegrationKind" }
         url:
           type: string
-          description: Prometheus base URL, or for traces a link template containing {traceId}.
+          description: Prometheus base URL, for traces a link template containing {traceId}, or a stampede agent's control API.
         hasToken: { type: boolean, description: Whether a bearer token is stored. The token itself is never returned. }
         createdAt: { type: string, format: date-time }
         updatedAt: { type: string, format: date-time }
@@ -1776,7 +1776,8 @@ components:
           description: |
             prometheus: the base URL, e.g. http://prometheus:9090. traces: a link
             template containing {traceId}, e.g. https://jaeger.example.com/trace/{traceId}.
-        bearerToken: { type: string, description: Prometheus only. Stored encrypted. }
+            agent: a stampede agent's control API, e.g. http://agent.shop.svc:7070.
+        bearerToken: { type: string, description: "Prometheus (optional) and agent (required). Stored encrypted." }
 
     NotificationKind:
       type: string
