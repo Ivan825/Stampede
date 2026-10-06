@@ -67,14 +67,17 @@ export default defineConfig(({ mode }) => ({
           // preload helper) into whichever group happens to import them.
           includeDependenciesRecursively: false,
           groups: [
+            // Vite's preload helper is shared by every chunk with dynamic
+            // imports; keep it out of the app entry so vendor chunks never
+            // import app code.
+            { name: 'runtime', test: /vite\/preload-helper/ },
             { name: 'monaco', test: /node_modules[\\/].*(monaco-|vscode-|jsonc-parser)/ },
             { name: 'echarts', test: /node_modules[\\/].*(echarts|zrender)/ },
             { name: 'flow', test: /node_modules[\\/].*(@xyflow|d3-|classcat|zustand)/ },
+            { name: 'uplot', test: /node_modules[\\/].*uplot/ },
             { name: 'yaml', test: /node_modules[\\/].*[\\/]yaml[\\/]/ },
-            {
-              name: 'vendor',
-              test: /node_modules[\\/].*(react|scheduler|@tanstack|@radix-ui|@floating-ui|lucide|clsx|openapi-fetch|aria-hidden|tslib|use-sync)/,
-            },
+            // Everything else from node_modules (React, Router, Query, Radix…).
+            { name: 'vendor', test: /node_modules/ },
           ],
         },
       },

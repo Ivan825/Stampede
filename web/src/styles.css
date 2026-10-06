@@ -1,4 +1,5 @@
-@import 'tailwindcss';
+/* Only scan the app sources for class names, so docs never change the CSS. */
+@import 'tailwindcss' source('.');
 
 /*
  * Design tokens. Light is the default; dark follows the OS unless the user
