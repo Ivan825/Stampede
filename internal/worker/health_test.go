@@ -32,7 +32,7 @@ func TestEvaluateThresholds(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			h := evaluate(DefaultThresholds, tt.s, tt.cpuHigh, tt.lag, tt.dropped)
+			h := evaluate(DefaultThresholds, tt.s, tt.cpuHigh, tt.lag, lagIntervals, tt.dropped)
 			if h.Saturated != tt.saturate {
 				t.Fatalf("saturated=%v reasons=%v, want %v", h.Saturated, h.Reasons, tt.saturate)
 			}
@@ -51,7 +51,7 @@ func TestEvaluateThresholds(t *testing.T) {
 
 func TestEvaluateReportsEveryReason(t *testing.T) {
 	s := sysSample{cpuPercent: 99, cpuOK: true, gcPauseP99: 9 * time.Millisecond, openFDs: 99, fdLimit: 100}
-	h := evaluate(DefaultThresholds, s, 6*time.Second, 50*time.Millisecond, 7)
+	h := evaluate(DefaultThresholds, s, 6*time.Second, 50*time.Millisecond, lagIntervals, 7)
 	if !h.Saturated || len(h.Reasons) != 5 {
 		t.Errorf("reasons %v, want all five", h.Reasons)
 	}
@@ -80,8 +80,11 @@ func TestMonitorSamplesProcess(t *testing.T) {
 	if _, limit, ok := fdUsage(); ok && (h.FDLimit != limit || h.OpenFDs == 0) {
 		t.Errorf("fds %d of %d", h.OpenFDs, h.FDLimit)
 	}
+	if got := m.observe(20*time.Millisecond, 0); got.Saturated {
+		t.Errorf("one interval of 20ms lag should not saturate yet: %+v", got)
+	}
 	if got := m.observe(20*time.Millisecond, 0); !got.Saturated {
-		t.Errorf("20ms scheduling lag should saturate: %+v", got)
+		t.Errorf("20ms scheduling lag for two intervals should saturate: %+v", got)
 	}
 	m.idle()
 	if got := m.current(); got.SchedLagP99 != 0 {
@@ -92,4 +95,15 @@ func TestMonitorSamplesProcess(t *testing.T) {
 func with(s sysSample, f func(*sysSample)) sysSample {
 	f(&s)
 	return s
+}
+
+func TestSingleLagIntervalIsNotSaturation(t *testing.T) {
+	h := evaluate(DefaultThresholds, sysSample{}, 0, 50*time.Millisecond, 1, 0)
+	if h.Saturated {
+		t.Errorf("one interval of lag should not count: %v", h.Reasons)
+	}
+	h = evaluate(DefaultThresholds, sysSample{}, 0, 50*time.Millisecond, 2, 0)
+	if !h.Saturated {
+		t.Error("sustained lag should count")
+	}
 }
