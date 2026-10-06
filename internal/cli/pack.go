@@ -118,7 +118,7 @@ func testPack(cmd *cobra.Command, p *pack.Pack, target string, envKV []string) e
 	}
 	env := packEnv(target, envKV)
 	if missing := missingVariables(p, env); len(missing) > 0 {
-		return fmt.Errorf("the %s pack also needs %s: add -e %s=...", p.Name, strings.Join(missing, ", "), missing[0])
+		return fmt.Errorf("the %s pack also needs %s (add -e %s=<value>)", p.Name, strings.Join(missing, ", "), missing[0])
 	}
 	tmp, err := os.MkdirTemp("", "stampede-pack-")
 	if err != nil {

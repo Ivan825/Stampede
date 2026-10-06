@@ -49,7 +49,7 @@ func (l *lab) connect(t *testing.T, id, password string) (*thing, error) {
 		SetDefaultPublishHandler(func(_ paho.Client, m paho.Message) { d.got <- m })
 	d.client = paho.NewClient(opts)
 	if tok := d.client.Connect(); !tok.WaitTimeout(5*time.Second) || tok.Error() != nil {
-		return nil, fmt.Errorf("connect %s: %v", id, tok.Error())
+		return nil, fmt.Errorf("connect %s: %w", id, tok.Error())
 	}
 	t.Cleanup(func() { d.client.Disconnect(0) })
 	return d, nil
