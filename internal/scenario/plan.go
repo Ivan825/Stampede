@@ -209,11 +209,17 @@ func (l Load) shapeStages(p *Plan, parse func(string, string) (float64, error)) 
 			total += s.Duration
 		}
 		f := float64(l.Duration) / float64(total)
+		var sum time.Duration
 		for i := range stages {
-			stages[i].Duration = time.Duration(float64(stages[i].Duration) * f)
+			stages[i].Duration = time.Duration(float64(stages[i].Duration) * f).Round(time.Millisecond)
 			if stages[i].Duration < time.Second {
 				stages[i].Duration = time.Second
 			}
+			sum += stages[i].Duration
+		}
+		// Absorb rounding in the last stage so the total is exact.
+		if last := &stages[len(stages)-1]; last.Duration+l.Duration.D()-sum >= time.Second {
+			last.Duration += l.Duration.D() - sum
 		}
 		return stages
 	}
