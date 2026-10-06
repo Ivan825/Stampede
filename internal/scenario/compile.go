@@ -5,6 +5,7 @@ import (
 	"encoding/hex"
 	"fmt"
 	"regexp"
+	"slices"
 	"sort"
 	"strings"
 
@@ -61,6 +62,30 @@ type CStep struct {
 	// in Req.
 	GraphQL *CGraphQL
 	SSE     *CSSE
+	// WS is set for ws steps: Req holds the handshake and Steps run on
+	// the connection.
+	WS     *CWS
+	Send   *CSend
+	Expect *CExpect
+}
+
+// CWS is a compiled WebSocket block.
+type CWS struct {
+	Subprotocols []string
+}
+
+// CSend is a compiled WebSocket message: exactly one of Text and JSON.
+type CSend struct {
+	Text *Template
+	JSON *JSONTemplate
+}
+
+// CExpect is a compiled wait for a WebSocket message.
+type CExpect struct {
+	Match   *regexp.Regexp
+	JSON    []JSONCheck
+	Timeout Duration
+	Extract []Extractor
 }
 
 // CSSE says when a compiled server-sent events step stops reading.
@@ -181,6 +206,8 @@ func Compile(s *Scenario) (*Program, error) {
 type compiler struct {
 	prog *Program
 	errs []string
+	// inWS is set while compiling the steps of a ws block.
+	inWS bool
 }
 
 func (c *compiler) errf(path, format string, args ...any) {
@@ -296,6 +323,53 @@ func (c *compiler) step(path, journey string, st Step, vars []string) (*CStep, [
 		c.record(cs)
 	case StepSSE:
 		vars = c.sse(path, scope, cs, st.SSE, vars)
+		c.record(cs)
+	case StepWS:
+		w := st.WS
+		if c.inWS {
+			c.errf(path, "ws blocks cannot be nested; close the first connection before opening another")
+			break
+		}
+		if cs.Name == "" {
+			cs.Name = "WS " + w.URL
+		}
+		cs.Req, _ = c.request(path, "ws", scope, &Request{Method: "GET", URL: w.URL, Headers: w.Headers, Timeout: w.Timeout}, vars)
+		cs.WS = &CWS{Subprotocols: w.Subprotocols}
+		c.record(cs)
+		if len(w.Steps) == 0 {
+			c.errf(path, "ws needs steps to run on the connection")
+		}
+		c.inWS = true
+		cs.Steps, vars = c.steps(path, journey, w.Steps, vars)
+		c.inWS = false
+	case StepSend:
+		if !c.inWS {
+			c.errf(path, "send only works inside a ws block")
+		}
+		if cs.Name == "" {
+			cs.Name = "send"
+		}
+		cs.Send = &CSend{}
+		switch {
+		case st.Send.JSON != nil:
+			cs.Send.JSON = c.jsonTemplate(scope, path+".send", st.Send.JSON)
+		case st.Send.Text == "":
+			c.errf(path, "send needs a message")
+		default:
+			cs.Send.Text = c.template(scope, path+".send", st.Send.Text)
+		}
+		c.record(cs)
+	case StepExpect:
+		if !c.inWS {
+			c.errf(path, "expect only works inside a ws block")
+		}
+		cs.Expect, vars = c.expect(path, st.Expect, vars)
+		if cs.Name == "" {
+			cs.Name = "expect"
+			if st.Expect.Match != "" {
+				cs.Name += " " + st.Expect.Match
+			}
+		}
 		c.record(cs)
 	case StepThink:
 		cs.Think = st.Think
@@ -413,6 +487,69 @@ func (c *compiler) sse(path string, scope *Scope, cs *CStep, e *SSE, vars []stri
 	return vars
 }
 
+func (c *compiler) expect(path string, e *Expect, vars []string) (*CExpect, []string) {
+	ce := &CExpect{Timeout: e.Timeout}
+	if e.Match != "" {
+		re, err := regexp.Compile(e.Match)
+		if err != nil {
+			c.errf(path+".expect.match", "invalid regex: %v", err)
+		}
+		ce.Match = re
+	}
+	ce.JSON = c.jsonChecks(path+".expect.json", e.JSON)
+	ce.Extract, vars = c.extractors(path, e.Extract, vars, ExtractJSON, ExtractRegex, ExtractBody)
+	return ce, vars
+}
+
+// jsonChecks compiles JSONPath assertions, sorted by path.
+func (c *compiler) jsonChecks(path string, m map[string]any) []JSONCheck {
+	keys := make([]string, 0, len(m))
+	for k := range m {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+	var out []JSONCheck
+	for _, k := range keys {
+		g, err := JSONPathToGJSON(k)
+		if err != nil {
+			c.errf(path, "%v", err)
+			continue
+		}
+		jc := JSONCheck{Path: k, GJSON: g, Expected: normalizeYAML(m[k])}
+		if s, ok := jc.Expected.(string); ok && s == "exists" {
+			jc.Exists = true
+		}
+		out = append(out, jc)
+	}
+	return out
+}
+
+// extractors compiles extraction rules and adds their variables to vars.
+// allowed limits the extractor kinds when the step has no HTTP response
+// (a WebSocket message has no headers, cookies or status); none means all.
+func (c *compiler) extractors(path string, m map[string]string, vars []string, allowed ...string) ([]Extractor, []string) {
+	names := make([]string, 0, len(m))
+	for k := range m {
+		names = append(names, k)
+	}
+	sort.Strings(names)
+	var out []Extractor
+	for _, name := range names {
+		ex, err := ParseExtractor(name, m[name])
+		if err != nil {
+			c.errf(path+".extract."+name, "%v", err)
+			continue
+		}
+		if len(allowed) > 0 && !slices.Contains(allowed, ex.Kind) {
+			c.errf(path+".extract."+name, "%s extractors do not apply here; use $.path, regex: or body", ex.Kind)
+			continue
+		}
+		out = append(out, ex)
+		vars = dedupe(append(vars, name))
+	}
+	return out, vars
+}
+
 func (c *compiler) condition(scope *Scope, path, src string) *Expr {
 	src = strings.TrimSpace(src)
 	if strings.HasPrefix(src, "${") && strings.HasSuffix(src, "}") {
@@ -467,21 +604,7 @@ func (c *compiler) request(path, kind string, scope *Scope, r *Request, vars []s
 	if r.Check != nil {
 		cr.Check = c.check(path+".check", r.Check, vars)
 	}
-
-	names := make([]string, 0, len(r.Extract))
-	for k := range r.Extract {
-		names = append(names, k)
-	}
-	sort.Strings(names)
-	for _, name := range names {
-		ex, err := ParseExtractor(name, r.Extract[name])
-		if err != nil {
-			c.errf(path+".extract."+name, "%v", err)
-			continue
-		}
-		cr.Extract = append(cr.Extract, ex)
-		vars = dedupe(append(vars, name))
-	}
+	cr.Extract, vars = c.extractors(path, r.Extract, vars)
 	return cr, vars
 }
 
@@ -491,24 +614,8 @@ func (c *compiler) check(path string, ch *Check, vars []string) *CCheck {
 	if ch.BodyContains != "" {
 		cc.BodyContains = c.template(scope, path+".bodyContains", ch.BodyContains)
 	}
-	keys := make([]string, 0, len(ch.JSON))
-	for k := range ch.JSON {
-		keys = append(keys, k)
-	}
-	sort.Strings(keys)
-	for _, k := range keys {
-		g, err := JSONPathToGJSON(k)
-		if err != nil {
-			c.errf(path+".json", "%v", err)
-			continue
-		}
-		jc := JSONCheck{Path: k, GJSON: g, Expected: normalizeYAML(ch.JSON[k])}
-		if s, ok := jc.Expected.(string); ok && s == "exists" {
-			jc.Exists = true
-		}
-		cc.JSON = append(cc.JSON, jc)
-		cc.NeedsJSON = true
-	}
+	cc.JSON = c.jsonChecks(path+".json", ch.JSON)
+	cc.NeedsJSON = len(cc.JSON) > 0
 	if ch.Expr != "" {
 		rs, err := NewResponseScope(vars...)
 		if err != nil {

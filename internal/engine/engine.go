@@ -84,12 +84,15 @@ type Engine struct {
 	feeders         map[string]*feeder
 	journeyFeeders  [][]string
 	sharedTransport *http.Transport
-	httpOpts        httpx.Options
-	baseURL         string
-	headers         []headerKV
-	userAgent       string
-	maxBody         int64
-	allowHost       func(*url.URL) bool
+	// wsTransport makes WebSocket handshakes. It never negotiates HTTP/2,
+	// which cannot carry a WebSocket upgrade.
+	wsTransport *http.Transport
+	httpOpts    httpx.Options
+	baseURL     string
+	headers     []headerKV
+	userAgent   string
+	maxBody     int64
+	allowHost   func(*url.URL) bool
 
 	t0        time.Time
 	activeVUs atomic.Int64
@@ -200,6 +203,9 @@ func New(opts Options) (*Engine, error) {
 	if h.Connections == "shared" {
 		e.sharedTransport = httpx.NewTransport(e.httpOpts)
 	}
+	wsOpts := e.httpOpts
+	wsOpts.HTTP2, wsOpts.H2C = false, false
+	e.wsTransport = httpx.NewTransport(wsOpts)
 
 	if e.prog.BaseURL != nil {
 		v := &vuVars{env: opts.Env, secret: opts.Secrets, static: s.Vars}
@@ -244,6 +250,14 @@ func walkCompiled(steps []*scenario.CStep, fn func(string)) {
 			}
 			if r.JSON != nil {
 				fn(r.JSON.Source())
+			}
+		}
+		if sd := st.Send; sd != nil {
+			if sd.Text != nil {
+				fn(sd.Text.String())
+			}
+			if sd.JSON != nil {
+				fn(sd.JSON.Source())
 			}
 		}
 		if g := st.GraphQL; g != nil {

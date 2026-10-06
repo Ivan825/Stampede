@@ -39,6 +39,8 @@ type VU struct {
 	rng    *rand.Rand
 	// trace context for the current iteration
 	traceID [16]byte
+	// ws is the connection of the ws block being run, if any.
+	ws *wsConn
 }
 
 func newVU(e *Engine, id int) *VU {
@@ -154,6 +156,12 @@ func (v *VU) runStep(ctx context.Context, st *scenario.CStep, intended time.Time
 		return v.graphql(ctx, st, intended)
 	case scenario.StepSSE:
 		return v.sse(ctx, st, intended)
+	case scenario.StepWS:
+		return v.websocket(ctx, st, intended)
+	case scenario.StepSend:
+		return v.wsSend(ctx, st)
+	case scenario.StepExpect:
+		return v.wsExpect(ctx, st)
 	case scenario.StepThink:
 		return sleepCtx(ctx, v.think(st.Think))
 	case scenario.StepBranch:

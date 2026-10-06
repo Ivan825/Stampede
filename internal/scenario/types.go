@@ -120,6 +120,9 @@ const (
 	StepScript  StepKind = "script"
 	StepGraphQL StepKind = "graphql"
 	StepSSE     StepKind = "sse"
+	StepWS      StepKind = "ws"
+	StepSend    StepKind = "send"
+	StepExpect  StepKind = "expect"
 )
 
 // Step is one action within a journey. Exactly one kind-specific field is
@@ -141,6 +144,9 @@ type Step struct {
 	Script  string
 	GraphQL *GraphQL
 	SSE     *SSE
+	WS      *WebSocket
+	Send    *Send
+	Expect  *Expect
 }
 
 // Request is an HTTP call.
@@ -192,6 +198,38 @@ type SSEUntil struct {
 	Events   int      `yaml:"events,omitempty" json:"events,omitempty"`
 	Match    string   `yaml:"match,omitempty" json:"match,omitempty"`
 	Duration Duration `yaml:"duration,omitempty" json:"duration,omitempty"`
+}
+
+// WebSocket opens a connection, runs Steps with it and closes it when they
+// finish (or the iteration fails). URL may be ws://, wss://, http(s):// or
+// a path joined to the base URL. Inside Steps, send and expect steps use
+// the connection; any other step kind may be mixed in.
+type WebSocket struct {
+	URL          string
+	Headers      map[string]string
+	Subprotocols []string
+	// Timeout bounds the opening handshake.
+	Timeout Duration
+	Steps   []Step
+}
+
+// Send writes one text message: Text is a template, JSON a JSON template
+// sent as text.
+type Send struct {
+	Text string
+	JSON any
+}
+
+// Expect waits for a message that matches every condition given; other
+// messages are skipped. With no condition the next message matches.
+type Expect struct {
+	// Match is a regex over the message.
+	Match string `yaml:"match,omitempty" json:"match,omitempty"`
+	// JSON maps a JSONPath to the expected value, or "exists".
+	JSON    map[string]any `yaml:"json,omitempty" json:"json,omitempty"`
+	Timeout Duration       `yaml:"timeout,omitempty" json:"timeout,omitempty"`
+	// Extract reads variables from the matching message.
+	Extract map[string]string `yaml:"-" json:"-"`
 }
 
 // Branch is one weighted alternative inside a branch step.
