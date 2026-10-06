@@ -51,6 +51,9 @@ type HTTPOptions struct {
 	Connections string `yaml:"connections,omitempty" json:"connections,omitempty"`
 	// HTTP2 enables HTTP/2 over TLS when the server offers it.
 	HTTP2 bool `yaml:"http2,omitempty" json:"http2,omitempty"`
+	// H2C speaks HTTP/2 without TLS to http:// targets, with prior
+	// knowledge rather than an upgrade from HTTP/1.1.
+	H2C bool `yaml:"h2c,omitempty" json:"h2c,omitempty"`
 	// DisableKeepAlive opens a new connection for every request.
 	DisableKeepAlive bool `yaml:"disableKeepAlive,omitempty" json:"disableKeepAlive,omitempty"`
 	// InsecureSkipVerify disables TLS certificate checks (test targets only).

@@ -182,6 +182,7 @@ func New(opts Options) (*Engine, error) {
 	h := s.Target.HTTP
 	e.httpOpts = opts.HTTP
 	e.httpOpts.HTTP2 = e.httpOpts.HTTP2 || h.HTTP2
+	e.httpOpts.H2C = e.httpOpts.H2C || h.H2C
 	e.httpOpts.DisableKeepAlive = e.httpOpts.DisableKeepAlive || h.DisableKeepAlive
 	e.httpOpts.InsecureSkipVerify = e.httpOpts.InsecureSkipVerify || h.InsecureSkipVerify
 	if e.httpOpts.MaxRedirects == 0 {

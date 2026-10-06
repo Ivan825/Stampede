@@ -23,7 +23,10 @@ import (
 
 // Options configures a client.
 type Options struct {
-	HTTP2              bool
+	HTTP2 bool
+	// H2C speaks HTTP/2 without TLS to http:// URLs, with prior knowledge
+	// (no upgrade from HTTP/1.1), as gRPC and many internal services do.
+	H2C                bool
 	DisableKeepAlive   bool
 	InsecureSkipVerify bool
 	// MaxRedirects: 0 means the default of 10, negative disables following.
@@ -49,10 +52,10 @@ func NewTransport(o Options) *http.Transport {
 			dial = o.DNS.DialContext(d)
 		}
 	}
-	return &http.Transport{
+	t := &http.Transport{
 		Proxy:                 nil,
 		DialContext:           dial,
-		ForceAttemptHTTP2:     o.HTTP2,
+		ForceAttemptHTTP2:     o.HTTP2 || o.H2C,
 		DisableKeepAlives:     o.DisableKeepAlive,
 		DisableCompression:    false,
 		MaxIdleConns:          0,
@@ -67,6 +70,15 @@ func NewTransport(o Options) *http.Transport {
 			MinVersion:         tls.VersionTLS12,
 		},
 	}
+	if o.H2C {
+		// Without HTTP1 in the set, http:// URLs use HTTP/2 with prior
+		// knowledge; https:// URLs still negotiate HTTP/2 over TLS.
+		p := new(http.Protocols)
+		p.SetUnencryptedHTTP2(true)
+		p.SetHTTP2(true)
+		t.Protocols = p
+	}
+	return t
 }
 
 // NewClient wraps a transport with a fresh cookie jar and redirect policy.
@@ -108,6 +120,9 @@ type Result struct {
 	Proto    string
 	Reused   bool
 	Err      error
+
+	// wrote and firstByte are trace timestamps used by Finish.
+	wrote, firstByte time.Time
 }
 
 // Do sends req and reads the response. Up to maxBody bytes are kept in
@@ -115,8 +130,38 @@ type Result struct {
 // can be reused and download time is measured fully. keepBody=false
 // discards the whole body.
 func Do(c *http.Client, req *http.Request, bodyLen int64, keepBody bool, maxBody int64) *Result {
+	r, resp := Open(c, req, bodyLen)
+	if resp == nil {
+		return r
+	}
+	var (
+		n   int64
+		err error
+	)
+	if keepBody {
+		lr := io.LimitReader(resp.Body, maxBody)
+		r.Body, err = io.ReadAll(lr)
+		n = int64(len(r.Body))
+		if err == nil {
+			var rest int64
+			rest, err = io.Copy(io.Discard, resp.Body)
+			n += rest
+		}
+	} else {
+		n, err = io.Copy(io.Discard, resp.Body)
+	}
+	resp.Body.Close()
+	r.Finish(n, err)
+	return r
+}
+
+// Open sends req and returns once the response headers have arrived, for
+// drivers that read a streamed body themselves. When the response is
+// non-nil the caller must read and close its body, then call Finish. On a
+// transport error the response is nil and the Result is complete.
+func Open(c *http.Client, req *http.Request, bodyLen int64) (*Result, *http.Response) {
 	r := &Result{}
-	var dnsStart, connStart, tlsStart, wrote, firstByte time.Time
+	var dnsStart, connStart, tlsStart time.Time
 	trace := &httptrace.ClientTrace{
 		DNSStart: func(httptrace.DNSStartInfo) { dnsStart = time.Now() },
 		DNSDone: func(httptrace.DNSDoneInfo) {
@@ -137,8 +182,8 @@ func Do(c *http.Client, req *http.Request, bodyLen int64, keepBody bool, maxBody
 			}
 		},
 		GotConn:              func(info httptrace.GotConnInfo) { r.Reused = info.Reused },
-		WroteRequest:         func(httptrace.WroteRequestInfo) { wrote = time.Now() },
-		GotFirstResponseByte: func() { firstByte = time.Now() },
+		WroteRequest:         func(httptrace.WroteRequestInfo) { r.wrote = time.Now() },
+		GotFirstResponseByte: func() { r.firstByte = time.Now() },
 	}
 	req = req.WithContext(httptrace.WithClientTrace(req.Context(), trace))
 
@@ -147,40 +192,31 @@ func Do(c *http.Client, req *http.Request, bodyLen int64, keepBody bool, maxBody
 	if err != nil {
 		r.End = time.Now()
 		r.Err = err
-		return r
+		return r, nil
 	}
 	r.Status = resp.StatusCode
 	r.Header = resp.Header
 	r.Cookies = resp.Cookies()
 	r.Proto = resp.Proto
 	r.BytesOut = estimateRequestSize(req, bodyLen)
+	r.BytesIn = estimateHeaderSize(resp.Header) + int64(len(resp.Proto)+len(resp.Status)+4)
+	return r, resp
+}
 
-	if keepBody {
-		lr := io.LimitReader(resp.Body, maxBody)
-		r.Body, err = io.ReadAll(lr)
-		r.BytesIn = int64(len(r.Body))
-		if err == nil {
-			n, cerr := io.Copy(io.Discard, resp.Body)
-			r.BytesIn += n
-			err = cerr
-		}
-	} else {
-		r.BytesIn, err = io.Copy(io.Discard, resp.Body)
-	}
-	resp.Body.Close()
+// Finish ends an exchange started by Open: bodyBytes were read from the
+// response body and err is the error that stopped reading, if any.
+func (r *Result) Finish(bodyBytes int64, err error) {
 	r.End = time.Now()
-	r.BytesIn += estimateHeaderSize(resp.Header) + int64(len(resp.Proto)+len(resp.Status)+4)
+	r.BytesIn += bodyBytes
 	if err != nil {
 		r.Err = err
 	}
-
-	if !firstByte.IsZero() {
-		if !wrote.IsZero() && firstByte.After(wrote) {
-			r.Phases[metrics.PhaseWait] = firstByte.Sub(wrote)
+	if !r.firstByte.IsZero() {
+		if !r.wrote.IsZero() && r.firstByte.After(r.wrote) {
+			r.Phases[metrics.PhaseWait] = r.firstByte.Sub(r.wrote)
 		}
-		r.Phases[metrics.PhaseDownload] = r.End.Sub(firstByte)
+		r.Phases[metrics.PhaseDownload] = r.End.Sub(r.firstByte)
 	}
-	return r
 }
 
 func estimateHeaderSize(h http.Header) int64 {
