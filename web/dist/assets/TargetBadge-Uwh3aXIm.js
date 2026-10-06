@@ -1,0 +1,1 @@
+import{Ht as e}from"./vendor-D0c08-PN.js";import{o as t}from"./index-2KlJi6uy.js";var n=e();function r({target:e}){return e.private?(0,n.jsx)(t,{tone:`info`,children:`private`}):e.verified?(0,n.jsx)(t,{tone:`pass`,children:`verified`}):(0,n.jsx)(t,{tone:`warn`,children:`unverified`})}export{r as t};
