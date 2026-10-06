@@ -188,6 +188,20 @@ What works today:
   provider keys encrypted, enforces a monthly token cap, and saves a
   scenario version only through an explicit, audited approve call.
 
+## Deploy
+
+| How | Guide | State |
+|---|---|---|
+| Docker Compose, one machine | [docs/deploy/compose.md](docs/deploy/compose.md) | `docker compose up -d` at the repository root |
+| Kubernetes, Helm chart | [docs/deploy/helm.md](docs/deploy/helm.md) | tested on kind: install, `helm test`, a distributed run |
+| Kubernetes operator (`StampedeCluster`, `StampedeRun`) | [docs/deploy/operator.md](docs/deploy/operator.md) | alpha, envtest-tested |
+| Workers in several AWS/GCP regions, Terraform | [docs/deploy/terraform.md](docs/deploy/terraform.md) | validated, not yet applied |
+| Upgrades, backups, restores | [docs/deploy/upgrades.md](docs/deploy/upgrades.md) | |
+
+Releases (binaries for Linux, macOS and Windows, signed multi-arch images
+on `ghcr.io/ivan825/stampede`, Homebrew and Scoop) are built by GoReleaser
+from version tags; none has been published yet.
+
 ## Building from source
 
 ```sh
