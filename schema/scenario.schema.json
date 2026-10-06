@@ -35,7 +35,8 @@
             "http2": { "type": "boolean" },
             "disableKeepAlive": { "type": "boolean" },
             "insecureSkipVerify": { "type": "boolean", "description": "Skip TLS certificate checks (test targets only)." },
-            "maxRedirects": { "type": "integer", "description": "0 = default 10, -1 = do not follow." }
+            "maxRedirects": { "type": "integer", "description": "0 = default 10, -1 = do not follow." },
+            "dnsCacheTTL": { "$ref": "#/$defs/duration", "description": "Reuse DNS answers across connections for this long (default 30s; 0s disables)." }
           }
         }
       }

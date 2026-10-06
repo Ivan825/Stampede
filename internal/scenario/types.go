@@ -55,6 +55,9 @@ type HTTPOptions struct {
 	DisableKeepAlive bool `yaml:"disableKeepAlive,omitempty" json:"disableKeepAlive,omitempty"`
 	// InsecureSkipVerify disables TLS certificate checks (test targets only).
 	InsecureSkipVerify bool `yaml:"insecureSkipVerify,omitempty" json:"insecureSkipVerify,omitempty"`
+	// DNSCacheTTL is how long a host name lookup is reused across
+	// connections (default 30s). Set "0s" to resolve on every connection.
+	DNSCacheTTL *Duration `yaml:"dnsCacheTTL,omitempty" json:"dnsCacheTTL,omitempty"`
 	// MaxRedirects caps followed redirects (default 10, 0 keeps the default,
 	// -1 disables following).
 	MaxRedirects int `yaml:"maxRedirects,omitempty" json:"maxRedirects,omitempty"`

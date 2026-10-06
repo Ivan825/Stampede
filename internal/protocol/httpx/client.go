@@ -32,6 +32,8 @@ type Options struct {
 	MaxConnsPerHost int
 	// Dialer allows tests and network emulation to replace dialing.
 	DialContext func(ctx context.Context, network, addr string) (net.Conn, error)
+	// DNS caches lookups across connections; nil resolves on every dial.
+	DNS *DNSCache
 }
 
 var sessionCache = tls.NewLRUClientSessionCache(4096)
@@ -43,6 +45,9 @@ func NewTransport(o Options) *http.Transport {
 	if dial == nil {
 		d := &net.Dialer{Timeout: 10 * time.Second, KeepAlive: 30 * time.Second}
 		dial = d.DialContext
+		if o.DNS != nil {
+			dial = o.DNS.DialContext(d)
+		}
 	}
 	return &http.Transport{
 		Proxy:                 nil,

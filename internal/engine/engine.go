@@ -184,6 +184,15 @@ func New(opts Options) (*Engine, error) {
 	if e.httpOpts.MaxRedirects == 0 {
 		e.httpOpts.MaxRedirects = h.MaxRedirects
 	}
+	if e.httpOpts.DialContext == nil && e.httpOpts.DNS == nil {
+		ttl := 30 * time.Second
+		if h.DNSCacheTTL != nil {
+			ttl = h.DNSCacheTTL.D()
+		}
+		if ttl > 0 {
+			e.httpOpts.DNS = httpx.NewDNSCache(ttl)
+		}
+	}
 	if h.Connections == "shared" {
 		e.sharedTransport = httpx.NewTransport(e.httpOpts)
 	}
