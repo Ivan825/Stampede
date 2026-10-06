@@ -266,7 +266,9 @@ export function AIProvidersTab() {
                 Used / cap this month
               </th>
               <th>Updated</th>
-              <th className="sr-only">Actions</th>
+              <th>
+                <span className="sr-only">Actions</span>
+              </th>
             </tr>
           </thead>
           <tbody>

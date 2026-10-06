@@ -171,6 +171,7 @@ function journeys(base: string, checkoutPassed: boolean, attempts: number): AIJo
         requestHeaders: { 'Content-Type': 'application/json', Authorization: '[redacted]' },
         requestBody: '{"items":[12]}',
         responseBody: '{"error":"shippingAddress is required"}',
+        checks: [{ name: 'status 201', ok: false, detail: 'got 422' }],
         error: 'check failed: status 201 expected, got 422',
       });
   return [
