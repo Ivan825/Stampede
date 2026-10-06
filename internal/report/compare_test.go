@@ -2,6 +2,7 @@ package report
 
 import (
 	"bytes"
+	"encoding/json"
 	"strings"
 	"testing"
 )
@@ -82,5 +83,58 @@ func TestCompareIgnoresSubMillisecondShifts(t *testing.T) {
 	b := []*Report{fake(0.0026, 100), fake(0.0026, 100), fake(0.0026, 100)} // +30% but only 0.6ms
 	if v := find(Compare(a, b, "a", "b"), "p95").Verdict; v != CmpNoChange {
 		t.Errorf("p95 verdict %s", v)
+	}
+}
+
+func withStep(r *Report, journey, step string, p95, errRate float64) *Report {
+	st := Step{Name: step}
+	st.Stats.Requests = 100
+	st.Stats.Latency.P95 = p95
+	st.Stats.ErrorRate = errRate
+	r.Journeys = append(r.Journeys, Journey{Name: journey, Steps: []Step{st}})
+	return r
+}
+
+func TestCompareSteps(t *testing.T) {
+	a := []*Report{
+		withStep(fake(0.1, 100), "buy", "POST /cart", 0.10, 0),
+		withStep(fake(0.1, 100), "buy", "POST /cart", 0.11, 0),
+		withStep(fake(0.1, 100), "buy", "POST /cart", 0.10, 0),
+	}
+	b := []*Report{
+		withStep(fake(0.1, 100), "buy", "POST /cart", 0.30, 0.02),
+		withStep(fake(0.1, 100), "buy", "POST /cart", 0.31, 0.03),
+		withStep(fake(0.1, 100), "buy", "POST /cart", 0.29, 0.02),
+	}
+	c := Compare(a, b, "v1", "v2")
+	if len(c.Steps) != 1 || c.Steps[0].Journey != "buy" || c.Steps[0].Step != "POST /cart" {
+		t.Fatalf("steps %+v", c.Steps)
+	}
+	if v := c.Steps[0].Metrics[0].Verdict; v != CmpRegression {
+		t.Errorf("step p95 verdict %s", v)
+	}
+	// Steps are informational: the overall figures did not change.
+	if c.Verdict != CmpNoChange {
+		t.Errorf("verdict %s", c.Verdict)
+	}
+	// An error rate that rises from zero is an infinite relative change,
+	// which the JSON writes as null.
+	raw, err := json.Marshal(c)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var back struct {
+		Steps []struct {
+			Metrics []map[string]any `json:"metrics"`
+		} `json:"steps"`
+	}
+	if err := json.Unmarshal(raw, &back); err != nil {
+		t.Fatal(err)
+	}
+	if v, ok := back.Steps[0].Metrics[1]["change"]; !ok || v != nil {
+		t.Errorf("infinite change should be null: %v", back.Steps[0].Metrics[1])
+	}
+	if back.Steps[0].Metrics[0]["change"] == nil || back.Steps[0].Metrics[0]["name"] != "p95" {
+		t.Errorf("finite change missing: %v", back.Steps[0].Metrics[0])
 	}
 }
