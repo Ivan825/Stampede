@@ -1,7 +1,7 @@
 import { useEffect, useRef } from 'react';
 import uPlot from 'uplot';
 import { cssVar, useIsDark } from '@/components/misc';
-import { secs } from '@/lib/format';
+import { clock } from '@/lib/format';
 
 export interface LiveSeries {
   label: string;
@@ -63,7 +63,7 @@ export function LiveChart({
     const opts: uPlot.Options = {
       width: el.clientWidth || 600,
       height,
-      padding: [8, 4, 0, 0],
+      padding: [8, 16, 0, 0],
       legend: { show: false },
       cursor: { points: { size: 6 }, drag: { x: false, y: false } },
       scales: {
@@ -77,7 +77,7 @@ export function LiveChart({
           grid: { show: false },
           ticks: { show: false },
           font: '11px ui-monospace, Menlo, monospace',
-          values: (_u, vals) => vals.map((v) => (v == null ? '' : secs(v))),
+          values: (_u, vals) => vals.map((v) => (v == null ? '' : clock(v))),
         },
         axis(leftFmt),
         ...(hasRight && rightFmt ? [{ ...axis(rightFmt, 1), scale: 'r' }] : []),

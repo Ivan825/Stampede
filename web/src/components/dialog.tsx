@@ -73,7 +73,9 @@ export function Confirm({
   onConfirm,
   open: controlledOpen,
   onOpenChange,
+  width = 'max-w-md',
 }: {
+  width?: string;
   trigger?: ReactNode;
   title: ReactNode;
   description: ReactNode;
@@ -109,7 +111,7 @@ export function Confirm({
       {trigger && <AlertDialog.Trigger asChild>{trigger}</AlertDialog.Trigger>}
       <AlertDialog.Portal>
         <AlertDialog.Overlay className={overlay} />
-        <AlertDialog.Content className={clsx(content, 'max-w-md')}>
+        <AlertDialog.Content className={clsx(content, width)}>
           <div className="px-4 pt-4">
             <AlertDialog.Title className="text-[15px] font-semibold">{title}</AlertDialog.Title>
             <AlertDialog.Description asChild>

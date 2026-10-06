@@ -16,6 +16,7 @@
   --primary: #c2410c;
   --primary-hover: #a8380a;
   --primary-fg: #ffffff;
+  --danger-fg: #ffffff;
   --pass: #127242;
   --fail: #b42323;
   --warn: #8a5700;
@@ -46,6 +47,7 @@
     --primary: #ff7a2f;
     --primary-hover: #ff9152;
     --primary-fg: #12161a;
+    --danger-fg: #12161a;
     --pass: #3ccb7f;
     --fail: #ff5c5c;
     --warn: #f5b841;
@@ -76,6 +78,7 @@
   --primary: #ff7a2f;
   --primary-hover: #ff9152;
   --primary-fg: #12161a;
+  --danger-fg: #12161a;
   --pass: #3ccb7f;
   --fail: #ff5c5c;
   --warn: #f5b841;
@@ -105,6 +108,7 @@
   --color-primary: var(--primary);
   --color-primary-hover: var(--primary-hover);
   --color-primary-fg: var(--primary-fg);
+  --color-danger-fg: var(--danger-fg);
   --color-pass: var(--pass);
   --color-fail: var(--fail);
   --color-warn: var(--warn);

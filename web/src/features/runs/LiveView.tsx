@@ -3,7 +3,7 @@ import { AlertTriangle, Info, Radio, ServerCrash, WifiOff } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 import type { Point, Run, RunEvent } from '@/api/types';
 import { Card, CardHeader, Stat } from '@/components/ui';
-import { clock, count, ms, num, pct, rate } from '@/lib/format';
+import { axisMs, axisPct, clock, count, ms, num, pct, rate } from '@/lib/format';
 import type { StreamState } from '@/lib/useRunStream';
 import { LiveChart, type LiveSeries } from './LiveChart';
 
@@ -199,8 +199,8 @@ export function LiveView({
           leftFmt={perSec}
           rightFmt={vusFmt}
         />
-        <LiveChart title="Latency" xs={xs} series={latency} leftFmt={ms} />
-        <LiveChart title="Error rate" xs={xs} series={errors} leftFmt={percent} height={150} />
+        <LiveChart title="Latency" xs={xs} series={latency} leftFmt={axisMs} />
+        <LiveChart title="Error rate" xs={xs} series={errors} leftFmt={axisPct} height={150} />
         <EventFeed events={events} />
       </div>
     </div>

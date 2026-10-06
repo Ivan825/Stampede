@@ -109,6 +109,21 @@ export function dateTime(iso: string | null | undefined): string {
   });
 }
 
+/** Axis label for a latency in seconds: "250ms", "1.2s". */
+export function axisMs(seconds: number): string {
+  if (seconds >= 1) return `${seconds.toFixed(1)}s`;
+  if (seconds >= 0.01 || seconds === 0) return `${Math.round(seconds * 1000)}ms`;
+  return `${(seconds * 1000).toFixed(1)}ms`;
+}
+
+/** Axis label for a fraction: more decimals when values are small. */
+export function axisPct(fraction: number): string {
+  if (fraction === 0) return '0%';
+  if (fraction < 0.001) return `${(fraction * 100).toFixed(3)}%`;
+  if (fraction < 0.01) return `${(fraction * 100).toFixed(2)}%`;
+  return `${(fraction * 100).toFixed(1)}%`;
+}
+
 /** The unit for a load level in a given mode, like report.Unit. */
 export function unit(mode: string | undefined): string {
   return mode === 'rate' ? '/s' : ' VUs';

@@ -61,7 +61,7 @@ export function WorkersPage() {
             </thead>
             <tbody>
               {list.map((w) => (
-                <tr key={w.id} className={w.status === 'lost' ? 'opacity-70' : undefined}>
+                <tr key={w.id}>
                   <td>
                     <div className="font-medium">{w.name}</div>
                     <div className="font-mono text-[11px] text-muted">{w.id}</div>
