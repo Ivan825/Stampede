@@ -201,6 +201,10 @@ func (m *runManager) execute(r *activeRun, spec ExecSpec, prog *scenario.Program
 		fail(err)
 		return
 	}
+	// Record how many workers actually ran it (the request may say 0 = all).
+	if err := m.s.st.SetRunWorkers(ctx, db.SetRunWorkersParams{ID: r.id, Workers: int32(res.Workers)}); err != nil { //nolint:gosec // small
+		m.s.log.Error("set run workers", "run", r.id, "error", err)
+	}
 	m.setStatus(ctx, r, statusAnalyzing)
 
 	if res.Snapshots != nil {
