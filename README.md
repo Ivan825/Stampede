@@ -22,45 +22,93 @@ runs many of them at once and tells you where your product breaks.
 > **Status: in development towards v1.0.** This README lists what works in
 > the repository today. Everything else in the plan is marked **planned**.
 
+## Two commands
+
+```sh
+git clone https://github.com/Ivan825/Stampede && cd Stampede
+docker compose up -d --build
+```
+
+Open <http://localhost:8080> for the web UI. The stack includes two workers
+and **ShopLab** (<http://localhost:8090>), a demo shop with six real
+performance problems planted on purpose. The [quick start](docs/quickstart.md)
+takes you from there to a breakpoint, a fix and a comparison in about five
+minutes.
+
+Just want the CLI?
+
+```sh
+go install github.com/Ivan825/Stampede/cmd/stampede@latest
+stampede init --target http://localhost:8090      # detect the product type, install a pack, dry-run it
+stampede run stampede/ecommerce/journeys/shop-mix.yaml -e TARGET_URL=http://localhost:8090 -o report.html
+```
+
 ## What works today
 
-- **One binary.** `stampede run` runs a scenario with an in-process engine.
-  No server, database or account needed.
-- **Scenario files** in YAML or JSON: weighted journeys, `${}` expressions,
-  extractors (JSONPath, header, cookie, regex, CSS), checks, think times,
-  branches, loops, conditions, and CSV/JSON/list/range data feeders.
-- **Protocols** ([docs/protocols.md](docs/protocols.md)), all with checks,
-  extractors, safety and trace context, mixed freely in one journey:
-  - HTTP/1.1 and HTTP/2 (`http2: true` over TLS, `h2c: true` without);
-    reports show the protocol each request actually used.
-  - GraphQL: variables, automatic persisted queries, `errors` fail the step.
-  - Server-sent events: time to first event and events per second (time to
-    first token and tokens per second for LLM APIs).
-  - WebSocket: `ws` blocks with `send` and `expect`; send-to-reply latency.
-  - gRPC: unary and server streaming, descriptors from server reflection or
-    `.protoset`/`.proto` files, no code generation.
-- **Open and closed load models.** Fixed arrival rate (`mode: rate`) or a
-  fixed number of users (`mode: vus`), constant or ramping, plus fixed
-  iteration counts.
-- **Traffic shapes:** smoke, baseline, stress, spike, soak, breakpoint, step
-  ramp, recovery and wave.
-- **Measurement you can trust.** Latency is measured from each request's
-  *scheduled* send time, so queueing is never hidden (coordinated omission).
-  Percentiles come from merged HDR-style histograms, never averaged. Per
-  phase timing: DNS, connect, TLS, time to first byte, download.
-- **Targets and verdicts:** `http.p95 < 500ms`, `errors < 1%`,
-  `checkout.p99 < 1s`. Breakpoint runs report the highest load that held.
-- **Reports:** terminal summary, self-contained HTML, JSON, JUnit XML and
-  Markdown. Exit code 3 when a target fails, for CI.
-- **Safety:** private and loopback targets just work; public targets run
-  under low caps until you verify ownership (`stampede target verify`).
-  Requests can only reach the target host unless you allow others.
-- **Accuracy benchmark** against a calibrated server with exact ground truth
-  (`bench/`).
-- **AI journey generation (optional, bring your own key).** `stampede
-  generate` drafts a scenario from a description, an OpenAPI spec, a HAR
-  file and/or an access log, then dry-runs every journey once with one
-  user and repairs failures. See [AI journey generation](#ai-journey-generation).
+**Describe users, not requests.** A [scenario](docs/concepts/scenarios.md)
+is a YAML file of weighted journeys with `${}` expressions, extractors
+(JSONPath, header, cookie, regex, CSS), checks, think times, branches,
+loops, conditions and CSV/JSON/list/range data. It is validated against a
+published JSON Schema, including that every variable is extracted before it
+is used.
+
+**Numbers you can trust.** Latency is measured from each request's
+*scheduled* send time, so queueing is never hidden. Percentiles come from
+merged HDR-style histograms, never averages of percentiles. DNS, connect,
+TLS, wait and download are timed for every request. Workers report their own
+saturation, and a run they distorted is marked generator-limited instead of
+failed. Accuracy is checked against a calibrated server in CI
+([how](docs/concepts/measurement.md)).
+
+**Every test type.** Open and closed models; smoke, baseline, stress, spike,
+soak, breakpoint, steps, recovery and wave shapes on any scenario; targets
+such as `checkout.p95 < 800ms`; breakpoint search; the knee of the
+throughput-against-load curve ([test types](docs/guides/test-types.md)).
+
+**Protocols:** HTTP/1.1, HTTP/2 (TLS and h2c), REST, GraphQL (with
+persisted queries), WebSocket, server-sent events with time to first event
+(for LLM apps), and gRPC unary and server streaming via reflection or proto
+files ([protocols](docs/protocols.md)).
+
+**Distributed.** `stampede worker` connects out to the server over gRPC.
+Load is split by capacity with no arrival lost or duplicated, start times are
+synchronised to within a millisecond, results merge losslessly, a lost
+worker is marked rather than silently ignored, and a kill reaches every
+worker in under a millisecond on a local network.
+
+**Control plane and UI.** `stampede server` with PostgreSQL/TimescaleDB:
+REST API ([OpenAPI](api/openapi.yaml)), web UI with a scenario editor and
+journey graph, live runs and reports, projects, targets, encrypted secrets,
+users and roles, API tokens, audit log, and a kill switch that is always on
+screen.
+
+**Reports and CI.** Self-contained HTML, JSON, JUnit XML and Markdown;
+exit code 3 when a target fails. `stampede compare` judges repeated runs of
+two versions with bootstrap confidence intervals and a measured noise floor,
+and exits 4 on a regression ([comparing](docs/guides/comparing.md),
+[CI](docs/guides/ci.md)).
+
+**Terminal.** `stampede` alone opens a console: `/run spike`, `/runs`,
+`/kill all`, or plain language such as "find the breaking point for
+checkout", always confirmed before it runs.
+
+**Product packs.** `stampede init` probes a target and installs the
+matching pack. The e-commerce pack ships, tested against ShopLab on every
+push; 19 more product types are catalogued as planned
+([packs](docs/guides/packs.md)).
+
+**AI journey generation** (optional, bring your own key, never during
+load). Anthropic, OpenAI, Gemini, Ollama or any OpenAI-compatible server
+turns a description, an OpenAPI spec, a HAR file or an access log into a
+scenario. Every journey is dry-run against your target and repaired until it
+works before you approve it; recorded traffic is redacted before anything
+reaches a model ([AI generation](docs/ai.md)). The pipeline is tested with a
+scripted model; it has not yet been run against a real provider in this
+repository's CI.
+
+**Safety.** Private targets just work; public targets stay under low caps
+until you prove ownership; requests cannot leave the target's host; hard caps
+per server and per target; audit log ([safety](docs/safety.md)).
 
 ## Planned for v1.0
 
@@ -69,124 +117,7 @@ SQL and UDP plugins, the other 19 product packs, AI generation from GraphQL
 introspection and browser crawls, AI report narratives, the fault-injection
 agent and network emulation, mutual TLS between server and workers, more
 than one server replica, scheduled runs, side-by-side benchmarks with k6 and
-wrk2, and the website.
-
-## Quick start
-
-```sh
-go install github.com/Ivan825/Stampede/cmd/stampede@latest
-```
-
-Write `smoke.yaml`:
-
-```yaml
-apiVersion: stampede.dev/v1
-kind: Scenario
-metadata:
-  name: shop-smoke
-target:
-  baseURL: ${env.TARGET_URL}
-journeys:
-  - name: browse
-    weight: 9
-    steps:
-      - get: /api/products?page=${rand(1, 20)}
-        check: { status: 200 }
-        extract: { productId: "$.items[0].id" }
-      - think: 1s..3s
-      - get: /api/products/${productId}
-  - name: login
-    weight: 1
-    steps:
-      - post: /api/login
-        json: { email: "${data.users.email}", password: "${data.users.password}" }
-        extract: { token: "$.token" }
-      - get: /api/me
-        headers: { Authorization: "Bearer ${token}" }
-data:
-  users: { csv: users.csv, mode: unique }
-load:
-  mode: rate
-  rate: 50/s
-  duration: 2m
-targets:
-  - http.p95 < 300ms
-  - errors < 1%
-```
-
-Run it:
-
-```sh
-stampede run smoke.yaml -e TARGET_URL=http://localhost:8090 -o report.html
-stampede run smoke.yaml --shape spike --rate 20/s     # same journeys, spike shape
-stampede validate smoke.yaml                          # check without running
-```
-
-## Scenario reference (short)
-
-| Key | Meaning |
-|---|---|
-| `get/post/put/patch/delete/head/options: <path>` | An HTTP request. Relative paths join `target.baseURL`. |
-| `headers`, `query`, `json`, `body`, `form` | Request parts. Values may contain `${}` expressions. |
-| `check` | `status` (200, [200, 201], "2xx"), `bodyContains`, `json` (path → value or `exists`), `maxLatency`, `expr`. |
-| `extract` | `name: "$.path"`, `header:Name`, `cookie:name`, `regex:(...)`, `css:selector[@attr]`, `status`, `body`. |
-| `think: 2s..6s` | Pause, fixed or uniformly random. |
-| `branch` | Weighted alternatives, each with its own steps. |
-| `loop: 3` / `while: expr` | Repeat steps. |
-| `group: name` | Name a set of steps. |
-| `if: expr` | Skip a step unless the expression is true. |
-| `graphql: <path>` | A GraphQL operation: `query`, `variables`, `operationName`, `persisted: true`. A non-empty `errors` array fails the step unless `check: {allowErrors: true}`. |
-| `sse: <path>` | Read a server-sent event stream `until: {events: N, match: regex, duration: 30s}`. Records time to first event and events per second. Takes HTTP request keys. |
-| `ws: <path>` + `steps` | Open a WebSocket for the steps inside; the handshake is the step's latency. |
-| `send: <text or JSON>` | Inside `ws`: send a message. |
-| `expect: <regex>` or `{match, json, timeout}` | Inside `ws`: wait for a matching message; latency runs from the last `send`. |
-| `grpc: pkg.Service/Method` | A unary or server-streaming gRPC call: `target` (`grpc://` or `grpcs://`), `message` (JSON), `metadata`, `protoset`/`proto`, `check: {status: [OK, NOT_FOUND]}`. |
-
-Expressions are [CEL](https://cel.dev) with helpers: `rand(a, b)`,
-`randString(n)`, `randEmail()`, `uuid()`, `pick(list)`, `now()`, `nowMs()`,
-`base64(s)`, `urlencode(s)`, `sha256(s)`, `toJSON(v)`. Roots: `env`,
-`secret`, `data`, `vars`, `vu`, `iter`, plus every extracted variable.
-
-A failed step ends that iteration, as a real user would not carry on after
-an error. Failed requests and checks count as errors.
-
-## AI journey generation
-
-Optional and bring-your-own-key. A model writes the scenario before any
-load runs; it is never called during a test. Full guide:
-[docs/ai.md](docs/ai.md).
-
-```sh
-export ANTHROPIC_API_KEY=sk-ant-...
-stampede generate --from-openapi examples/shoplab/openapi.yaml \
-  --describe "most shoppers browse, some log in to check orders, a few buy" \
-  --target http://localhost:8090 -o shop.yaml
-```
-
-What works today:
-
-- **Providers:** Anthropic (default model `claude-sonnet-5-5`), OpenAI,
-  Google Gemini, Ollama (local, no key) and any OpenAI-compatible server
-  (`--base-url`). Keys come from `ANTHROPIC_API_KEY`, `OPENAI_API_KEY` or
-  `GEMINI_API_KEY`.
-- **Inputs:** a plain-language description, an OpenAPI 3.x spec, a HAR
-  recording and an access log (used to estimate the journey mix), in any
-  combination. Stampede builds a dependency map showing which call
-  produces the token, id or cookie that another call needs.
-- **Checked before you see it:** the scenario must compile (including
-  variable flow), use only endpoints in the spec or recording, and never
-  call payment, SMS, email or CAPTCHA hosts. Then every journey and branch
-  runs once with one user against `--target`. Failures go back to the
-  model with redacted evidence, up to 3 repair rounds. Journeys that still
-  fail are flagged for a human.
-- **Privacy:** tokens, cookies, Authorization headers, secrets, emails,
-  phone numbers and card numbers in recorded traffic are redacted before
-  anything is sent to a provider.
-- **You approve:** the CLI writes the file only when every journey passed
-  (or with `--allow-unvalidated`, which marks the failing journeys). The
-  server API (`/api/v1/ai/...`) runs generation jobs asynchronously, stores
-  provider keys encrypted, enforces a monthly token cap, and saves a
-  scenario version only through an explicit, audited approve call.
+wrk2, a packaged GitHub Action, and the website.
 
 ## Deploy
 
@@ -201,6 +132,13 @@ What works today:
 Releases (binaries for Linux, macOS and Windows, signed multi-arch images
 on `ghcr.io/ivan825/stampede`, Homebrew and Scoop) are built by GoReleaser
 from version tags; none has been published yet.
+
+## Documentation
+
+Everything is in [docs/](docs/README.md): quick start, concepts, guides, the
+[scenario reference](docs/reference/scenario.md), the [CLI
+reference](docs/reference/cli/stampede.md) and
+[configuration](docs/reference/configuration.md).
 
 ## Building from source
 
