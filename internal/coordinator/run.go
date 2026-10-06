@@ -561,7 +561,9 @@ func (r *Run) handle(in inMsg) {
 		}
 		m.state, m.stopReason = memberFinished, fin.GetStopReason()
 		m.peakVUs = int(fin.GetPeakVus())
-		m.end = time.Unix(0, fin.GetEndUnixNano()-int64(m.offset))
+		if end := fin.GetEndUnixNano(); end > 0 {
+			m.end = time.Unix(0, end-int64(m.offset))
+		}
 		ph, err := wire.PhasesFromProto(fin.GetPhases())
 		if err != nil {
 			r.c.log.Error("bad phase histograms", "run", r.spec.ID, "worker", m.w.id, "error", err)

@@ -204,6 +204,14 @@ func (s *session) send(m *workerv1.WorkerMessage) {
 	}
 }
 
+// sendWait queues a message, waiting for room unless the session ends.
+func (s *session) sendWait(m *workerv1.WorkerMessage) {
+	select {
+	case s.out <- m:
+	case <-s.ctx.Done():
+	}
+}
+
 func (s *session) writeLoop() {
 	for {
 		select {
@@ -271,11 +279,10 @@ func (w *Worker) session(ctx context.Context) error {
 	}
 
 	s := &session{stream: stream, out: make(chan *workerv1.WorkerMessage, 1024), ctx: sctx, cancel: cancel}
+	go s.writeLoop()
 	w.attach(s, welcome.GetWorkerId())
 	defer w.detach(s)
 	w.log.Info("connected to server", "server", w.cfg.Server, "worker", welcome.GetWorkerId())
-
-	go s.writeLoop()
 	go w.heartbeatLoop(s)
 
 	for {
@@ -321,11 +328,14 @@ func (w *Worker) attach(s *session, id string) {
 	// snapshots produced concurrently.
 	r.mu.Lock()
 	defer r.mu.Unlock()
+	// The writer is already draining, so a long backlog (up to an hour of
+	// snapshots after a long outage) is replayed in full rather than
+	// overflowing the queue.
 	for _, p := range r.outbox {
-		s.send(&workerv1.WorkerMessage{Msg: &workerv1.WorkerMessage_Snapshot{Snapshot: p}})
+		s.sendWait(&workerv1.WorkerMessage{Msg: &workerv1.WorkerMessage_Snapshot{Snapshot: p}})
 	}
 	if r.finished != nil {
-		s.send(&workerv1.WorkerMessage{Msg: &workerv1.WorkerMessage_RunFinished{RunFinished: r.finished}})
+		s.sendWait(&workerv1.WorkerMessage{Msg: &workerv1.WorkerMessage_RunFinished{RunFinished: r.finished}})
 	}
 	w.mu.Lock()
 	w.sess = s
