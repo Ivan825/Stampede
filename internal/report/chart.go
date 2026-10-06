@@ -18,11 +18,6 @@ type series struct {
 	Right bool
 }
 
-// lineChart renders a responsive SVG line chart over time (xs in seconds).
-func lineChart(title string, xs []float64, ss []series) template.HTML {
-	return lineChartX(title, xs, fmtSecs, ss)
-}
-
 // band shades a stretch of the x axis, such as an injected fault.
 type band struct {
 	From, To float64
