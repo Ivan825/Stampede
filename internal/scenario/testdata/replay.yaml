@@ -1,0 +1,16 @@
+apiVersion: stampede.dev/v1
+kind: Scenario
+metadata:
+  name: replay-yesterday-peak
+target:
+  baseURL: ${env.TARGET_URL}
+  headers:
+    Authorization: Bearer ${secret.API_TOKEN}
+load:
+  mode: replay
+  replay:
+    file: access.log
+    speed: 2
+targets:
+  - http.p95 < 500ms
+  - errors < 1%

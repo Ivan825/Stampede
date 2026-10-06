@@ -26,6 +26,11 @@ settings are checked when a run starts on a worker that has it.`,
 			failed := 0
 			for _, path := range args {
 				s, err := scenario.LoadFile(path)
+				if err == nil {
+					if err = s.LoadReplay(); err != nil {
+						err = fmt.Errorf("%s: %w", path, err)
+					}
+				}
 				if err != nil {
 					failed++
 					fmt.Fprintf(cmd.ErrOrStderr(), "✗ %v\n", err)

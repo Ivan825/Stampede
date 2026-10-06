@@ -368,6 +368,9 @@ func TestProtocolExamplesRoundTrip(t *testing.T) {
 		if err != nil {
 			t.Fatalf("%s: re-parse failed: %v\n%s", f, err, out)
 		}
+		if s.Load.Mode == ModeReplay {
+			continue // compiling reads the recording, which examples do not ship
+		}
 		p1, _ := Compile(s)
 		p2, _ := Compile(s2)
 		if len(p1.Steps) != len(p2.Steps) {

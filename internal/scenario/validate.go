@@ -85,7 +85,31 @@ func (s *Scenario) Validate() error {
 		}
 	}
 
-	if len(s.Journeys) == 0 {
+	replay := s.Load.Mode == ModeReplay
+	if replay {
+		switch r := s.Load.Replay; {
+		case r == nil || strings.TrimSpace(r.File) == "":
+			add("load.replay.file", "required: an access log or HAR file to replay")
+		default:
+			if r.Speed < 0 {
+				add("load.replay.speed", "must be positive")
+			}
+			if r.Limit < 0 {
+				add("load.replay.limit", "must not be negative")
+			}
+			switch r.Format {
+			case "", "auto", "log", "har":
+			default:
+				add("load.replay.format", "must be auto, log or har")
+			}
+		}
+		if s.Target.BaseURL == "" {
+			add("target.baseURL", "required: recorded paths are sent to it")
+		}
+	} else if s.Load.Replay != nil {
+		add("load.replay", "set load.mode to replay to replay a recording")
+	}
+	if len(s.Journeys) == 0 && !replay {
 		add("journeys", "at least one journey is required")
 	}
 	seen := map[string]bool{}
@@ -119,8 +143,12 @@ func (s *Scenario) Validate() error {
 		add("target.baseURL", "required because some requests use relative paths (or gRPC steps have no target)")
 	}
 
-	if _, err := s.Load.Plan(); err != nil {
-		add("load", "%v", err)
+	// A replay plan comes from the recording, which LoadReplay reads
+	// after paths are resolved.
+	if !replay || s.Load.Replay.Recording() != nil {
+		if _, err := s.Load.Plan(); err != nil {
+			add("load", "%v", err)
+		}
 	}
 	if o := s.Observe; o != nil {
 		for _, p := range o.problems() {
@@ -131,7 +159,7 @@ func (s *Scenario) Validate() error {
 	if len(errs) > 0 {
 		return &ValidationError{Problems: errs}
 	}
-	_, err := Compile(s)
+	_, err := compile(s)
 	return err
 }
 

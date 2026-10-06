@@ -19,6 +19,9 @@ type Overrides struct {
 // duration or rate without a shape switches to a constant executor.
 func (o Overrides) Apply(s *Scenario) error {
 	l := &s.Load
+	if l.Mode == ModeReplay && (o.Shape != "" || o.Mode != "" || o.VUs != 0 || o.Rate != "" || o.Duration != "" || o.Iterations != 0) {
+		return fmt.Errorf("a replay sends the recording as recorded; change load.replay.speed instead of the load")
+	}
 	if o.Shape != "" {
 		l.Shape, l.Stages, l.Iterations = o.Shape, nil, 0
 	}

@@ -248,7 +248,17 @@ var identRe = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_]*$`)
 // Compile validates the scenario's dynamic parts and returns an
 // executable program. It checks that every variable is defined before it
 // is used.
+//
+// A replay scenario's recording is loaded first if it is not yet, so call
+// Compile after ResolvePaths.
 func Compile(s *Scenario) (*Program, error) {
+	if err := s.LoadReplay(); err != nil {
+		return nil, err
+	}
+	return compile(s)
+}
+
+func compile(s *Scenario) (*Program, error) {
 	c := &compiler{prog: &Program{Scenario: s}}
 	return c.compile()
 }

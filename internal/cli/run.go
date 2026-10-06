@@ -111,6 +111,9 @@ func runScenario(ctx context.Context, stdout, stderr io.Writer, path string, f *
 	if err != nil {
 		return err
 	}
+	if err := s.LoadReplay(); err != nil {
+		return err
+	}
 	if err := applyOverrides(s, f); err != nil {
 		return err
 	}

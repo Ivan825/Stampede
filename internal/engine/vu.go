@@ -85,7 +85,17 @@ func (v *VU) pickJourney() *scenario.CJourney {
 // runIteration executes one journey. intended is the scheduled start time
 // (open model) or zero (closed model).
 func (v *VU) runIteration(ctx context.Context, intended time.Time) error {
-	j := v.pickJourney()
+	return v.runJourney(ctx, intended, v.pickJourney(), nil)
+}
+
+// runReplay sends one recorded request through its endpoint's journey.
+func (v *VU) runReplay(ctx context.Context, intended time.Time, a *scenario.Arrival) error {
+	return v.runJourney(ctx, intended, v.e.prog.Journeys[a.Endpoint], map[string]any{
+		"target": a.Target, "body": a.Body, "contentType": a.ContentType,
+	})
+}
+
+func (v *VU) runJourney(ctx context.Context, intended time.Time, j *scenario.CJourney, replay map[string]any) error {
 	start := time.Now()
 	lag := time.Duration(0)
 	if !intended.IsZero() {
@@ -95,6 +105,7 @@ func (v *VU) runIteration(ctx context.Context, intended time.Time) error {
 	// New session: fresh variables, cookies and feeder rows.
 	v.iter++
 	v.vars.reset(v.iter)
+	v.vars.replay = replay
 	httpx.ResetCookies(v.client)
 	for _, name := range v.e.journeyFeeders[j.Index] {
 		row, err := v.e.feeders[name].next(v.ID)
@@ -634,6 +645,8 @@ type vuVars struct {
 	local  map[string]any
 	vu     int64
 	iter   int64
+	// replay is the recorded request of a replay iteration.
+	replay map[string]any
 }
 
 func (a *vuVars) reset(iter int64) {
@@ -659,6 +672,8 @@ func (a *vuVars) ResolveName(name string) (any, bool) {
 		return a.vu, true
 	case "iter":
 		return a.iter, true
+	case "replay":
+		return a.replay, a.replay != nil
 	}
 	v, ok := a.local[name]
 	return v, ok

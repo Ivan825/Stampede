@@ -34,6 +34,8 @@ type Plan struct {
 	Duration   time.Duration
 	Iterations int
 	VUs        int
+	// Rates is the planned rate in each second of a replay plan.
+	Rates []float64
 	// MaxVUs caps the pool in rate mode.
 	MaxVUs       int
 	GracefulStop time.Duration
@@ -71,6 +73,12 @@ func (p *Plan) Peak() float64 {
 
 // ValueAt returns the planned users or rate at elapsed time t.
 func (p *Plan) ValueAt(t time.Duration) float64 {
+	if p.Rates != nil {
+		if i := int(t / time.Second); i >= 0 && i < len(p.Rates) {
+			return p.Rates[i]
+		}
+		return 0
+	}
 	if len(p.Stages) == 0 {
 		return p.Value
 	}
@@ -89,6 +97,9 @@ func (p *Plan) ValueAt(t time.Duration) float64 {
 
 // Plan resolves the load section into executor settings.
 func (l Load) Plan() (*Plan, error) {
+	if l.Mode == ModeReplay {
+		return l.replayPlan()
+	}
 	p := &Plan{Shape: l.Shape, Mode: l.Mode, GracefulStop: l.GracefulStop.D(), MaxVUs: l.MaxVUs}
 	if p.Mode != ModeVUs && p.Mode != ModeRate {
 		return nil, fmt.Errorf("mode must be vus or rate, got %q", l.Mode)

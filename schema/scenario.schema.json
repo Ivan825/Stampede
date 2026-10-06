@@ -5,7 +5,10 @@
   "description": "A load test: what to hit, how users behave, how much load and what counts as passing.",
   "type": "object",
   "additionalProperties": false,
-  "required": ["metadata", "journeys", "load"],
+  "required": ["metadata", "load"],
+  "if": { "properties": { "load": { "properties": { "mode": { "const": "replay" } }, "required": ["mode"] } } },
+  "then": {},
+  "else": { "required": ["journeys"] },
   "properties": {
     "apiVersion": { "const": "stampede.dev/v1", "default": "stampede.dev/v1" },
     "kind": { "const": "Scenario", "default": "Scenario" },
@@ -338,7 +341,21 @@
       "additionalProperties": false,
       "properties": {
         "shape": { "enum": ["smoke", "baseline", "stress", "spike", "soak", "breakpoint", "steps", "recovery", "wave"] },
-        "mode": { "enum": ["vus", "rate"], "description": "rate: open model, journeys start on a schedule; vus: closed model, a fixed population loops." },
+        "mode": { "enum": ["vus", "rate", "replay"], "description": "rate: open model, journeys start on a schedule; vus: closed model, a fixed population loops; replay: send the requests of a recording at their recorded times." },
+        "replay": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["file"],
+          "description": "With mode: replay, the recording to send. Each recorded endpoint becomes a journey; leave journeys out.",
+          "properties": {
+            "file": { "type": "string", "description": "An access log (common or combined format) or a HAR file." },
+            "format": { "enum": ["auto", "log", "har"], "default": "auto" },
+            "speed": { "type": "number", "exclusiveMinimum": 0, "default": 1, "description": "Divides recorded gaps: 2 replays an hour in 30 minutes." },
+            "limit": { "type": "integer", "minimum": 0, "default": 100000, "description": "Most requests to replay." },
+            "host": { "type": "string", "description": "HAR only: keep requests to this host (default the most frequent one)." },
+            "static": { "type": "boolean", "default": false, "description": "Keep requests for static assets (.js, .css, images, fonts)." }
+          }
+        },
         "vus": { "type": "integer", "minimum": 1 },
         "rate": { "$ref": "#/$defs/rate" },
         "duration": { "$ref": "#/$defs/duration" },

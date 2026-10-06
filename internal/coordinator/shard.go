@@ -208,7 +208,7 @@ func regionCounts(names []string, regions map[string]float64, fsum float64, n in
 // requiredVUs is the most virtual users the plan runs at once.
 func requiredVUs(p *scenario.Plan) float64 {
 	switch p.Executor {
-	case scenario.ExecConstantRate, scenario.ExecRampingRate:
+	case scenario.ExecConstantRate, scenario.ExecRampingRate, scenario.ExecReplay:
 		return float64(p.MaxVUs)
 	case scenario.ExecIterations:
 		return float64(p.VUs)

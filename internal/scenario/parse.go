@@ -68,6 +68,9 @@ func (s *Scenario) ResolvePaths(dir string) {
 		f.CSV, f.JSON = abs(f.CSV), abs(f.JSON)
 		s.Data[name] = f
 	}
+	if r := s.Load.Replay; r != nil {
+		r.File = abs(r.File)
+	}
 	for _, j := range s.Journeys {
 		walkSteps(j.Steps, func(st Step) {
 			if g := st.GRPC; g != nil {

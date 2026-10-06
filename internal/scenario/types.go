@@ -498,6 +498,8 @@ type Load struct {
 	GracefulStop Duration `yaml:"gracefulStop,omitempty" json:"gracefulStop,omitempty"`
 	// Abort stops the run early when the target is clearly failing.
 	Abort *Abort `yaml:"abort,omitempty" json:"abort,omitempty"`
+	// Replay sends recorded traffic (mode: replay).
+	Replay *Replay `yaml:"replay,omitempty" json:"replay,omitempty"`
 }
 
 // Abort ends a run when errors or latency stay above a limit for a while,

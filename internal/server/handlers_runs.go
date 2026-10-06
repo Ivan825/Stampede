@@ -449,5 +449,18 @@ func confineDataFiles(s *scenario.Scenario, dataDir string) error {
 		}
 		s.Data[name] = f
 	}
+	if r := s.Load.Replay; r != nil && r.File != "" {
+		if dataDir == "" {
+			return errInvalid("load.replay reads a file, which needs the server to be started with --data-dir")
+		}
+		full := filepath.Join(dataDir, filepath.Clean("/"+r.File))
+		if rel, err := filepath.Rel(dataDir, full); err != nil || strings.HasPrefix(rel, "..") {
+			return errInvalid(fmt.Sprintf("load.replay.file: %q is outside the data directory", r.File))
+		}
+		r.File = full
+		if err := s.LoadReplay(); err != nil {
+			return errInvalid(err.Error())
+		}
+	}
 	return nil
 }

@@ -409,7 +409,7 @@ func (e *Engine) Run(ctx context.Context) (*Result, error) {
 		e.runClosed(loadCtx, iterCtx)
 	case scenario.ExecIterations:
 		e.runIterations(loadCtx, iterCtx)
-	case scenario.ExecConstantRate, scenario.ExecRampingRate:
+	case scenario.ExecConstantRate, scenario.ExecRampingRate, scenario.ExecReplay:
 		e.runOpen(loadCtx, iterCtx)
 	default:
 		err = fmt.Errorf("unknown executor %q", e.plan.Executor)
@@ -579,9 +579,13 @@ func (e *Engine) runIterations(loadCtx, iterCtx context.Context) {
 // regardless of how the target responds. Each iteration carries its
 // intended start time so latency includes any time spent waiting.
 func (e *Engine) runOpen(_, iterCtx context.Context) {
+	type job struct {
+		intended time.Time
+		replay   *scenario.Arrival
+	}
 	type worker struct {
 		vu   *VU
-		work chan time.Time
+		work chan job
 	}
 	maxVUs := e.shareCount(float64(e.plan.MaxVUs))
 	if maxVUs < 1 {
@@ -591,7 +595,7 @@ func (e *Engine) runOpen(_, iterCtx context.Context) {
 	var wg sync.WaitGroup
 	created := 0
 	spawn := func() *worker {
-		w := &worker{vu: newVU(e, e.opts.WorkerIndex*1_000_000+created), work: make(chan time.Time, 1)}
+		w := &worker{vu: newVU(e, e.opts.WorkerIndex*1_000_000+created), work: make(chan job, 1)}
 		created++
 		wg.Add(1)
 		e.vuStarted()
@@ -599,8 +603,14 @@ func (e *Engine) runOpen(_, iterCtx context.Context) {
 			defer wg.Done()
 			defer e.activeVUs.Add(-1)
 			defer w.vu.close()
-			for intended := range w.work {
-				if err := w.vu.runIteration(iterCtx, intended); err != nil {
+			for jb := range w.work {
+				var err error
+				if jb.replay != nil {
+					err = w.vu.runReplay(iterCtx, jb.intended, jb.replay)
+				} else {
+					err = w.vu.runIteration(iterCtx, jb.intended)
+				}
+				if err != nil {
 					e.handleIterErr(err)
 				}
 				idle <- w
@@ -620,12 +630,26 @@ func (e *Engine) runOpen(_, iterCtx context.Context) {
 	}()
 
 	sched := newArrivalSchedule(e.plan)
+	var rec *scenario.Recording
+	if e.plan.Executor == scenario.ExecReplay {
+		rec = e.prog.Scenario.Load.Replay.Recording()
+	}
 	lo, hi := e.opts.ShareLo, e.opts.ShareHi
 	waiter := newPreciseWaiter()
 	for k := uint64(0); ; k++ {
-		at, ok := sched.next()
-		if !ok {
-			return
+		var at time.Duration
+		var arrival *scenario.Arrival
+		if rec != nil {
+			if k >= uint64(len(rec.Arrivals)) {
+				return
+			}
+			arrival = &rec.Arrivals[k]
+			at = arrival.At
+		} else {
+			var ok bool
+			if at, ok = sched.next(); !ok {
+				return
+			}
 		}
 		// Low-discrepancy assignment: arrival k belongs to the worker whose
 		// slice contains frac(k*phi). Slices of all workers cover [0, 1).
@@ -654,7 +678,7 @@ func (e *Engine) runOpen(_, iterCtx context.Context) {
 			e.collector.Dropped(1)
 			continue
 		}
-		w.work <- intended
+		w.work <- job{intended: intended, replay: arrival}
 	}
 }
 

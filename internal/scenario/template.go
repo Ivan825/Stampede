@@ -22,7 +22,7 @@ import (
 )
 
 // Built-in variable roots available to every expression.
-var builtinRoots = []string{"env", "secret", "data", "vars", "vu", "iter"}
+var builtinRoots = []string{"env", "secret", "data", "vars", "vu", "iter", "replay"}
 
 // Response variables available to check expressions.
 var responseRoots = []string{"status", "headers", "body", "json", "latencyMs"}
