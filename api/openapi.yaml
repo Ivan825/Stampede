@@ -933,7 +933,7 @@ components:
     Caps:
       type: object
       properties:
-        maxRate: { type: number, description: Iterations per second }
+        maxRate: { type: number, format: double, description: Iterations per second }
         maxVUs: { type: integer }
         maxDurationSeconds: { type: integer }
 
@@ -1002,8 +1002,8 @@ components:
         executor: { type: string }
         mode: { type: string }
         shape: { type: string }
-        peak: { type: number }
-        durationSeconds: { type: number }
+        peak: { type: number, format: double }
+        durationSeconds: { type: number, format: double }
         journeys: { type: integer }
         steps: { type: integer }
 
@@ -1103,26 +1103,26 @@ components:
       nullable: true
       properties:
         requests: { type: integer }
-        errorRate: { type: number }
-        rps: { type: number }
-        p95: { type: number, description: seconds }
-        p99: { type: number, description: seconds }
+        errorRate: { type: number, format: double }
+        rps: { type: number, format: double }
+        p95: { type: number, format: double, description: seconds }
+        p99: { type: number, format: double, description: seconds }
 
     Point:
       type: object
       required: [t, rps, errorRate, p50, p95, p99, vus, planned, dropped]
       properties:
-        t: { type: number, description: Seconds since start }
-        rps: { type: number }
-        errorRate: { type: number }
-        p50: { type: number }
-        p95: { type: number }
-        p99: { type: number }
+        t: { type: number, format: double, description: Seconds since start }
+        rps: { type: number, format: double }
+        errorRate: { type: number, format: double }
+        p50: { type: number, format: double }
+        p95: { type: number, format: double }
+        p99: { type: number, format: double }
         vus: { type: integer }
-        planned: { type: number }
+        planned: { type: number, format: double }
         dropped: { type: integer }
         iterations: { type: integer }
-        schedLagP99: { type: number }
+        schedLagP99: { type: number, format: double }
 
     Report:
       type: object
