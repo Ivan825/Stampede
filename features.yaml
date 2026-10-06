@@ -44,6 +44,12 @@ groups:
       - { name: AI report narratives that cite every figure, status: shipped, doc: docs/ai }
       - { name: Scheduled runs, status: planned }
       - { name: Packaged GitHub Action, status: planned }
+  - name: Integrations
+    features:
+      - { name: Target metrics from Prometheus charted in the report, status: shipped, doc: docs/guides/integrations }
+      - { name: Slowest requests per step with trace links (Jaeger, Tempo), status: shipped, doc: docs/guides/integrations }
+      - { name: "Notifications: signed webhooks, Slack and Discord", status: shipped, doc: docs/guides/integrations }
+      - { name: "Own telemetry: Prometheus metrics, OpenTelemetry traces, Grafana dashboard", status: shipped, doc: docs/reference/configuration }
   - name: Operate
     features:
       - { name: Docker Compose stack with the ShopLab demo app, status: shipped, doc: docs/deploy/compose }
