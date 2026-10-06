@@ -46,9 +46,15 @@ type sysSample struct {
 	goroutines int
 }
 
+// lagIntervals is how many consecutive intervals scheduling lag must stay
+// above its threshold to count as saturation. A single interval at the
+// start of a run (connections opening, goroutines warming up) is not.
+const lagIntervals = 2
+
 // evaluate turns a reading into a Health verdict. cpuHighFor is how long
-// CPU has stayed above the threshold, including this sample.
-func evaluate(th Thresholds, s sysSample, cpuHighFor, schedLag time.Duration, dropped uint64) wire.Health {
+// CPU has stayed above the threshold, including this sample; lagStreak is
+// how many consecutive intervals scheduling lag has been above its limit.
+func evaluate(th Thresholds, s sysSample, cpuHighFor, schedLag time.Duration, lagStreak int, dropped uint64) wire.Health {
 	h := wire.Health{
 		CPUPercent: s.cpuPercent, SchedLagP99: schedLag, GCPauseP99: s.gcPauseP99,
 		OpenFDs: s.openFDs, FDLimit: s.fdLimit, Goroutines: s.goroutines, Dropped: dropped,
@@ -56,7 +62,7 @@ func evaluate(th Thresholds, s sysSample, cpuHighFor, schedLag time.Duration, dr
 	if s.cpuOK && s.cpuPercent > th.CPUPercent && cpuHighFor >= th.CPUFor {
 		h.Reasons = append(h.Reasons, fmt.Sprintf("cpu %.0f%% above %.0f%% for %s", s.cpuPercent, th.CPUPercent, cpuHighFor.Round(time.Second)))
 	}
-	if schedLag > th.SchedLagP99 {
+	if schedLag > th.SchedLagP99 && lagStreak >= lagIntervals {
 		h.Reasons = append(h.Reasons, fmt.Sprintf("scheduling lag p99 %s above %s", schedLag.Round(time.Microsecond*100), th.SchedLagP99))
 	}
 	if dropped > 0 {
@@ -85,6 +91,7 @@ type monitor struct {
 	prevGC    []uint64
 	gcSample  []metrics.Sample
 	lastLag   time.Duration
+	lagStreak int
 	lastDrops uint64
 }
 
@@ -180,20 +187,25 @@ func (m *monitor) observe(schedLag time.Duration, dropped uint64) wire.Health {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	m.lastLag, m.lastDrops = schedLag, dropped
-	return evaluate(m.th, m.last, m.cpuHigh, schedLag, dropped)
+	if schedLag > m.th.SchedLagP99 {
+		m.lagStreak++
+	} else {
+		m.lagStreak = 0
+	}
+	return evaluate(m.th, m.last, m.cpuHigh, schedLag, m.lagStreak, dropped)
 }
 
 // current returns the latest health for heartbeats.
 func (m *monitor) current() wire.Health {
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	return evaluate(m.th, m.last, m.cpuHigh, m.lastLag, m.lastDrops)
+	return evaluate(m.th, m.last, m.cpuHigh, m.lastLag, m.lagStreak, m.lastDrops)
 }
 
 // idle clears the engine-level signals when no run is active, so an old
 // run's lag does not keep a worker marked saturated.
 func (m *monitor) idle() {
 	m.mu.Lock()
-	m.lastLag, m.lastDrops = 0, 0
+	m.lastLag, m.lastDrops, m.lagStreak = 0, 0, 0
 	m.mu.Unlock()
 }
