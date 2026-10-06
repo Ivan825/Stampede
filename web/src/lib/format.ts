@@ -134,3 +134,16 @@ export function load(level: number | null | undefined, mode: string | undefined)
   if (level == null) return '–';
   return `${num(level)}${unit(mode)}`;
 }
+
+/** Formats a target metric value compactly: 0.0123, 12.3, 4.56k, 120M. */
+export function metricValue(f: number): string {
+  const a = Math.abs(f);
+  const sig = (x: number) => String(Number(x.toPrecision(3)));
+  if (a === 0) return '0';
+  if (a >= 1e12) return `${sig(f / 1e12)}T`;
+  if (a >= 1e9) return `${sig(f / 1e9)}G`;
+  if (a >= 1e6) return `${sig(f / 1e6)}M`;
+  if (a >= 1e4) return `${sig(f / 1e3)}k`;
+  if (a >= 0.001) return a >= 1000 ? f.toFixed(0) : sig(f);
+  return f.toExponential(2);
+}

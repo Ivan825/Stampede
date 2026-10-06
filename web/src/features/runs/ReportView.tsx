@@ -1,12 +1,12 @@
 import { clsx } from 'clsx';
-import { Download } from 'lucide-react';
+import { Download, ExternalLink } from 'lucide-react';
 import { Fragment } from 'react';
 import { reportUrl } from '@/api/client';
-import type { Report } from '@/api/types';
+import type { Report, ReportJourney } from '@/api/types';
 import { verdictLabels } from '@/components/chips';
 import { Card, Notice, SectionTitle, Stat, Table } from '@/components/ui';
 import { bytes, count, dateTime, ms, num, pct, rate, secs } from '@/lib/format';
-import { ReportCharts } from './ReportCharts';
+import { ReportCharts, TargetMetricCharts } from './ReportCharts';
 
 const verdictStyle = {
   pass: 'border-pass/50 bg-pass-bg text-pass',
@@ -48,6 +48,72 @@ export function Downloads({ runId }: { runId: string }) {
 }
 
 const phases = ['dns', 'connect', 'tls', 'wait', 'download'] as const;
+
+/** Each step's slowest requests with links to their traces. */
+export function SlowestRequests({ journeys }: { journeys: ReportJourney[] }) {
+  const rows = journeys.flatMap((j) =>
+    (j.steps ?? []).flatMap((s) =>
+      (s.slowest ?? []).map((r, i) => ({ journey: j.name, step: s.name, id: s.id, i, r })),
+    ),
+  );
+  if (rows.length === 0) return null;
+  return (
+    <>
+      <SectionTitle>Slowest requests</SectionTitle>
+      <Card>
+        <Table>
+          <thead>
+            <tr>
+              <th>Step</th>
+              <th className="!text-right">Latency</th>
+              <th className="!text-right">At</th>
+              <th>Status</th>
+              <th>Trace</th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map(({ journey, step, id, i, r }) => (
+              <tr key={`${id}-${i}`}>
+                <td>
+                  {i === 0 ? (
+                    <>
+                      <span className="text-xs text-muted">{journey} › </span>
+                      <span className="font-mono text-xs">{step}</span>
+                    </>
+                  ) : null}
+                </td>
+                <td className="num text-right">{ms(r.latency)}</td>
+                <td className="num text-right text-xs text-muted" title={r.at}>
+                  t+{r.t < 120 ? `${r.t.toFixed(1)}s` : secs(r.t)}
+                </td>
+                <td className={clsx('font-mono text-xs', r.error && 'text-fail')}>
+                  {r.error || r.status || '–'}
+                </td>
+                <td className="font-mono text-xs">
+                  {r.traceUrl ? (
+                    <a
+                      href={r.traceUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center gap-1 text-accent hover:underline"
+                    >
+                      {r.traceId}
+                      <ExternalLink className="size-3" aria-hidden />
+                    </a>
+                  ) : r.traceId ? (
+                    <span className="text-muted">{r.traceId}</span>
+                  ) : (
+                    <span className="text-muted">none</span>
+                  )}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </Table>
+      </Card>
+    </>
+  );
+}
 
 export function ReportView({ report }: { report: Report }) {
   const o = report.overall;
@@ -199,6 +265,13 @@ export function ReportView({ report }: { report: Report }) {
         </>
       )}
 
+      {(report.targetMetrics?.length ?? 0) > 0 && (
+        <>
+          <SectionTitle>Target metrics</SectionTitle>
+          <TargetMetricCharts metrics={report.targetMetrics ?? []} />
+        </>
+      )}
+
       <SectionTitle>Journeys and steps</SectionTitle>
       <Card>
         <Table className="[&_td]:text-right [&_td:first-child]:text-left [&_th]:text-right [&_th:first-child]:text-left">
@@ -273,6 +346,8 @@ export function ReportView({ report }: { report: Report }) {
           </tbody>
         </Table>
       </Card>
+
+      <SlowestRequests journeys={journeys} />
 
       {errors.length > 0 && (
         <>
