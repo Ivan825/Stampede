@@ -231,7 +231,7 @@ type stepRun struct {
 }
 
 func (v *VU) begin(st *scenario.CStep, intended time.Time) stepRun {
-	return stepRun{v: v, st: st, s: metrics.Sample{Step: st.ID, Intended: intended}}
+	return stepRun{v: v, st: st, s: metrics.Sample{Step: st.ID, Intended: intended, TraceID: v.traceID}}
 }
 
 // fail records the step as failed with a bounded error class, logs err
