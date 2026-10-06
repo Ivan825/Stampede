@@ -7,7 +7,10 @@ import (
 	"log/slog"
 	"net/http/httptest"
 	"net/url"
+	"os"
 	"path/filepath"
+	"regexp"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -40,7 +43,10 @@ func TestPacksAgainstReferenceApps(t *testing.T) {
 
 			t.Run("detect", func(t *testing.T) { checkDetect(t, srv.URL, p.pack, shipped) })
 			t.Run("pack test", func(t *testing.T) {
-				out, err := stampede(t, "", "pack", "test", p.pack, "--target", srv.URL)
+				// The pack's own files with think times cut to 10ms, so
+				// the dry run takes seconds; the CI packs job runs the
+				// unmodified pack against the packlab binary.
+				out, err := stampede(t, "", "pack", "test", quickCopy(t, p.pack), "--target", srv.URL)
 				if err != nil {
 					t.Fatalf("pack test: %v\n%s", err, out)
 				}
@@ -100,6 +106,35 @@ func checkDetect(t *testing.T, target, want string, shipped []*pack.Pack) {
 	if !strings.Contains(out, "Set up the "+want+" pack") {
 		t.Fatalf("init did not propose %s:\n%s", want, out)
 	}
+}
+
+var thinkLine = regexp.MustCompile(`(?m)^(\s*(?:- )?think:\s*).*$`)
+
+// quickCopy installs a pack into a temporary folder with every think time
+// set to 10ms and returns the pack's folder.
+func quickCopy(t *testing.T, name string) string {
+	t.Helper()
+	p, err := pack.Load(name)
+	if err != nil {
+		t.Fatal(err)
+	}
+	dir := t.TempDir()
+	if _, err := p.Install(dir, false); err != nil {
+		t.Fatal(err)
+	}
+	root := filepath.Join(dir, name)
+	files, _ := p.Files()
+	for _, f := range files {
+		fp := filepath.Join(root, filepath.FromSlash(f))
+		b, err := os.ReadFile(fp)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(fp, thinkLine.ReplaceAll(b, []byte("${1}10ms")), 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	return root
 }
 
 func summary(ms []pack.Match) []string {
@@ -193,6 +228,9 @@ func shorten(s *scenario.Scenario) {
 	if len(l.Stages) > 0 {
 		for i := range l.Stages {
 			l.Stages[i].Duration = scenario.Duration(time.Second)
+			if n, err := strconv.Atoi(l.Stages[i].Target); err == nil && n > 50 {
+				l.Stages[i].Target = "50"
+			}
 		}
 		return
 	}

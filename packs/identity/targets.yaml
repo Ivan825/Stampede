@@ -1,0 +1,8 @@
+# Default targets for token services. Sign-in is slower than everything
+# else because a password hash is meant to be expensive; refreshes and
+# userinfo must stay fast because every signed-in client makes them.
+targets:
+  - http.p95 < 500ms
+  - errors < 1%
+  - "sign-in/password grant.p95 < 800ms"
+  - "long-session/refresh.p95 < 200ms"
