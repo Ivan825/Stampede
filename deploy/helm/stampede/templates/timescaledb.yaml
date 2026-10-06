@@ -1,0 +1,145 @@
+{{- if .Values.timescaledb.enabled }}
+{{- $db := .Values.timescaledb }}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "stampede.dbFullname" . }}
+  labels:
+    {{- include "stampede.labels" . | nindent 4 }}
+    app.kubernetes.io/component: database
+spec:
+  clusterIP: None
+  selector:
+    {{- include "stampede.selectorLabels" . | nindent 4 }}
+    app.kubernetes.io/component: database
+  ports:
+    - name: postgres
+      port: 5432
+      targetPort: postgres
+      protocol: TCP
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: {{ include "stampede.dbFullname" . }}
+  labels:
+    {{- include "stampede.labels" . | nindent 4 }}
+    app.kubernetes.io/component: database
+spec:
+  serviceName: {{ include "stampede.dbFullname" . }}
+  replicas: 1
+  selector:
+    matchLabels:
+      {{- include "stampede.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: database
+  template:
+    metadata:
+      labels:
+        {{- include "stampede.selectorLabels" . | nindent 8 }}
+        app.kubernetes.io/component: database
+        {{- with .Values.commonLabels }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+    spec:
+      serviceAccountName: {{ include "stampede.serviceAccountName" . }}
+      automountServiceAccountToken: false
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      terminationGracePeriodSeconds: 60
+      securityContext:
+        {{- toYaml $db.podSecurityContext | nindent 8 }}
+      containers:
+        - name: timescaledb
+          image: "{{ $db.image.repository }}:{{ $db.image.tag }}"
+          imagePullPolicy: {{ $db.image.pullPolicy }}
+          env:
+            - name: POSTGRES_USER
+              value: {{ $db.username | quote }}
+            - name: POSTGRES_DB
+              value: {{ $db.database | quote }}
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "stampede.dbPasswordSecret" . }}
+                  key: {{ $db.existingSecretKey }}
+            # A subdirectory, so a volume's lost+found does not upset initdb.
+            - name: PGDATA
+              value: /var/lib/postgresql/data/pgdata
+            - name: TS_TUNE_MEMORY
+              value: {{ $db.tuneMemory | quote }}
+            - name: TS_TUNE_NUM_CPUS
+              value: {{ $db.tuneCPUs | quote }}
+            - name: TIMESCALEDB_TELEMETRY
+              value: "off"
+          ports:
+            - name: postgres
+              containerPort: 5432
+              protocol: TCP
+          startupProbe:
+            exec:
+              command: ["pg_isready", "-h", "127.0.0.1", "-U", {{ $db.username | quote }}, "-d", {{ $db.database | quote }}]
+            periodSeconds: 2
+            failureThreshold: 90
+          readinessProbe:
+            exec:
+              command: ["pg_isready", "-h", "127.0.0.1", "-U", {{ $db.username | quote }}, "-d", {{ $db.database | quote }}]
+            periodSeconds: 5
+            timeoutSeconds: 3
+          livenessProbe:
+            exec:
+              command: ["pg_isready", "-h", "127.0.0.1", "-U", {{ $db.username | quote }}, "-d", {{ $db.database | quote }}]
+            periodSeconds: 15
+            timeoutSeconds: 5
+            failureThreshold: 6
+          resources:
+            {{- toYaml $db.resources | nindent 12 }}
+          securityContext:
+            {{- toYaml $db.securityContext | nindent 12 }}
+          volumeMounts:
+            - name: data
+              mountPath: /var/lib/postgresql/data
+            - name: run
+              mountPath: /var/run/postgresql
+            - name: tmp
+              mountPath: /tmp
+      volumes:
+        - name: run
+          emptyDir: {}
+        - name: tmp
+          emptyDir: {}
+        {{- if not $db.persistence.enabled }}
+        - name: data
+          emptyDir: {}
+        {{- end }}
+      {{- with $db.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with $db.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with $db.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+  {{- if $db.persistence.enabled }}
+  volumeClaimTemplates:
+    - metadata:
+        name: data
+        labels:
+          {{- include "stampede.selectorLabels" . | nindent 10 }}
+          app.kubernetes.io/component: database
+      spec:
+        accessModes:
+          {{- toYaml $db.persistence.accessModes | nindent 10 }}
+        {{- with $db.persistence.storageClass }}
+        storageClassName: {{ . | quote }}
+        {{- end }}
+        resources:
+          requests:
+            storage: {{ $db.persistence.size }}
+  {{- end }}
+{{- end }}
