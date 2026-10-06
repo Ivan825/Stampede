@@ -1,0 +1,249 @@
+// Protocol between a Stampede server (the coordinator) and its workers.
+//
+// Workers dial out to the server and hold one bidirectional stream open,
+// so they work from behind NAT and firewalls that only allow outbound
+// connections. Everything the two sides say to each other travels on that
+// stream as WorkerMessage and ServerMessage envelopes.
+//
+// Times are Unix nanoseconds. A time is in the clock of the side that
+// produced it unless the field says otherwise; the server measures each
+// worker's clock offset with ClockPing/ClockPong and converts.
+//
+// Histograms travel as the compact binary encoding of
+// internal/metrics.Histogram (sparse, varint), which merges losslessly.
+syntax = "proto3";
+
+package stampede.worker.v1;
+
+option go_package = "github.com/Ivan825/Stampede/gen/stampede/worker/v1;workerv1";
+
+// WorkerService is served by the coordinator.
+service WorkerService {
+  // Connect carries the whole conversation with one worker. The first
+  // message must be a Hello; the server answers with a Welcome or ends the
+  // stream with an error (bad join token, incompatible protocol major).
+  rpc Connect(stream WorkerMessage) returns (stream ServerMessage);
+}
+
+// WorkerMessage is anything a worker sends.
+message WorkerMessage {
+  oneof msg {
+    Hello hello = 1;
+    Heartbeat heartbeat = 2;
+    ClockPong clock_pong = 3;
+    RunAccepted run_accepted = 4;
+    Snapshot snapshot = 5;
+    RunFinished run_finished = 6;
+    RunFailed run_failed = 7;
+  }
+}
+
+// ServerMessage is anything the server sends.
+message ServerMessage {
+  oneof msg {
+    Welcome welcome = 1;
+    ClockPing clock_ping = 2;
+    StartRun start_run = 3;
+    StopRun stop_run = 4;
+    Ack ack = 5;
+    ServerHeartbeat heartbeat = 6;
+  }
+}
+
+// ProtocolVersion is negotiated in Hello. The server rejects a worker whose
+// major version differs from its own; minor versions only add fields.
+message ProtocolVersion {
+  uint32 major = 1;
+  uint32 minor = 2;
+}
+
+// Hello registers a worker.
+message Hello {
+  ProtocolVersion protocol = 1;
+  // join_token must match the server's join token.
+  string join_token = 2;
+  string name = 3;
+  // version is the stampede build the worker runs.
+  string version = 4;
+  string region = 5;
+  map<string, string> labels = 6;
+  Capacity capacity = 7;
+  // resume_worker_id is the id from a previous Welcome. A worker that
+  // reconnects mid-run presents it so the server reattaches it to the run.
+  string resume_worker_id = 8;
+  // active_run_id is the run the worker is executing, if any.
+  string active_run_id = 9;
+}
+
+// Capacity describes what a worker can take on. The server splits load in
+// proportion to cpus.
+message Capacity {
+  uint32 cpus = 1;
+  uint64 memory_bytes = 2;
+  // max_vus caps the virtual users the worker accepts (0 = no cap).
+  uint32 max_vus = 3;
+  // protocols lists the drivers the worker supports, e.g. "http".
+  repeated string protocols = 4;
+}
+
+// Health is the worker's self-monitoring for the last second.
+message Health {
+  // saturated is true when any threshold in reasons was crossed: the
+  // worker itself, not the target, may be limiting the measured load.
+  bool saturated = 1;
+  repeated string reasons = 2;
+  // cpu_percent is process CPU as a share of all cores (0-100).
+  double cpu_percent = 3;
+  int64 sched_lag_p99_ns = 4;
+  int64 gc_pause_p99_ns = 5;
+  uint64 open_fds = 6;
+  uint64 fd_limit = 7;
+  uint32 goroutines = 8;
+  uint64 dropped = 9;
+}
+
+// Heartbeat is sent every heartbeat interval. Three missed heartbeats mark
+// the worker lost.
+message Heartbeat {
+  int64 worker_time_unix_nano = 1;
+  Health health = 2;
+  string active_run_id = 3;
+  uint32 vus = 4;
+}
+
+// ClockPong answers a ClockPing: t1 is echoed, t2 is when the worker
+// received the ping and t3 when it sent the pong, both in its own clock.
+message ClockPong {
+  int64 t1_unix_nano = 1;
+  int64 t2_unix_nano = 2;
+  int64 t3_unix_nano = 3;
+}
+
+// RunAccepted confirms that a StartRun compiled and the worker will start
+// at T0.
+message RunAccepted {
+  string run_id = 1;
+}
+
+// Snapshot is one interval of a worker's metrics.
+message Snapshot {
+  string run_id = 1;
+  // seq increases by one per snapshot so the server can drop resends.
+  uint64 seq = 2;
+  // interval is the number of whole intervals since T0.
+  int64 interval = 3;
+  map<int32, StepStats> steps = 4;
+  map<int32, JourneyStats> journeys = 5;
+  uint64 dropped = 6;
+  bytes sched_lag = 7;
+  uint32 vus = 8;
+  double planned = 9;
+  Health health = 10;
+}
+
+// StepStats aggregates one request step within an interval.
+message StepStats {
+  uint64 requests = 1;
+  uint64 failed = 2;
+  map<string, uint64> errors = 3;
+  map<int32, uint64> status = 4;
+  uint64 checks_passed = 5;
+  uint64 checks_failed = 6;
+  uint64 bytes_in = 7;
+  uint64 bytes_out = 8;
+  bytes latency = 9;
+  bytes service = 10;
+  // phase_sum holds per-phase totals in microseconds (dns, connect, tls,
+  // wait, download).
+  repeated uint64 phase_sum = 11;
+}
+
+// JourneyStats aggregates whole iterations of a journey.
+message JourneyStats {
+  uint64 started = 1;
+  uint64 completed = 2;
+  uint64 failed = 3;
+  bytes duration = 4;
+}
+
+// PhaseHistograms holds one histogram per request phase (dns, connect,
+// tls, wait, download) for a step over the whole run.
+message PhaseHistograms {
+  repeated bytes phases = 1;
+}
+
+// RunFinished reports the end of a worker's part of a run.
+message RunFinished {
+  string run_id = 1;
+  string stop_reason = 2;
+  map<int32, PhaseHistograms> phases = 3;
+  uint32 peak_vus = 4;
+  // last_seq is the seq of the final snapshot, so the server knows when it
+  // holds them all.
+  uint64 last_seq = 5;
+  int64 t0_unix_nano = 6;
+  int64 end_unix_nano = 7;
+}
+
+// RunFailed reports that a worker could not start or continue a run.
+message RunFailed {
+  string run_id = 1;
+  string error = 2;
+}
+
+// Welcome accepts a worker.
+message Welcome {
+  string worker_id = 1;
+  int64 heartbeat_interval_ns = 2;
+  ProtocolVersion protocol = 3;
+}
+
+// ClockPing asks for a ClockPong. t1 is the server's send time.
+message ClockPing {
+  int64 t1_unix_nano = 1;
+}
+
+// StartRun gives a worker its slice of a run.
+message StartRun {
+  string run_id = 1;
+  // scenario is the scenario YAML.
+  bytes scenario = 2;
+  map<string, string> env = 3;
+  map<string, string> secrets = 4;
+  // share_lo and share_hi select this worker's slice of the total load as
+  // cumulative fractions; the slices of all workers cover [0, 1).
+  double share_lo = 5;
+  double share_hi = 6;
+  // worker_index and worker_count partition unique test data.
+  uint32 worker_index = 7;
+  uint32 worker_count = 8;
+  // t0_unix_nano is the synchronised start, already converted to the
+  // worker's own clock.
+  int64 t0_unix_nano = 9;
+  // allow_hosts lists public hosts requests may reach. Private hosts are
+  // always allowed.
+  repeated string allow_hosts = 10;
+  int64 interval_ns = 11;
+}
+
+// StopRun ends a run. kill abandons in-flight requests at once; otherwise
+// in-flight iterations get the scenario's graceful stop period.
+message StopRun {
+  string run_id = 1;
+  bool kill = 2;
+  string reason = 3;
+}
+
+// Ack confirms receipt of snapshots up to and including seq, so the worker
+// can forget them. finished confirms RunFinished.
+message Ack {
+  string run_id = 1;
+  uint64 seq = 2;
+  bool finished = 3;
+}
+
+// ServerHeartbeat answers a worker Heartbeat so the worker knows the server
+// still hears it; the worker's dead man's switch relies on it.
+message ServerHeartbeat {
+  int64 server_time_unix_nano = 1;
+}
