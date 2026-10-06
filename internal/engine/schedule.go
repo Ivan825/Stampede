@@ -2,6 +2,7 @@ package engine
 
 import (
 	"math"
+	"runtime"
 	"time"
 
 	"github.com/Ivan825/Stampede/internal/scenario"
@@ -76,4 +77,62 @@ func (s *arrivalSchedule) next() (time.Duration, bool) {
 		s.stage++
 	}
 	return 0, false
+}
+
+// preciseWaiter sleeps until a deadline with sub-millisecond accuracy. OS
+// timers can wake late (around 1ms on macOS), and in an open-model run
+// that lateness would be reported as target latency. It sleeps until
+// shortly before the deadline, then yields in a loop until it arrives. The
+// early-wake window adapts to the timer overshoot it observes.
+type preciseWaiter struct {
+	timer *time.Timer
+	// overshoot is an exponentially weighted average of timer lateness.
+	overshoot time.Duration
+}
+
+const (
+	minSpin = 100 * time.Microsecond
+	maxSpin = 3 * time.Millisecond
+)
+
+func newPreciseWaiter() *preciseWaiter {
+	t := time.NewTimer(time.Hour)
+	t.Stop()
+	return &preciseWaiter{timer: t, overshoot: time.Millisecond}
+}
+
+func (w *preciseWaiter) spin() time.Duration {
+	s := 2*w.overshoot + minSpin
+	return min(max(s, minSpin), maxSpin)
+}
+
+// wait blocks until deadline or until done is closed. It returns false
+// when done was closed first.
+func (w *preciseWaiter) wait(deadline time.Time, done <-chan struct{}) bool {
+	if d := time.Until(deadline) - w.spin(); d > 0 {
+		wake := time.Now().Add(d)
+		w.timer.Reset(d)
+		select {
+		case <-w.timer.C:
+		case <-done:
+			w.timer.Stop()
+			return false
+		}
+		late := time.Since(wake)
+		if late < 0 {
+			late = 0
+		}
+		w.overshoot = (w.overshoot*7 + late) / 8
+	}
+	for i := 0; time.Now().Before(deadline); i++ {
+		if i&63 == 0 {
+			select {
+			case <-done:
+				return false
+			default:
+			}
+		}
+		runtime.Gosched()
+	}
+	return true
 }
