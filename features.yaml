@@ -38,7 +38,7 @@ groups:
     features:
       - { name: "Web UI with scenario editor, live runs and reports", status: shipped }
       - { name: "Terminal console with plain-language commands", status: shipped }
-      - { name: "HTML, JSON, JUnit and Markdown reports; CI exit codes", status: shipped, doc: docs/guides/ci }
+      - { name: "HTML, PDF, CSV, JSON, JUnit and Markdown reports; CI exit codes", status: shipped, doc: docs/guides/ci }
       - { name: "Release comparison with confidence intervals", status: shipped, doc: docs/guides/comparing }
       - { name: "Side-by-side run comparison in the web UI", status: shipped, doc: docs/guides/comparing }
       - { name: "AI journey generation from specs, recordings, logs or a browser crawl, with dry-run validation", status: shipped, doc: docs/ai }

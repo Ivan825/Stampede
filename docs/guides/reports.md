@@ -2,7 +2,31 @@
 
 Every run produces the same report, whether it ran with `stampede run`, on
 the server, or across workers. Export it as HTML (self-contained, no network
-requests, light and dark), JSON, JUnit XML or Markdown.
+requests, light and dark), PDF, CSV, JSON, JUnit XML or Markdown.
+
+## Exports
+
+| Format | `stampede run` / `stampede report` | Server API (`GET /api/v1/runs/{id}/report?format=`) |
+|---|---|---|
+| HTML | `-o report.html` | `html` |
+| PDF | `--pdf report.pdf` | the web UI's **PDF** button prints the HTML report (choose "Save as PDF") |
+| CSV, per step | `--csv steps.csv` | `csv` |
+| CSV, per second | `--timeline-csv timeline.csv` | `timeline-csv` |
+| JSON | `--json report.json` | `json` (the default) |
+| JUnit XML | `--junit junit.xml` | `junit` |
+| Markdown | `--md summary.md` | `markdown` |
+
+`--pdf` prints the HTML report with headless Chrome or Chromium, on A4 in
+the light theme. It finds the browser as browser steps do (set
+`STAMPEDE_CHROME` to choose one); the server image has no browser, which
+is why the web UI prints through yours.
+
+The per-step CSV has one row per step, then a row for its journey (empty
+`step`), and a last row for the whole run (empty `journey` and `step`).
+Latencies are in milliseconds, `error_rate` is a fraction, and `rps` is
+requests per second. The timeline CSV has one row per second with
+achieved and planned rates, error rate, p50/p95/p99, virtual users,
+iterations, dropped iterations and the generator's scheduling lag.
 
 ## Verdict
 

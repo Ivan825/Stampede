@@ -109,7 +109,7 @@ users and roles, single sign-on (OIDC), API tokens, audit log, integrations and 
 reports with target metrics and trace links, and a kill switch that is always on
 screen.
 
-**Reports and CI.** Self-contained HTML, JSON, JUnit XML and Markdown;
+**Reports and CI.** Self-contained HTML, PDF, CSV, JSON, JUnit XML and Markdown;
 exit code 3 when a target fails. `stampede compare` judges repeated runs of
 two versions with bootstrap confidence intervals and a measured noise floor,
 and exits 4 on a regression ([comparing](docs/guides/comparing.md),
