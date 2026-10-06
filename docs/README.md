@@ -26,6 +26,7 @@ not built yet are marked **planned**.
 - [AI journey generation](ai.md)
 - [Product packs](guides/packs.md): using and writing them
 - [Protocols](protocols.md): HTTP/1.1, HTTP/2, GraphQL, WebSocket, SSE, gRPC
+- [Plugins](plugins.md): MQTT, Kafka, Redis, SQL and UDP steps; installing plugins and writing your own
 
 ## Operate
 

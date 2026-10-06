@@ -1,7 +1,9 @@
 # Protocols
 
 Besides plain HTTP requests (`get: /path`, `post: /path`, ...), a step can
-speak GraphQL, server-sent events, WebSocket or gRPC. Every protocol step:
+speak GraphQL, server-sent events, WebSocket or gRPC, or any protocol a
+[plugin](plugins.md) adds (MQTT, Kafka, Redis, SQL and UDP plugins are in
+this repository). Every protocol step:
 
 - is checked when the scenario is loaded: unknown keys are rejected with
   their line number, templates and regexes are compiled, and a variable
@@ -24,6 +26,7 @@ A failed step ends its iteration, as for HTTP.
 | `send` (in `ws`) | writing the message | `ws closed`, `ws error` |
 | `expect` (in `ws`) | from the last `send` to the matching message | `ws expect timeout`, `ws closed`, `ws message too large` |
 | `grpc` | the call (all messages of a server stream) | `gRPC <STATUS>`, `check status (gRPC <STATUS>)`, `grpc unknown method`, `grpc reflection failed`, `grpc invalid message` |
+| `plugin` | measured by the plugin around its operation | the plugin's own (such as `mqtt timeout`, `sql 23505`), `invalid config`, `plugin crashed`, `plugin unavailable`, `timeout` |
 
 ## GraphQL
 
@@ -207,6 +210,28 @@ In `check.expr`, `status` is the numeric code.
 
 A server stream records its messages, time to first message and message
 rate, reported like an SSE stream.
+
+## Plugin steps
+
+```yaml
+- name: publish reading
+  plugin: mqtt.publish              # <plugin>.<step>
+  with:                             # the step's settings; strings may contain ${}
+    topic: devices/${vu}/telemetry
+    payload: '{"seq": ${iter}}'
+    qos: 1
+  check: { maxLatency: 50ms, json: { "$.messageId": exists } }
+  extract: { msgId: "$.messageId" }
+  timeout: 5s
+```
+
+A plugin step runs in a plugin: a separate executable installed with
+`stampede plugin install <name>`. `with` is checked against the schema the
+plugin describes, checks and extractors work on the JSON object the step
+returns, and the engine applies the target policy to the address the
+plugin marks. Each user has its own session (connection, client, socket)
+in each plugin, kept across iterations. See [plugins](plugins.md) for the
+details, the first-party plugins and writing your own.
 
 ## HTTP/2
 
