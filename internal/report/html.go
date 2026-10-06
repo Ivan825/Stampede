@@ -75,18 +75,19 @@ func (r *Report) WriteHTML(w io.Writer) error {
 	}
 	load = append(load, series{Name: "active virtual users", Class: "s2", Ys: vus, Fmt: countFmt, Right: true})
 
+	bands := r.faultBands()
 	d := htmlData{
 		Report:          r,
 		Unit:            Unit(r.Load.Mode),
-		ThroughputChart: lineChart("Throughput", xs, load),
-		LatencyChart: lineChart("Latency", xs, []series{
+		ThroughputChart: lineChartBands("Throughput", xs, fmtSecs, load, bands),
+		LatencyChart: lineChartBands("Latency", xs, fmtSecs, []series{
 			{Name: "p50", Class: "s3", Ys: p50, Fmt: Ms},
 			{Name: "p95", Class: "s1", Ys: p95, Fmt: Ms},
 			{Name: "p99", Class: "s5", Ys: p99, Fmt: Ms},
-		}),
-		ErrorChart: lineChart("Errors", xs, []series{
+		}, bands),
+		ErrorChart: lineChartBands("Errors", xs, fmtSecs, []series{
 			{Name: "error rate", Class: "s5", Ys: errs, Fmt: func(f float64) string { return fmt.Sprintf("%.1f%%", f*100) }},
-		}),
+		}, bands),
 	}
 	if len(r.Curve) >= 2 {
 		cx := make([]float64, len(r.Curve))
@@ -117,7 +118,7 @@ func (r *Report) WriteHTML(w io.Writer) error {
 			for i, p := range m.Points {
 				mx[i], my[i] = p.T, p.Value
 			}
-			mc.Chart = lineChart(m.Name, mx, []series{{Name: m.Name, Class: "s2", Ys: my, Fmt: MetricValue}})
+			mc.Chart = lineChartBands(m.Name, mx, fmtSecs, []series{{Name: m.Name, Class: "s2", Ys: my, Fmt: MetricValue}}, bands)
 		}
 		d.MetricCharts = append(d.MetricCharts, mc)
 	}

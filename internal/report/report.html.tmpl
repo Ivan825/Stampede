@@ -63,6 +63,8 @@ td code { font: 12.5px var(--mono); }
 .narrative .label.suspected { color: var(--warn); border: 1px solid currentColor; }
 .narrative .ref { font: 12px var(--mono); color: var(--muted); border-bottom: 1px dotted var(--muted); cursor: help; margin-left: 4px; }
 .narrative .by { color: var(--muted); font-size: 12.5px; margin: 6px 0 0; }
+svg .band { fill: var(--warn); opacity: .14; }
+.swatch.band { background: var(--warn); opacity: .45; }
 footer { color: var(--muted); font-size: 12.5px; margin-top: 48px; border-top: 1px solid var(--line); padding-top: 16px; }
 footer a, td a { color: var(--accent); }
 .sub { color: var(--muted); font-weight: 400; font-size: 12.5px; }
@@ -137,6 +139,14 @@ footer a, td a { color: var(--accent); }
 <div class="card"><h3>Throughput and users</h3>{{.ThroughputChart}}</div>
 <div class="card"><h3>Latency (from scheduled send)</h3>{{.LatencyChart}}</div>
 <div class="card"><h3>Error rate</h3>{{.ErrorChart}}</div>
+
+{{with .Faults}}
+<h2>Injected faults</h2>
+<div class="card"><table>
+<thead><tr><th>Fault</th><th class="l">Kind</th><th class="l">Target</th><th>From</th><th>To</th><th class="l">Result</th></tr></thead>
+<tbody>{{range .}}<tr><td>{{.Label}}</td><td class="l">{{.Kind}}</td><td class="l"><code>{{.Target}}</code></td><td>{{secs .Start}}</td><td>{{secs .End}}</td><td class="l{{if .Error}} bad{{end}}">{{if .Error}}{{.Error}}{{else}}applied, then reverted{{end}}</td></tr>{{end}}</tbody>
+</table></div>
+{{end}}
 
 {{if .MetricCharts}}
 <h2>Target metrics</h2>

@@ -141,6 +141,16 @@ func (r *Report) WriteText(w io.Writer) {
 			fmt.Fprintf(w, "    %6d  %-28s %s › %s\n", e.Count, e.Error, e.Journey, e.Step)
 		}
 	}
+	if len(r.Faults) > 0 {
+		fmt.Fprintf(w, "\n  injected faults\n")
+		for _, f := range r.Faults {
+			res := "applied, then reverted"
+			if f.Error != "" {
+				res = f.Error
+			}
+			fmt.Fprintf(w, "    %6s-%-6s %-34s %s\n", fmtSecs(f.Start), fmtSecs(f.End), f.Label, res)
+		}
+	}
 	for _, n := range r.Notes {
 		fmt.Fprintf(w, "\n  note: %s\n", n)
 	}
@@ -326,6 +336,19 @@ func (r *Report) WriteMarkdown(w io.Writer) {
 			fmt.Fprintf(w, "| `%s` | %s | %s |\n", c.Source, c.ObservedText, res)
 		}
 		fmt.Fprintln(w)
+	}
+	if len(r.Faults) > 0 {
+		fmt.Fprintf(w, "**Injected faults:** ")
+		for i, f := range r.Faults {
+			if i > 0 {
+				fmt.Fprint(w, "; ")
+			}
+			fmt.Fprintf(w, "%s (%s–%s)", f.Label, fmtSecs(f.Start), fmtSecs(f.End))
+			if f.Error != "" {
+				fmt.Fprintf(w, " **failed: %s**", f.Error)
+			}
+		}
+		fmt.Fprint(w, "\n\n")
 	}
 	fmt.Fprintf(w, "<details><summary>Per step</summary>\n\n| Journey | Step | Requests | Errors | p95 | p99 |\n|---|---|---:|---:|---:|---:|\n")
 	for _, j := range r.Journeys {

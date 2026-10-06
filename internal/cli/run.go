@@ -17,6 +17,7 @@ import (
 	"cel.dev/cel-go/interpreter"
 	"github.com/spf13/cobra"
 
+	"github.com/Ivan825/Stampede/internal/agent"
 	"github.com/Ivan825/Stampede/internal/observe"
 	"github.com/Ivan825/Stampede/internal/report"
 	"github.com/Ivan825/Stampede/internal/runner"
@@ -173,6 +174,10 @@ func runScenario(ctx context.Context, stdout, stderr io.Writer, path string, f *
 	if err != nil {
 		return err
 	}
+	faults, err := faultPlan(s, env, secrets)
+	if err != nil {
+		return err
+	}
 
 	pause, err := scenario.ParseDuration(f.pause)
 	if err != nil {
@@ -195,7 +200,7 @@ func runScenario(ctx context.Context, stdout, stderr io.Writer, path string, f *
 		}
 		rep, err := runner.Run(ctx, runner.Options{
 			Scenario: s, RunID: newRunID(), Env: env, Secrets: secrets,
-			AllowHost: policy, Logger: logger, Progress: prog,
+			AllowHost: policy, Logger: logger, Progress: prog, Faults: faults,
 		})
 		if err != nil {
 			return err
@@ -291,6 +296,31 @@ func observeConfig(s *scenario.Scenario, env, secrets map[string]string) (*obser
 		c.TraceURL = t.URL
 	}
 	return c, nil
+}
+
+// faultPlan resolves the scenario's faults block for a local run: the
+// agent's URL and token may be templated.
+func faultPlan(s *scenario.Scenario, env, secrets map[string]string) (*runner.FaultPlan, error) {
+	fs := s.Faults
+	if fs == nil {
+		return nil, nil
+	}
+	u, err := renderField(s, fs.Agent.URL, env, secrets)
+	if err != nil {
+		return nil, fmt.Errorf("faults.agent.url: %w (set it with -e)", err)
+	}
+	tok, err := renderField(s, fs.Agent.Token, env, secrets)
+	if err != nil {
+		return nil, fmt.Errorf("faults.agent.token: %w (set STAMPEDE_SECRET_<NAME>)", err)
+	}
+	pu, err := url.Parse(u)
+	if err != nil || (pu.Scheme != "http" && pu.Scheme != "https") || pu.Host == "" {
+		return nil, fmt.Errorf("faults.agent.url must be an absolute http(s) URL, got %q", u)
+	}
+	if tok == "" {
+		return nil, errors.New("faults.agent.token is empty")
+	}
+	return &runner.FaultPlan{Client: &agent.Client{BaseURL: u, Token: tok}, Steps: fs.Timeline}, nil
 }
 
 type baseActivation map[string]any

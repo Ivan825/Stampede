@@ -46,6 +46,8 @@ type Report struct {
 	// Workers describes each worker of a distributed run (empty for a
 	// single in-process engine).
 	Workers []WorkerRow `json:"workers,omitempty"`
+	// Faults are the faults a stampede agent injected during the run.
+	Faults []FaultEvent `json:"faults,omitempty"`
 	// Narrative is an optional AI-written summary that cites the figures.
 	Narrative *Narrative `json:"narrative,omitempty"`
 	// TargetMetrics are the target's own metrics over the run, queried
@@ -454,4 +456,26 @@ func statsOf(st *metrics.StepStats, dur float64) Stats {
 		s.RPS = float64(st.Requests) / dur
 	}
 	return s
+}
+
+// FaultEvent is a fault injected during the run. Start and End are
+// seconds since the run started, like Point.T.
+type FaultEvent struct {
+	Label  string  `json:"label"`
+	Kind   string  `json:"kind"` // proxy, container or deployment
+	Target string  `json:"target"`
+	Start  float64 `json:"start"`
+	End    float64 `json:"end"`
+	// Error says why the fault could not be applied or reverted.
+	Error string `json:"error,omitempty"`
+}
+
+func (r *Report) faultBands() []band {
+	var out []band
+	for _, f := range r.Faults {
+		if f.Error == "" {
+			out = append(out, band{From: f.Start, To: f.End, Label: f.Label})
+		}
+	}
+	return out
 }

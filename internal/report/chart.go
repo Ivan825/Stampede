@@ -23,8 +23,19 @@ func lineChart(title string, xs []float64, ss []series) template.HTML {
 	return lineChartX(title, xs, fmtSecs, ss)
 }
 
+// band shades a stretch of the x axis, such as an injected fault.
+type band struct {
+	From, To float64
+	Label    string
+}
+
 // lineChartX renders a line chart with a custom x axis label format.
 func lineChartX(title string, xs []float64, xFmt func(float64) string, ss []series) template.HTML {
+	return lineChartBands(title, xs, xFmt, ss, nil)
+}
+
+// lineChartBands is lineChartX with shaded bands behind the lines.
+func lineChartBands(title string, xs []float64, xFmt func(float64) string, ss []series, bands []band) template.HTML {
 	const (
 		w, h         = 760.0, 240.0
 		padL, padR   = 56.0, 56.0
@@ -81,6 +92,15 @@ func lineChartX(title string, xs []float64, xFmt func(float64) string, ss []seri
 		x := padL + plotW*float64(i)/5
 		fmt.Fprintf(&b, `<text class="axis" x="%.1f" y="%.1f" text-anchor="middle">%s</text>`, x, h-8, html.EscapeString(xFmt(xMax*float64(i)/5)))
 	}
+	for _, bd := range bands {
+		x0 := padL + plotW*math.Max(0, math.Min(bd.From, xMax))/xMax
+		x1 := padL + plotW*math.Max(0, math.Min(bd.To, xMax))/xMax
+		if x1 <= x0 {
+			continue
+		}
+		fmt.Fprintf(&b, `<rect class="band" x="%.1f" y="%.1f" width="%.1f" height="%.1f"><title>%s</title></rect>`,
+			x0, padT, x1-x0, plotH, html.EscapeString(bd.Label))
+	}
 	for _, s := range ss {
 		top := lMax
 		if s.Right {
@@ -101,6 +121,9 @@ func lineChartX(title string, xs []float64, xFmt func(float64) string, ss []seri
 		fmt.Fprintf(&b, `<polyline class="line %s" points="%s"/>`, s.Class, strings.Join(pts, " "))
 	}
 	b.WriteString(`</svg><div class="legend">`)
+	if len(bands) > 0 {
+		b.WriteString(`<span><i class="swatch band"></i>injected fault</span>`)
+	}
 	for _, s := range ss {
 		side := ""
 		if s.Right {

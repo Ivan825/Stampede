@@ -94,6 +94,13 @@ func (r *Report) Facts() []Fact {
 		}
 		add(fmt.Sprintf("error.%d", i), "errors", "%d × %s at %s › %s", e.Count, e.Error, e.Journey, e.Step)
 	}
+	for i, f := range r.Faults {
+		if f.Error != "" {
+			add(fmt.Sprintf("fault.%d", i), "injected faults", "fault %s could not be applied: %s", f.Label, f.Error)
+			continue
+		}
+		add(fmt.Sprintf("fault.%d", i), "injected faults", "fault %s (%s on %s) was active from %.0fs to %.0fs", f.Label, f.Kind, f.Target, f.Start, f.End)
+	}
 	for i, n := range r.Notes {
 		add(fmt.Sprintf("note.%d", i), "notes", "%s", n)
 	}

@@ -27,6 +27,9 @@ type Options struct {
 	Logger    *slog.Logger
 	// Progress receives each interval's merged snapshot for live display.
 	Progress func(p Progress)
+	// Faults, when set, injects the scenario's fault timeline through a
+	// stampede agent during the run. It is checked before any load.
+	Faults *FaultPlan
 }
 
 // Progress is a live update.
@@ -62,6 +65,15 @@ func Run(ctx context.Context, o Options) (*report.Report, error) {
 		bp = NewBreakpointTracker(prog, plan)
 	}
 	abort := NewAbortWatcher(o.Scenario.Load.Abort, nil, time.Second)
+	logger := o.Logger
+	if logger == nil {
+		logger = slog.Default()
+	}
+	if o.Faults != nil {
+		if err := o.Faults.Check(ctx); err != nil {
+			return nil, err
+		}
+	}
 	start := time.Now()
 	onSnap := func(s *metrics.Snapshot) {
 		mu.Lock()
@@ -89,7 +101,15 @@ func Run(ctx context.Context, o Options) (*report.Report, error) {
 	if err != nil {
 		return nil, err
 	}
+	var faults *faultRun
+	if o.Faults != nil {
+		faults = o.Faults.start(ctx, start, o.RunID, logger)
+	}
 	res, err := eng.Run(ctx)
+	var events []report.FaultEvent
+	if faults != nil {
+		events = faults.stop(time.Now())
+	}
 	if err != nil {
 		return nil, err
 	}
@@ -104,7 +124,9 @@ func Run(ctx context.Context, o Options) (*report.Report, error) {
 	if bp != nil {
 		in.Breakpoint = bp.Result()
 	}
-	return report.Build(in), nil
+	rep := report.Build(in)
+	rep.Faults = events
+	return rep, nil
 }
 
 // BreakpointTracker evaluates targets at the end of each hold stage of a
