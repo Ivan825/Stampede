@@ -27,8 +27,14 @@ func newValidateCmd() *cobra.Command {
 					continue
 				}
 				plan, _ := s.Load.Plan()
-				fmt.Fprintf(cmd.OutOrStdout(), "✓ %s: %d journeys, %s, peak %.0f, %s\n",
-					path, len(s.Journeys), plan.Executor, plan.Peak(), plan.TotalDuration())
+				load := fmt.Sprintf("peak %.0f VUs, %s", plan.Peak(), plan.TotalDuration())
+				switch {
+				case plan.Executor == scenario.ExecIterations:
+					load = fmt.Sprintf("%d iterations over %d VUs", plan.Iterations, plan.VUs)
+				case plan.Mode == scenario.ModeRate:
+					load = fmt.Sprintf("peak %.0f/s, %s", plan.Peak(), plan.TotalDuration())
+				}
+				fmt.Fprintf(cmd.OutOrStdout(), "✓ %s: %d journeys, %s, %s\n", path, len(s.Journeys), plan.Executor, load)
 			}
 			if failed > 0 {
 				return fmt.Errorf("%d of %d scenarios are invalid", failed, len(args))
