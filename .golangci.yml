@@ -1,0 +1,40 @@
+version: "2"
+linters:
+  enable:
+    - errorlint
+    - gosec
+    - misspell
+    - unconvert
+    - unparam
+    - revive
+  settings:
+    errcheck:
+      exclude-functions:
+        - fmt.Fprint
+        - fmt.Fprintf
+        - fmt.Fprintln
+        - (io.Closer).Close
+        - (*os.File).Close
+        - (net.Conn).Close
+        - (net.Listener).Close
+        - os.RemoveAll
+    gosec:
+      excludes:
+        - G104 # unhandled errors are covered by errcheck
+        - G404 # math/rand is intended for load generation, not crypto
+        - G304 # reading scenario and data files chosen by the user
+        - G115 # integer conversions are bounds-checked where it matters (histogram indices)
+        - G704 # a load generator sends requests to user-chosen URLs by design; see internal/safety
+    revive:
+      rules:
+        - name: exported
+          disabled: true
+  exclusions:
+    rules:
+      - path: _test\.go
+        linters: [gosec, errcheck, unparam]
+      - path: ^bench/
+        linters: [gosec]
+formatters:
+  enable:
+    - gofmt
