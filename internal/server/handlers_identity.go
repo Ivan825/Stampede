@@ -16,11 +16,8 @@ import (
 	"github.com/Ivan825/Stampede/internal/version"
 )
 
-// Advisory lock keys.
-const (
-	lockSetup  = 7461
-	lockLeader = 7462
-)
+// lockSetup serialises first-run setup.
+const lockSetup = 7461
 
 // audit records an action. Failures are logged, never returned: the audit
 // log must not make an otherwise successful action fail.

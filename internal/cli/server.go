@@ -8,6 +8,7 @@ import (
 	"io/fs"
 	"log/slog"
 	"net"
+	"net/http"
 	"net/netip"
 	"os"
 	"strings"
@@ -196,10 +197,27 @@ func runServer(cmd *cobra.Command, f *serverFlags) error {
 	if err != nil {
 		return err
 	}
+	// Only one replica runs load at a time. Others wait as standbys and take
+	// over when the leader's database session ends, so a crashed leader's
+	// runs are settled exactly once.
+	lock, err := becomeLeader(ctx, log, st, f.addr)
+	if err != nil {
+		return err
+	}
+	defer lock.Release()
+	ctx, cancel := context.WithCancelCause(ctx)
+	defer cancel(nil)
+	go watchLeadership(ctx, cancel, log, lock)
 	if err := srv.Recover(ctx); err != nil {
 		return err
 	}
-	return srv.ListenAndServe(ctx, f.addr)
+	if err := srv.ListenAndServe(ctx, f.addr); err != nil {
+		return err
+	}
+	if cause := context.Cause(ctx); cause != nil && !errors.Is(cause, context.Canceled) {
+		return cause
+	}
+	return nil
 }
 
 func newKeygenCmd() *cobra.Command {
@@ -233,5 +251,76 @@ func openStoreWithRetry(ctx context.Context, log *slog.Logger, url string, wait 
 			return nil, ctx.Err()
 		}
 		delay = min(delay*2, 5*time.Second)
+	}
+}
+
+// becomeLeader returns once this replica holds the leader lock. While it
+// waits it serves /healthz (200) and /readyz (503), so orchestrators keep it
+// alive but route no traffic to it.
+func becomeLeader(ctx context.Context, log *slog.Logger, st *store.Store, addr string) (*store.Lock, error) {
+	lock, err := st.AdvisoryLock(ctx, store.LeaderLockKey)
+	if err != nil || lock != nil {
+		return lock, err
+	}
+	log.Info("another replica is active; waiting as a standby")
+	mux := http.NewServeMux()
+	mux.HandleFunc("/healthz", func(w http.ResponseWriter, _ *http.Request) { _, _ = w.Write([]byte("standby\n")) })
+	mux.HandleFunc("/", func(w http.ResponseWriter, _ *http.Request) {
+		http.Error(w, "standby replica: another Stampede server is active", http.StatusServiceUnavailable)
+	})
+	hs := &http.Server{Addr: addr, Handler: mux, ReadHeaderTimeout: 5 * time.Second}
+	go func() { _ = hs.ListenAndServe() }()
+	defer func() {
+		sctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		_ = hs.Shutdown(sctx)
+	}()
+	tick := time.NewTicker(2 * time.Second)
+	defer tick.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return nil, ctx.Err()
+		case <-tick.C:
+		}
+		lock, err := st.AdvisoryLock(ctx, store.LeaderLockKey)
+		if err != nil {
+			log.Warn("leader lock check failed", "error", err)
+			continue
+		}
+		if lock != nil {
+			log.Info("became the active replica")
+			return lock, nil
+		}
+	}
+}
+
+// watchLeadership stops the server if the session holding the leader lock
+// dies: another replica may already have taken over, and two leaders would
+// both drive the same runs.
+func watchLeadership(ctx context.Context, cancel context.CancelCauseFunc, log *slog.Logger, lock *store.Lock) {
+	tick := time.NewTicker(2 * time.Second)
+	defer tick.Stop()
+	fails := 0
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-tick.C:
+		}
+		pctx, pcancel := context.WithTimeout(ctx, 2*time.Second)
+		err := lock.Alive(pctx)
+		pcancel()
+		if err == nil {
+			fails = 0
+			continue
+		}
+		fails++
+		log.Warn("leader lock connection check failed", "error", err, "consecutive", fails)
+		if fails >= 3 {
+			log.Error("lost the leader lock; shutting down so a standby can take over")
+			cancel(errors.New("lost the leader lock"))
+			return
+		}
 	}
 }

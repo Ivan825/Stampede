@@ -134,25 +134,45 @@ func IsUniqueViolation(err error) bool {
 	return errors.As(err, &pe) && pe.Code == "23505"
 }
 
+// LeaderLockKey is the advisory lock held by the active server replica.
+const LeaderLockKey = 7462
+
+// Lock is a session-level advisory lock held on a dedicated connection.
+type Lock struct {
+	conn interface {
+		Ping(context.Context) error
+		Release()
+	}
+	key     int64
+	release func()
+}
+
+// Alive reports whether the connection holding the lock still works. If it
+// does not, the database has dropped the session and the lock with it.
+func (l *Lock) Alive(ctx context.Context) error { return l.conn.Ping(ctx) }
+
+// Release frees the lock.
+func (l *Lock) Release() { l.release() }
+
 // AdvisoryLock tries to take a session-level advisory lock on a dedicated
-// connection, used for leader election between server replicas. The
-// returned release function frees it.
-func (s *Store) AdvisoryLock(ctx context.Context, key int64) (bool, func(), error) {
+// connection, used for leader election between server replicas. It returns
+// nil when another session holds the lock.
+func (s *Store) AdvisoryLock(ctx context.Context, key int64) (*Lock, error) {
 	conn, err := s.Pool.Acquire(ctx)
 	if err != nil {
-		return false, nil, err
+		return nil, err
 	}
 	var ok bool
 	if err := conn.QueryRow(ctx, "SELECT pg_try_advisory_lock($1)", key).Scan(&ok); err != nil {
 		conn.Release()
-		return false, nil, err
+		return nil, err
 	}
 	if !ok {
 		conn.Release()
-		return false, nil, nil
+		return nil, nil
 	}
-	return true, func() {
+	return &Lock{conn: conn, key: key, release: func() {
 		_, _ = conn.Exec(context.Background(), "SELECT pg_advisory_unlock($1)", key)
 		conn.Release()
-	}, nil
+	}}, nil
 }

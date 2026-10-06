@@ -50,13 +50,20 @@ func TestMigrateAndBasics(t *testing.T) {
 		t.Errorf("want not found, got %v", err)
 	}
 
-	ok, release, err := s.AdvisoryLock(ctx, 42)
-	if err != nil || !ok {
+	l, err := s.AdvisoryLock(ctx, 42)
+	if err != nil || l == nil {
 		t.Fatalf("lock: %v", err)
 	}
-	ok2, _, _ := s.AdvisoryLock(ctx, 42)
-	if ok2 {
+	if err := l.Alive(ctx); err != nil {
+		t.Errorf("alive: %v", err)
+	}
+	if l2, _ := s.AdvisoryLock(ctx, 42); l2 != nil {
 		t.Error("second lock holder should be refused")
 	}
-	release()
+	l.Release()
+	if l3, _ := s.AdvisoryLock(ctx, 42); l3 == nil {
+		t.Error("lock should be free after release")
+	} else {
+		l3.Release()
+	}
 }
