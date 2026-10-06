@@ -81,11 +81,56 @@ type AuditLog struct {
 	Ip      string
 }
 
+type Integration struct {
+	ID         uuid.UUID
+	OrgID      uuid.UUID
+	Name       string
+	Kind       string
+	Url        string
+	Ciphertext []byte
+	WrappedKey []byte
+	KeyID      *string
+	CreatedBy  *uuid.UUID
+	CreatedAt  time.Time
+	UpdatedAt  time.Time
+}
+
 type Membership struct {
 	OrgID     uuid.UUID
 	UserID    uuid.UUID
 	Role      string
 	CreatedAt time.Time
+}
+
+type NotificationChannel struct {
+	ID               uuid.UUID
+	OrgID            uuid.UUID
+	Name             string
+	Kind             string
+	Events           []string
+	AllowPrivate     bool
+	UrlHint          string
+	UrlCiphertext    []byte
+	UrlWrappedKey    []byte
+	SecretCiphertext []byte
+	SecretWrappedKey []byte
+	KeyID            string
+	CreatedBy        *uuid.UUID
+	CreatedAt        time.Time
+}
+
+type NotificationDelivery struct {
+	ID         int64
+	ChannelID  uuid.UUID
+	DeliveryID uuid.UUID
+	Event      string
+	RunID      *uuid.UUID
+	Attempt    int32
+	Ok         bool
+	StatusCode int32
+	Error      string
+	DurationMs int32
+	At         time.Time
 }
 
 type Org struct {
