@@ -41,7 +41,7 @@ groups:
       - { name: HTML, JSON, JUnit and Markdown reports; CI exit codes, status: shipped, doc: docs/guides/ci }
       - { name: Release comparison with confidence intervals, status: shipped, doc: docs/guides/comparing }
       - { name: AI journey generation with dry-run validation, status: shipped, doc: docs/ai }
-      - { name: AI report narratives, status: planned }
+      - { name: AI report narratives that cite every figure, status: shipped, doc: docs/ai }
       - { name: Scheduled runs, status: planned }
       - { name: Packaged GitHub Action, status: planned }
   - name: Operate

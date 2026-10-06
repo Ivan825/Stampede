@@ -214,9 +214,56 @@ log, without keys or input contents. Only admins can set a provider's
 `baseURL`, because the server sends prompts (redacted inputs) to that
 address.
 
+## Report narratives
+
+After a run finishes, a model can write the summary at the top of the
+report. Every claim in it cites the report figures it rests on and is
+labelled **measured** (the figures state it) or **suspected** (a likely
+cause the figures suggest, such as rising connect time pointing at
+connection pool exhaustion).
+
+```sh
+stampede run checkout.yaml --narrative -o report.html
+stampede report saved.json --narrative --json with-summary.json -o report.html
+stampede run checkout.yaml --narrative --provider ollama --model qwen3:14b
+```
+
+| Flag | Meaning |
+|---|---|
+| `--narrative` | write a summary after the run |
+| `--provider` | `anthropic` (default), `openai`, `gemini`, `ollama`, `openai-compatible` |
+| `--model` | model name (default `claude-sonnet-5-5` for anthropic) |
+| `--ai-base-url` | provider endpoint, as `--base-url` for `generate` |
+
+How claims are checked:
+
+- The model sees only the report's aggregate figures as a list of facts
+  with ids (`overall.latency`, `target.0`, `breakpoint`, `knee`,
+  `step.checkout/pay`, `error.0`, ...). No request or response data is sent.
+  Error messages and notes are redacted first.
+- A claim citing an id that does not exist is dropped.
+- A measured claim must cite at least one fact, and every number in it
+  must appear in the facts it cites (compared by value, so 840ms matches
+  840.0ms). Otherwise it is dropped.
+- Every number in the summary must appear in some fact.
+- If anything was dropped, the model gets one chance to correct its reply.
+  What survives is kept, and nothing unchecked is ever shown.
+
+The narrative runs after the load has finished, so it never affects the
+measurement. If the model fails, the run's report and exit code are
+unchanged and a warning is printed. The HTML report shows the summary
+with each citation's figure on hover. The text and Markdown reports
+list the claims with their fact ids, and the JSON report stores it under
+`narrative`.
+
 ## Limitations
 
 - Browser crawling as an input is **planned**, not built.
+- A narrative's checks prove that its figures come from the report, not
+  that its suspected causes are right. Suspected claims are leads to
+  investigate.
+- Narratives are available from the CLI. The server API and web UI do not
+  offer them yet.
 - A dry run proves one user can complete each journey. It does not prove
   the journey is realistic, or that the weights match production. Review
   the proposal.

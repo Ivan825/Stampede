@@ -106,7 +106,9 @@ access log into a scenario. Every journey is dry-run against your target and rep
 works before you approve it; recorded traffic is redacted before anything
 reaches a model ([AI generation](docs/ai.md)). The pipeline is tested with a
 scripted model; it has not yet been run against a real provider in this
-repository's CI.
+repository's CI. `stampede run --narrative` (or `stampede report
+--narrative`) adds a written summary to a finished report in which every
+claim cites the figures behind it and is labelled measured or suspected.
 
 **Safety.** Private targets just work; public targets stay under low caps
 until you prove ownership; requests cannot leave the target's host; hard caps
@@ -116,7 +118,7 @@ per server and per target; audit log ([safety](docs/safety.md)).
 
 Browser (Playwright) workers, the plugin interface with MQTT, Kafka, Redis,
 SQL and UDP plugins, the other 19 product packs, AI generation from browser
-crawls, AI report narratives, the fault-injection
+crawls, the fault-injection
 agent, mutual TLS between server and workers, several
 active server replicas (today extra replicas are hot standbys), scheduled runs, side-by-side benchmarks with k6 and
 wrk2, a packaged GitHub Action, and the website.

@@ -105,7 +105,12 @@ func newReportCmd() *cobra.Command {
 				return err
 			}
 			r := rs[0]
-			if f.html == "" && f.junit == "" && f.md == "" {
+			p, err := f.ai.provider()
+			if err != nil {
+				return err
+			}
+			narrate(cmd.Context(), cmd.ErrOrStderr(), r, p)
+			if f.html == "" && f.json == "" && f.junit == "" && f.md == "" {
 				r.WriteText(cmd.OutOrStdout())
 				return nil
 			}
@@ -115,6 +120,8 @@ func newReportCmd() *cobra.Command {
 	cmd.Flags().StringVarP(&f.html, "out", "o", "", "write HTML to this file")
 	cmd.Flags().StringVar(&f.junit, "junit", "", "write JUnit XML to this file")
 	cmd.Flags().StringVar(&f.md, "md", "", "write Markdown to this file (- for stdout)")
+	cmd.Flags().StringVar(&f.json, "json", "", "write the JSON report (with any narrative) to this file (- for stdout)")
+	f.ai.register(cmd.Flags())
 	return cmd
 }
 

@@ -46,6 +46,8 @@ type Report struct {
 	// Workers describes each worker of a distributed run (empty for a
 	// single in-process engine).
 	Workers []WorkerRow `json:"workers,omitempty"`
+	// Narrative is an optional AI-written summary that cites the figures.
+	Narrative *Narrative `json:"narrative,omitempty"`
 }
 
 // LoadInfo summarises the plan.

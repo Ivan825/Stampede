@@ -30,6 +30,7 @@ type htmlData struct {
 	LatencyChart    template.HTML
 	ErrorChart      template.HTML
 	CurveChart      template.HTML
+	NarrativeHTML   template.HTML
 	Unit            string
 	// HasStreams shows the streams table.
 	HasStreams bool
@@ -94,5 +95,6 @@ func (r *Report) WriteHTML(w io.Writer) error {
 			d.HasStreams = d.HasStreams || s.Stream != nil
 		}
 	}
+	d.NarrativeHTML = narrativeHTML(r.Narrative, r.Facts())
 	return htmlTmpl.Execute(w, d)
 }

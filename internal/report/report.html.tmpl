@@ -57,6 +57,12 @@ td code { font: 12.5px var(--mono); }
 .journey td { font-weight: 600; background: color-mix(in srgb, var(--surface) 92%, var(--fg)); }
 .note { border-left: 3px solid var(--warn); background: var(--surface); padding: 10px 14px; border-radius: 4px; margin: 10px 0; }
 .empty { color: var(--muted); }
+.narrative .claims { padding-left: 0; list-style: none; display: grid; gap: 8px; margin: 10px 0; }
+.narrative .label { font: 600 11px var(--mono); text-transform: uppercase; letter-spacing: .06em; padding: 1px 7px; border-radius: 999px; margin-right: 6px; }
+.narrative .label.measured { color: var(--pass); border: 1px solid currentColor; }
+.narrative .label.suspected { color: var(--warn); border: 1px solid currentColor; }
+.narrative .ref { font: 12px var(--mono); color: var(--muted); border-bottom: 1px dotted var(--muted); cursor: help; margin-left: 4px; }
+.narrative .by { color: var(--muted); font-size: 12.5px; margin: 6px 0 0; }
 footer { color: var(--muted); font-size: 12.5px; margin-top: 48px; border-top: 1px solid var(--line); padding-top: 16px; }
 footer a { color: var(--accent); }
 </style>
@@ -79,6 +85,11 @@ footer a { color: var(--accent); }
 </header>
 
 {{range .Notes}}<div class="note">{{.}}</div>{{end}}
+
+{{if .NarrativeHTML}}
+<h2>Summary</h2>
+<div class="card narrative">{{.NarrativeHTML}}</div>
+{{end}}
 
 <h2>Summary</h2>
 <div class="tiles">

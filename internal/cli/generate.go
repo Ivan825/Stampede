@@ -16,7 +16,6 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/Ivan825/Stampede/internal/ai"
-	"github.com/Ivan825/Stampede/internal/ai/provider"
 )
 
 // ExitUnvalidated is returned by generate when the proposal was not
@@ -122,15 +121,7 @@ func runGenerate(ctx context.Context, stdout, stderr io.Writer, f *generateFlags
 	if !f.noDryRun && f.target == "" {
 		return errors.New("--target is required for the dry run (or pass --no-dry-run)")
 	}
-	kind, err := provider.ParseKind(f.providerName)
-	if err != nil {
-		return err
-	}
-	key := ""
-	if env := provider.KeyEnv(kind); env != "" {
-		key = os.Getenv(env)
-	}
-	p, err := provider.New(provider.Config{Kind: kind, Model: f.model, BaseURL: f.baseURL, APIKey: key})
+	p, err := newProvider(f.providerName, f.model, f.baseURL)
 	if err != nil {
 		return err
 	}

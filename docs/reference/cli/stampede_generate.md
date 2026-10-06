@@ -48,10 +48,13 @@ stampede generate [flags]
       --describe string       plain-language description of your users and what they do
       --diff-against string   show a diff against this scenario (default: the --out file if it exists)
   -e, --env stringArray       set ${env.KEY} for the dry run (KEY=VALUE, repeatable)
+      --from-graphql string   GraphQL schema: SDL (.graphql) or an introspection result (.json)
       --from-har string       HAR recording of real use (browser devtools or a proxy)
       --from-log string       web server access log, used to estimate the journey mix
       --from-openapi string   OpenAPI 3.x spec (YAML or JSON)
+      --graphql-path string   path of the GraphQL API on the target (default "/graphql")
   -h, --help                  help for generate
+      --introspect            fetch the GraphQL schema from --target by introspection
       --max-repairs int       repair rounds before a failing journey is flagged for a human (0 disables repair) (default 3)
       --max-tokens int        maximum tokens per model reply (default 16000)
       --model string          model name (default claude-sonnet-5-5 for anthropic; required for the others)

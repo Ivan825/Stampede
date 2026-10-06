@@ -26,6 +26,7 @@ stampede run <scenario.yaml> [flags]
 ### Options
 
 ```
+      --ai-base-url string   provider API base URL for --narrative
       --allow-host strings   extra public hosts requests may reach besides the target
       --base-url string      override target.baseURL
       --duration string      override the duration, e.g. 30s or 5m
@@ -35,8 +36,11 @@ stampede run <scenario.yaml> [flags]
       --json string          write a JSON report to this file (- for stdout)
       --junit string         write JUnit XML (one test per target) to this file
       --md string            write a Markdown summary to this file (- for stdout)
+      --model string         model for --narrative (default claude-sonnet-5-5 for anthropic)
+      --narrative            add an AI-written summary; every claim cites the report's figures (needs a provider key)
   -o, --out string           write an HTML report to this file
       --pause string         pause between repeats (default "10s")
+      --provider string      model provider for --narrative: anthropic, openai, gemini, ollama or openai-compatible (default "anthropic")
   -q, --quiet                no live progress
       --rate string          override the arrival rate, e.g. 100/s (switches to rate mode)
       --repeat int           run the scenario this many times (for stampede compare); report files get -1, -2 ... suffixes (default 1)

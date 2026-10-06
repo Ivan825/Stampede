@@ -61,6 +61,7 @@ type runFlags struct {
 	repeat                int
 	pause                 string
 	verbose               bool
+	ai                    aiFlags
 }
 
 func newRunCmd() *cobra.Command {
@@ -99,6 +100,7 @@ fails, 1 on any other error.`,
 	fl.IntVar(&f.repeat, "repeat", 1, "run the scenario this many times (for stampede compare); report files get -1, -2 ... suffixes")
 	fl.StringVar(&f.pause, "pause", "10s", "pause between repeats")
 	fl.BoolVarP(&f.verbose, "verbose", "v", false, "log step errors as they happen")
+	f.ai.register(fl)
 	return cmd
 }
 
@@ -111,6 +113,10 @@ func runScenario(ctx context.Context, stdout, stderr io.Writer, path string, f *
 		return err
 	}
 	if err := s.Validate(); err != nil {
+		return err
+	}
+	narrator, err := f.ai.provider()
+	if err != nil {
 		return err
 	}
 
@@ -180,6 +186,7 @@ func runScenario(ctx context.Context, stdout, stderr io.Writer, path string, f *
 		if err != nil {
 			return err
 		}
+		narrate(ctx, stderr, rep, narrator)
 		if f.json != "-" && f.md != "-" {
 			rep.WriteText(stdout)
 		}

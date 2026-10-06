@@ -141,6 +141,7 @@ func (r *Report) WriteText(w io.Writer) {
 	for _, n := range r.Notes {
 		fmt.Fprintf(w, "\n  note: %s\n", n)
 	}
+	r.WriteNarrativeText(w)
 	fmt.Fprintln(w)
 }
 
@@ -183,6 +184,13 @@ func (r *Report) WriteMarkdown(w io.Writer) {
 	fmt.Fprintf(w, "### %s Stampede: %s — %s\n\n", icon, r.Scenario, VerdictLabel(r.Verdict))
 	fmt.Fprintf(w, "%d requests at %.1f/s over %.0fs · errors %s · p95 %s · p99 %s\n\n",
 		o.Requests, o.RPS, r.Duration, Pct(o.ErrorRate), Ms(o.Latency.P95), Ms(o.Latency.P99))
+	if n := r.Narrative; n != nil {
+		fmt.Fprintf(w, "%s\n\n", n.Summary)
+		for _, c := range n.Claims {
+			fmt.Fprintf(w, "- **%s** %s <sub>%s</sub>\n", c.Label, c.Text, strings.Join(c.Refs, ", "))
+		}
+		fmt.Fprintf(w, "\n<sub>Summary written by %s from this report's figures.</sub>\n\n", n.Model)
+	}
 	if len(r.Thresholds) > 0 {
 		fmt.Fprintf(w, "| Target | Observed | Result |\n|---|---|---|\n")
 		for _, c := range r.Thresholds {
