@@ -39,6 +39,7 @@ The authoritative definition is the [JSON Schema](../../schema/scenario.schema.j
 | `iterations` | fixed total iterations shared by `vus` users |
 | `maxVUs` | open-model user cap (default 5 × peak rate, 50 to 50,000) |
 | `gracefulStop` | time in-flight iterations get at the end (default 30s) |
+| `abort` | `{errors: 50%, p95: 5s, for: 10s}`: stop early when either limit holds for `for` (default 10s) |
 
 Units: durations `500ms 2s 1m30s 4h 2d` (a bare number is seconds); rates
 `50/s 3000/m 100/h`; percentages `1%` or `0.01`.

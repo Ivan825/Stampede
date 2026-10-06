@@ -40,7 +40,7 @@ the files it runs. This page lists what is defended today and what is not.
 | A rogue worker | join token compared in constant time; a worker only receives runs assigned to it | partial: one shared token, no per-worker identity |
 | Eavesdropping between server and workers | TLS on the worker port when certificates are configured | partial: mutual TLS with a built-in CA is planned |
 | Denial of service on the worker port | gRPC pinned past GO-2026-6443; keepalive limits | partial: no rate limiting per peer |
-| Runaway run | kill switch (UI, CLI, API), worker dead man's switch after 10 s without the server, breakpoint auto-stop | built; automatic abort on error-rate limits is planned |
+| Runaway run | kill switch (UI, CLI, API), worker dead man's switch after 10 s without the server, breakpoint auto-stop, auto-abort on sustained errors or latency (server floor 90% errors for 30 s by default) | built |
 | Supply chain | Dependabot, govulncheck and golangci-lint (gosec) in CI, pinned workflow actions, distroless non-root images; signed releases and SBOMs from GoReleaser | built in config; not yet exercised by a published release |
 
 ## Known gaps

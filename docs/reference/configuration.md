@@ -15,6 +15,7 @@
 | `--executor` | `STAMPEDE_EXECUTOR` | `auto` | `auto`: workers when any are idle, else in-process; `workers`; `local` |
 | `--data-dir` | `STAMPEDE_DATA_DIR` | — | folder holding CSV/JSON feeder files; file feeders are refused without it |
 | `--max-rate`, `--max-vus`, `--max-duration` | — | none | hard caps applied to every run |
+| `--abort-errors`, `--abort-for` | `STAMPEDE_ABORT_ERRORS` | `90%`, `30s` | stop any run whose error rate stays at or above this; `0` disables |
 | `--trusted-proxy` | `STAMPEDE_TRUSTED_PROXIES` (comma separated) | none | reverse proxies whose `X-Forwarded-For` is believed |
 | `--secure-cookies` | `STAMPEDE_SECURE_COOKIES=true` | `false` | mark the session cookie Secure (behind HTTPS) |
 | `--log-level`, `--log-format` | `STAMPEDE_LOG_LEVEL`, `STAMPEDE_LOG_FORMAT` | `info`, `json` | logging |

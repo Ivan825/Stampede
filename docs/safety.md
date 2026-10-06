@@ -35,6 +35,12 @@ with the reason if any is exceeded.
 - **Dead man's switch:** a worker that cannot reach the server for 10
   seconds stops its load by itself.
 - **Breakpoint runs** stop at the first load level that misses a target.
+- **Auto-abort:** a scenario's `load.abort` (for example
+  `{errors: 50%, p95: 5s, for: 10s}`) stops the run once errors or p95 stay
+  at or above the limit for that long. The server also applies a floor to
+  every run, by default errors at or above 90% for 30 seconds
+  (`--abort-errors`, `--abort-for`; `0` disables it), so a target that has
+  fallen over is not hammered for the rest of a test.
 
 ## Record
 
@@ -42,5 +48,4 @@ Every run start, stop and kill, target and secret change, token and user
 change is in the audit log (Settings → Audit log, admins), with who did it.
 
 **Planned:** typed confirmation for attack-like tests (connection floods,
-slow clients), and automatic abort on error rate or latency limits during
-a run.
+slow clients).
