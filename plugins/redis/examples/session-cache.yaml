@@ -1,0 +1,32 @@
+apiVersion: stampede.dev/v1
+kind: Scenario
+metadata:
+  name: redis-session-cache
+  description: Users store, read and refresh a session in Redis while a counter tracks page views.
+journeys:
+  - name: visitor
+    steps:
+      - name: store session
+        plugin: redis.command
+        with:
+          addr: ${env.REDIS_ADDR}       # host:port or redis://user:pass@host:6379/0
+          command: [SET, "session:${vu}", '{"user": ${vu}, "cart": []}', EX, 1800]
+      - name: read session
+        plugin: redis.command
+        with:
+          addr: ${env.REDIS_ADDR}
+          command: [GET, "session:${vu}"]
+        check: { json: { "$.value": exists }, maxLatency: 20ms }
+        extract: { session: "$.value" }
+      - name: touch and count
+        plugin: redis.command
+        with:
+          addr: ${env.REDIS_ADDR}
+          pipeline:                     # one round trip for both
+            - [EXPIRE, "session:${vu}", 1800]
+            - [INCR, "stats:views"]
+        extract: { views: "$.values[1]" }
+      - think: 100ms..300ms
+load: { vus: 50, duration: 1m }
+targets:
+  - visitor/read session.p99 < 10ms
