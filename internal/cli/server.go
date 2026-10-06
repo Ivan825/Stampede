@@ -21,6 +21,7 @@ import (
 	"github.com/Ivan825/Stampede/internal/coordinator"
 	"github.com/Ivan825/Stampede/internal/keyring"
 	"github.com/Ivan825/Stampede/internal/safety"
+	"github.com/Ivan825/Stampede/internal/scenario"
 	"github.com/Ivan825/Stampede/internal/server"
 	"github.com/Ivan825/Stampede/internal/store"
 )
@@ -40,6 +41,8 @@ type serverFlags struct {
 	maxVUs        int
 	maxDuration   time.Duration
 	trusted       []string
+	abortErrors   string
+	abortFor      time.Duration
 	workerAddr    string
 	joinToken     string
 	executor      string
@@ -80,6 +83,8 @@ Environment:
 	fl.StringVar(&f.dataDir, "data-dir", os.Getenv("STAMPEDE_DATA_DIR"), "directory holding CSV/JSON feeder files for runs")
 	fl.StringVar(&f.tlsCert, "worker-tls-cert", os.Getenv("STAMPEDE_WORKER_TLS_CERT"), "TLS certificate for the worker port")
 	fl.StringVar(&f.tlsKey, "worker-tls-key", os.Getenv("STAMPEDE_WORKER_TLS_KEY"), "TLS key for the worker port")
+	fl.StringVar(&f.abortErrors, "abort-errors", envOr("STAMPEDE_ABORT_ERRORS", "90%"), "stop any run whose error rate stays at or above this (0 disables)")
+	fl.DurationVar(&f.abortFor, "abort-for", 30*time.Second, "how long --abort-errors must hold before a run is stopped")
 	fl.StringSliceVar(&f.trusted, "trusted-proxy", splitEnv("STAMPEDE_TRUSTED_PROXIES"), "CIDR of a reverse proxy whose X-Forwarded-For is trusted (repeatable)")
 	return cmd
 }
@@ -193,6 +198,13 @@ func runServer(cmd *cobra.Command, f *serverFlags) error {
 	cfg.Store, cfg.Keyring, cfg.Logger, cfg.UI, cfg.SecureCookies = st, kr, log, UI, f.secureCookies
 	cfg.HardCaps = safety.Caps{MaxRate: f.maxRate, MaxVUs: f.maxVUs, MaxDuration: f.maxDuration}
 	cfg.TrustedProxies = proxies
+	if f.abortErrors != "" && f.abortErrors != "0" && f.abortErrors != "0%" {
+		p, err := scenario.ParsePercent(f.abortErrors)
+		if err != nil {
+			return fmt.Errorf("--abort-errors: %w", err)
+		}
+		cfg.AbortFloor = &scenario.Abort{Errors: &p, For: scenario.Duration(f.abortFor)}
+	}
 	srv, err := server.New(cfg)
 	if err != nil {
 		return err

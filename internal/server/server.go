@@ -24,6 +24,7 @@ import (
 	"github.com/Ivan825/Stampede/internal/auth"
 	"github.com/Ivan825/Stampede/internal/keyring"
 	"github.com/Ivan825/Stampede/internal/safety"
+	"github.com/Ivan825/Stampede/internal/scenario"
 	"github.com/Ivan825/Stampede/internal/store"
 )
 
@@ -44,6 +45,9 @@ type Config struct {
 	SessionTTL time.Duration
 	// HardCaps bound every run regardless of target settings.
 	HardCaps safety.Caps
+	// AbortFloor stops any run whose target is clearly failing, even when
+	// its scenario sets no abort limits. Nil disables it.
+	AbortFloor *scenario.Abort
 	// DataDir is where CSV and JSON feeder files for server runs live.
 	// Empty disables file feeders on the server.
 	DataDir string

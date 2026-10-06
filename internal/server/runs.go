@@ -184,6 +184,7 @@ func (m *runManager) execute(r *activeRun, spec ExecSpec, prog *scenario.Program
 			m.event(ctx, r, ev)
 		}
 	}()
+	abort := runner.NewAbortWatcher(spec.Scenario.Load.Abort, m.s.cfg.AbortFloor, time.Second)
 	t0 := time.Now()
 	for s := range exec.Snapshots() {
 		snaps = append(snaps, s)
@@ -192,6 +193,9 @@ func (m *runManager) execute(r *activeRun, spec ExecSpec, prog *scenario.Program
 		r.hub.publish("point", pt)
 		if bp != nil && bp.Observe(s) {
 			exec.Stop("breakpoint reached")
+		}
+		if reason := abort.Observe(s); reason != "" {
+			exec.Stop(reason)
 		}
 	}
 	<-evDone
