@@ -1,0 +1,53 @@
+apiVersion: stampede.dev/v1
+kind: Scenario
+metadata:
+  name: shop-weekday-peak
+  tags: [ecommerce, checkout]
+target:
+  baseURL: ${env.TARGET_URL}
+  headers:
+    User-Agent: stampede
+vars:
+  pageSize: 20
+data:
+  users: { csv: data/users.csv, mode: unique }
+  queries: { list: [shoes, jacket, socks], mode: random }
+journeys:
+  - name: browse
+    weight: 60
+    steps:
+      - get: /api/products?page=${rand(1, 20)}&per_page=${pageSize}
+        check: { status: 200 }
+        extract: { productId: "$.items[0].id" }
+      - think: 2s..6s
+      - get: /api/products/${productId}
+  - name: checkout
+    weight: 5
+    target: { p95: 800ms, errors: 0.5% }
+    steps:
+      - post: /api/login
+        json: { email: "${data.users.email}", password: "${secret.SHOP_PASSWORD}" }
+        extract: { token: "$.token" }
+      - get: /api/products?q=${data.queries.value}
+        extract: { productId: "$.items[0].id" }
+      - name: add to cart
+        post: /api/cart
+        headers: { Authorization: "Bearer ${token}" }
+        json: { productId: "${productId}", qty: 1 }
+        check:
+          status: [200, 201]
+          expr: json.items.size() > 0
+      - branch:
+          - weight: 70
+            steps: [{ post: /api/checkout, check: { status: 201 } }]
+          - weight: 30
+            steps: [{ think: 10s }]
+load:
+  shape: breakpoint
+  mode: rate
+  start: 50/s
+  max: 5000/s
+targets:
+  - http.p95 < 500ms
+  - errors < 1%
+  - checkout.p99 < 1s
