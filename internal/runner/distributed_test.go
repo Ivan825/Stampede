@@ -85,7 +85,7 @@ targets: ["p95 < 1s", "errors < 1%%"]`, srv.URL))},
 
 func TestAnnotateExplainsLossAndSaturation(t *testing.T) {
 	rep := &report.Report{Verdict: report.VerdictFail}
-	annotate(rep, &coordinator.Result{
+	Annotate(rep, &coordinator.Result{
 		Interval: time.Second,
 		Workers: []coordinator.WorkerSummary{
 			{Name: "b", Region: "mumbai", ShareLo: 0.5, ShareHi: 1, State: coordinator.WorkerLost, Lost: &coordinator.Window{From: 12, To: 29}},
