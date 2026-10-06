@@ -1,0 +1,30 @@
+# Edge journeys: a missing or unknown key gets a quick 401 that says how to
+# authenticate, and a missing record a 404, never a 5xx.
+apiVersion: stampede.dev/v1
+kind: Scenario
+metadata:
+  name: public-api-auth-errors
+  tags: [pack:public-apis, edge]
+target:
+  baseURL: ${env.TARGET_URL}
+journeys:
+  - name: missing-key
+    steps:
+      - get: /v1/items
+        check: { status: 401, expr: "'www-authenticate' in headers" }
+  - name: unknown-key
+    steps:
+      - get: /v1/items
+        headers: { X-API-Key: "sk_test_${randString(12)}" }
+        check: { status: [401, 403] }
+  - name: missing-record
+    steps:
+      - get: /v1/items/999999999
+        headers: { X-API-Key: "sk_test_0${rand(1000, 9999)}" }
+        check: { status: 404 }
+load:
+  mode: rate
+  rate: 5/s
+  duration: 1m
+targets:
+  - http.p95 < 200ms

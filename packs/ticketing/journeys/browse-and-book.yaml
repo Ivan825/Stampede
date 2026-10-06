@@ -1,0 +1,63 @@
+# The everyday mix for a ticketing site outside an on-sale: most people
+# browse events and seat maps, some hold seats and most of those buy. A
+# hold that is not bought expires and the seats go back on sale.
+apiVersion: stampede.dev/v1
+kind: Scenario
+metadata:
+  name: ticketing-browse-and-book
+  description: Weighted browse, seat-map and booking journeys; abandoned holds expire.
+  tags: [pack:ticketing]
+target:
+  baseURL: ${env.TARGET_URL}
+journeys:
+  - name: browse
+    weight: 60
+    steps:
+      - get: /api/events
+        check: { status: 200, json: { "$.events[0].id": exists } }
+      - think: 2s..5s
+      - get: /api/events/${rand(3, 20)}
+        check: { status: 200 }
+      - think: 1s..3s
+      - name: seat map
+        get: /api/events/${rand(3, 20)}/seats
+        check: { status: 200, json: { "$.rows[0].seats": exists } }
+  - name: book
+    weight: 40
+    steps:
+      - get: /api/events
+        check: { status: 200 }
+      - think: 1s..3s
+      - name: seat map
+        get: /api/events/${rand(3, 20)}/seats
+        check: { status: 200 }
+      - think: 2s..5s
+      - name: hold seats
+        post: /api/holds
+        json: { eventId: "${rand(3, 20)}", quantity: "${rand(1, 4)}" }
+        # 409 means sold out, a correct answer.
+        check: { status: [201, 409] }
+        extract: { held: status }
+      - name: checkout
+        if: "${held == 201}"
+        branch:
+          - weight: 80
+            name: buys
+            steps:
+              - think: 5s..15s
+              - name: order
+                post: /api/orders
+                json: {}
+                check: { status: 201, json: { "$.seats[0]": exists } }
+          - weight: 20
+            name: abandons
+            steps:
+              - think: 5s
+load:
+  mode: rate
+  rate: 10/s
+  duration: 5m
+targets:
+  - http.p95 < 500ms
+  - errors < 1%
+  - "book/hold seats.p95 < 300ms"

@@ -1,0 +1,7 @@
+# Default targets for public APIs. Reads should be fast for every key;
+# a 429 with Retry-After is an answer, not an error, and the stresses check
+# for it explicitly.
+targets:
+  - http.p95 < 300ms
+  - errors < 1%
+  - webhook.p95 < 5s

@@ -1,0 +1,51 @@
+# Edge journeys: a user must never see another tenant's data, and wrong
+# passwords and missing tokens are refused quickly. Reading another
+# tenant's record must look exactly like a record that does not exist.
+apiVersion: stampede.dev/v1
+kind: Scenario
+metadata:
+  name: saas-tenant-isolation
+  tags: [pack:saas, edge, security]
+target:
+  baseURL: ${env.TARGET_URL}
+vars:
+  # A record that belongs to a tenant none of data/users.csv is in.
+  foreignRecord: rec_megacorp_1
+data:
+  users: { csv: ../data/users.csv, mode: random }
+journeys:
+  - name: cross-tenant-read
+    weight: 6
+    steps:
+      - name: sign in
+        post: /api/login
+        json: { email: "${data.users.email}", password: "${data.users.password}" }
+        check: { status: 200 }
+        extract: { token: "$.token" }
+      - name: rest
+        get: /api/records/${vars.foreignRecord}
+        headers: { Authorization: "Bearer ${token}" }
+        check: { status: [403, 404] }
+      - name: graphql
+        graphql: /graphql
+        headers: { Authorization: "Bearer ${token}" }
+        query: 'query R($id: ID!) { record(id: $id) { id title } }'
+        variables: { id: "${vars.foreignRecord}" }
+        check: { allowErrors: true, expr: "json.data.record == null" }
+  - name: wrong-password
+    weight: 3
+    steps:
+      - post: /api/login
+        json: { email: "${data.users.email}", password: not-the-password }
+        check: { status: [400, 401] }
+  - name: no-token
+    weight: 1
+    steps:
+      - get: /api/records
+        check: { status: 401 }
+load:
+  mode: rate
+  rate: 5/s
+  duration: 1m
+targets:
+  - http.p95 < 300ms

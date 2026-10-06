@@ -1,0 +1,70 @@
+# The everyday mix for a chat product: most users ask a question, read the
+# streamed answer and ask a follow-up; some ask for long answers, some
+# embed text for search, and the app lists models now and then.
+apiVersion: stampede.dev/v1
+kind: Scenario
+metadata:
+  name: llm-chat-mix
+  description: Weighted short chats, long answers, embeddings and model listing over a streaming chat API.
+  tags: [pack:llm-apps]
+target:
+  baseURL: ${env.TARGET_URL}
+  timeout: 2m
+data:
+  prompts: { csv: ../data/prompts.csv, mode: random }
+journeys:
+  - name: chat
+    weight: 60
+    steps:
+      - name: first turn
+        sse: /v1/chat/completions
+        json:
+          model: lab-small
+          stream: true
+          max_tokens: 64
+          messages: [{ role: user, content: "${data.prompts.prompt}" }]
+        until: { match: '"finish_reason":"stop"', duration: 90s }
+        check: { status: 200, json: { "$.usage.completion_tokens": exists } }
+      - think: 2s..5s
+      - name: follow-up
+        sse: /v1/chat/completions
+        json:
+          model: lab-small
+          stream: true
+          max_tokens: 64
+          messages:
+            - { role: user, content: "${data.prompts.prompt}" }
+            - { role: user, content: "Make it shorter." }
+        until: { match: '"finish_reason":"stop"', duration: 90s }
+        check: { status: 200 }
+  - name: long-answer
+    weight: 15
+    steps:
+      - name: completion
+        sse: /v1/chat/completions
+        json:
+          model: lab-large
+          stream: true
+          max_tokens: 512
+          messages: [{ role: user, content: "Answer in detail: ${data.prompts.prompt}" }]
+        until: { match: '"finish_reason":"stop"', duration: 2m }
+        check: { status: 200 }
+  - name: embed
+    weight: 15
+    steps:
+      - post: /v1/embeddings
+        json: { model: lab-embed, input: "${data.prompts.prompt}" }
+        check: { status: 200, json: { "$.data[0].embedding": exists } }
+  - name: models
+    weight: 10
+    steps:
+      - get: /v1/models
+        check: { status: 200, json: { "$.data[0].id": exists } }
+load:
+  mode: rate
+  rate: 2/s
+  duration: 5m
+targets:
+  - chat.p95 < 20s
+  - errors < 1%
+  - models.p95 < 300ms

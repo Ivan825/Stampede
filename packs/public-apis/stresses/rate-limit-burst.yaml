@@ -1,0 +1,35 @@
+# One integration bursts far past its plan's limit. The right answer is a
+# fast 429 carrying Retry-After; the client backs off for that long. Any
+# other status, a 429 without Retry-After, or a slow refusal fails.
+# The report's status counts show how many requests were let through.
+apiVersion: stampede.dev/v1
+kind: Scenario
+metadata:
+  name: public-api-rate-limit-burst
+  tags: [pack:public-apis, rate-limit]
+target:
+  baseURL: ${env.TARGET_URL}
+vars:
+  # A key on APILab's free plan (5 requests/s). Use one of your own.
+  key: sk_test_free
+journeys:
+  - name: burst
+    steps:
+      - name: request
+        get: /v1/items?limit=5
+        headers: { X-API-Key: "${vars.key}" }
+        check:
+          status: [200, 429]
+          expr: "status == 200 || ('retry-after' in headers && int(headers['retry-after']) >= 1)"
+          maxLatency: 200ms
+        extract: { code: status }
+      - name: back off
+        if: "${code == 429}"
+        think: 1s
+load:
+  mode: vus
+  vus: 10
+  duration: 2m
+targets:
+  - burst/request.p95 < 100ms
+  - errors < 1%

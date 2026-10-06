@@ -1,0 +1,45 @@
+# A deploy, a load balancer failover or a network blip drops every
+# connection, and every client reconnects at once: sign in again, open the
+# socket, fetch what it missed and carry on. Connection set-up, history
+# and presence updates all spike together.
+apiVersion: stampede.dev/v1
+kind: Scenario
+metadata:
+  name: chat-reconnect-storm
+  tags: [pack:chat, spike]
+target:
+  baseURL: ${env.TARGET_URL}
+data:
+  rooms: { list: [general, random, support, engineering, sales, town-hall], mode: random }
+journeys:
+  - name: reconnect
+    steps:
+      - name: sign in
+        post: /api/login
+        json: { user: "user-${vu}-${iter}" }
+        check: { status: 200 }
+        extract: { token: "$.token" }
+      - name: connect
+        ws: /ws?room=${data.rooms}
+        headers: { Authorization: "Bearer ${token}" }
+        timeout: 10s
+        steps:
+          - name: welcome
+            expect: { json: { "$.type": welcome }, timeout: 10s }
+          - send: { type: history, limit: 50 }
+          - name: history
+            expect: { json: { "$.type": history }, timeout: 10s }
+          - send: { type: say, text: "back online (${vu})" }
+          - name: ack
+            expect: { json: { "$.type": ack }, timeout: 10s }
+          - think: 1s..5s
+load:
+  shape: spike
+  mode: rate
+  start: 10/s
+  max: 300/s
+  duration: 3m
+targets:
+  - reconnect/connect.p99 < 1s
+  - reconnect/history.p95 < 300ms
+  - errors < 1%

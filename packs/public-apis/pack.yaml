@@ -1,0 +1,25 @@
+apiVersion: stampede.dev/v1
+kind: Pack
+name: public-apis
+title: Public APIs, developer platforms
+description: >
+  API-key traffic against a public developer API: paginated reads,
+  idempotent writes, usage checks and webhook deliveries, plus a client
+  that bursts past its rate limit (429 with Retry-After is the right
+  answer), a noisy neighbour and a webhook burst. Built for APIs shaped like
+  APILab (X-API-Key header, /v1 paths); adjust the header and paths to
+  match yours.
+status: shipped
+protocols: [http]
+referenceApp: examples/packlab/apilab
+detect:
+  paths: ["/v1/usage", "/v1/webhooks", "/v1/deliveries", "/v1/api-keys", "/v1/keys", "/v1/rate_limit", "/rate_limit"]
+  openapiTags: [usage, webhooks, api-keys, rate-limits, developers]
+  htmlMeta: []
+  # Present on rate-limited APIs; an empty value only asks for the header.
+  headers: { X-RateLimit-Limit: "", RateLimit-Limit: "" }
+variables:
+  TARGET_URL: { description: Base URL of the API (without /v1) }
+targets:
+  - http.p95 < 300ms
+  - errors < 1%

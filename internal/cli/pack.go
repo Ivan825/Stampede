@@ -144,10 +144,11 @@ func newInitCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "init",
 		Short: "Detect what kind of product a target is and set up the matching pack",
-		Long: `init probes the target (its OpenAPI document at common paths, its home page
-and response headers), scores the shipped product packs against what it
-finds, asks you to confirm, installs the pack into ./stampede and dry-runs
-its journeys once against the target.`,
+		Long: `init probes the target (its OpenAPI document at common paths, its OpenID
+Connect discovery document, its home page and response headers), scores
+the shipped product packs against what it finds, asks you to confirm,
+installs the pack into ./stampede and dry-runs its journeys once against
+the target.`,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			if target == "" {
 				return errors.New("--target is required, e.g. stampede init --target http://localhost:8090")
@@ -165,6 +166,9 @@ its journeys once against the target.`,
 			}
 			if ev.OpenAPI {
 				fmt.Fprintf(out, "Found an OpenAPI document with %d paths.\n", len(ev.Paths))
+			}
+			if ev.OIDC {
+				fmt.Fprintln(out, "Found an OpenID Connect discovery document.")
 			}
 			shipped, err := pack.Shipped()
 			if err != nil {
@@ -195,7 +199,17 @@ its journeys once against the target.`,
 					filepath.Join(dir, best.Pack.Name), filepath.Join(dir, best.Pack.Name), target)
 				return err
 			}
-			fmt.Fprintf(out, "\nNext: stampede run %s -e TARGET_URL=%s\n", filepath.Join(dir, best.Pack.Name, "journeys", "shop-mix.yaml"), target)
+			next := "journeys"
+			if files, err := best.Pack.Files(); err == nil && len(files) > 0 {
+				next = files[0]
+				for _, f := range files {
+					if strings.HasSuffix(f, "-mix.yaml") {
+						next = f
+						break
+					}
+				}
+			}
+			fmt.Fprintf(out, "\nNext: stampede run %s -e TARGET_URL=%s\n", filepath.Join(dir, best.Pack.Name, filepath.FromSlash(next)), target)
 			return nil
 		},
 	}

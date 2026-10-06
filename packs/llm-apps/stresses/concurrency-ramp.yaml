@@ -1,0 +1,37 @@
+# How time to first token behaves as concurrent streams grow. Users are
+# added in steps; compare "first p95" per step in the report. A server
+# without continuous batching queues requests before their first token, so
+# first-token time climbs while tokens per second stays flat.
+apiVersion: stampede.dev/v1
+kind: Scenario
+metadata:
+  name: llm-concurrency-ramp
+  tags: [pack:llm-apps, ramp]
+target:
+  baseURL: ${env.TARGET_URL}
+  timeout: 2m
+data:
+  prompts: { csv: ../data/prompts.csv, mode: random }
+journeys:
+  - name: chat
+    steps:
+      - name: completion
+        sse: /v1/chat/completions
+        json:
+          model: lab-small
+          stream: true
+          max_tokens: 128
+          messages: [{ role: user, content: "${data.prompts.prompt}" }]
+        until: { match: '"finish_reason":"stop"', duration: 2m }
+        check: { status: 200 }
+      - think: 1s..3s
+load:
+  mode: vus
+  stages:
+    - { duration: 1m, target: "4" }
+    - { duration: 1m, target: "16" }
+    - { duration: 1m, target: "32" }
+    - { duration: 1m, target: "64" }
+targets:
+  - chat/completion.p95 < 30s
+  - errors < 1%

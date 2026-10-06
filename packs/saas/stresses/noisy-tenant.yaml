@@ -1,0 +1,62 @@
+# One big tenant runs reports and pages through its huge record list
+# non-stop while everyone else works normally. Its own requests may slow
+# down; the other tenants' targets must hold. A shared worker pool, a
+# shared cache or a missing per-tenant limit shows up here.
+apiVersion: stampede.dev/v1
+kind: Scenario
+metadata:
+  name: saas-noisy-tenant
+  tags: [pack:saas, contention]
+target:
+  baseURL: ${env.TARGET_URL}
+vars:
+  # SaaSLab's big tenant (100,000 records). Use your largest tenant.
+  noisyEmail: user01@megacorp.test
+  noisyPassword: saaslab-pass
+data:
+  users: { csv: ../data/users.csv, mode: random }
+journeys:
+  - name: noisy-tenant
+    weight: 4
+    steps:
+      - name: sign in
+        post: /api/login
+        json: { email: "${vars.noisyEmail}", password: "${vars.noisyPassword}" }
+        check: { status: 200 }
+        extract: { token: "$.token" }
+      - loop: 5
+        steps:
+          - name: report
+            get: /api/reports/${pick(['pipeline', 'revenue-by-month', 'activity'])}
+            headers: { Authorization: "Bearer ${token}" }
+            check: { status: 200 }
+          - name: list
+            get: /api/records?page=${rand(1, 50)}&limit=100
+            headers: { Authorization: "Bearer ${token}" }
+            check: { status: 200 }
+  - name: everyone-else
+    weight: 6
+    target: { p95: 300ms, errors: 0.5% }
+    steps:
+      - name: sign in
+        post: /api/login
+        json: { email: "${data.users.email}", password: "${data.users.password}" }
+        check: { status: 200 }
+        extract: { token: "$.token" }
+      - name: dashboard
+        graphql: /graphql
+        headers: { Authorization: "Bearer ${token}" }
+        query: 'query { dashboard { tenant openRecords recent(limit: 10) { id title owner { name } } } }'
+        check: { json: { "$.data.dashboard.tenant": exists } }
+      - think: 1s..3s
+      - name: report
+        get: /api/reports/pipeline
+        headers: { Authorization: "Bearer ${token}" }
+        check: { status: 200 }
+load:
+  mode: rate
+  rate: 10/s
+  duration: 3m
+targets:
+  - everyone-else.p95 < 300ms
+  - everyone-else.errors < 0.5%

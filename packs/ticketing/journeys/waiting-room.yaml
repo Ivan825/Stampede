@@ -1,0 +1,48 @@
+# Buying for a headline on-sale: join the waiting room, wait on a
+# WebSocket until admitted, then pick seats and buy. The same session
+# cookie carries the admission from the socket to the hold.
+apiVersion: stampede.dev/v1
+kind: Scenario
+metadata:
+  name: ticketing-waiting-room
+  tags: [pack:ticketing, waiting-room]
+target:
+  baseURL: ${env.TARGET_URL}
+vars:
+  # TicketLab's headline event, the one behind a waiting room.
+  eventId: 1
+journeys:
+  - name: on-sale
+    steps:
+      - name: event
+        get: /api/events/${vars.eventId}
+        check: { status: 200, json: { "$.waitingRoom": true } }
+      - name: join queue
+        post: /api/queue/${vars.eventId}/join
+        check: { status: 200, json: { "$.position": exists } }
+      - name: waiting room
+        ws: /ws/queue?event=${vars.eventId}
+        timeout: 10s
+        steps:
+          - name: admitted
+            expect: { json: { "$.type": admitted }, timeout: 5m }
+      - name: seat map
+        get: /api/events/${vars.eventId}/seats
+        check: { status: 200 }
+      - name: hold seats
+        post: /api/holds
+        json: { eventId: "${vars.eventId}", quantity: 2 }
+        check: { status: [201, 409] }
+        extract: { held: status }
+      - name: order
+        if: "${held == 201}"
+        post: /api/orders
+        json: {}
+        check: { status: 201 }
+load:
+  mode: rate
+  rate: 5/s
+  duration: 2m
+targets:
+  - "on-sale/hold seats.p95 < 300ms"
+  - errors < 1%

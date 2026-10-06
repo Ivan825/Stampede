@@ -180,7 +180,9 @@ func (p *Pack) Install(dir string, force bool) ([]string, error) {
 
 // Evidence is what detection found about a target.
 type Evidence struct {
-	OpenAPI     bool
+	OpenAPI bool
+	// OIDC is set when the target publishes OpenID Connect discovery.
+	OIDC        bool
 	Paths       []string
 	OpenAPITags []string
 	HTML        string
@@ -252,6 +254,33 @@ func Probe(ctx context.Context, base *url.URL, hc *http.Client) (*Evidence, erro
 		sort.Strings(ev.Paths)
 		break
 	}
+	// Identity providers rarely publish OpenAPI but do publish OpenID
+	// Connect discovery; its endpoints count as API paths.
+	if resp, b, err := get("/.well-known/openid-configuration"); err == nil && resp.StatusCode == 200 {
+		var d map[string]any
+		if json.Unmarshal(b, &d) == nil && d["issuer"] != nil && d["token_endpoint"] != nil {
+			ev.OIDC = true
+			seen := map[string]bool{}
+			for _, p := range ev.Paths {
+				seen[p] = true
+			}
+			add := func(p string) {
+				if p != "" && !seen[p] {
+					seen[p] = true
+					ev.Paths = append(ev.Paths, p)
+				}
+			}
+			add("/.well-known/openid-configuration")
+			for _, k := range []string{"token_endpoint", "userinfo_endpoint", "jwks_uri", "revocation_endpoint", "introspection_endpoint", "authorization_endpoint", "end_session_endpoint"} {
+				if s, ok := d[k].(string); ok {
+					if u, err := url.Parse(s); err == nil {
+						add(u.Path)
+					}
+				}
+			}
+			sort.Strings(ev.Paths)
+		}
+	}
 	return ev, nil
 }
 
@@ -284,7 +313,9 @@ func Score(ev *Evidence, ps []*Pack) []Match {
 			}
 		}
 		for k, v := range p.Detect.Headers {
-			if strings.Contains(strings.ToLower(ev.Headers.Get(k)), strings.ToLower(v)) {
+			// An empty value asks only that the header is present.
+			got, present := ev.Headers.Get(k), len(ev.Headers.Values(k)) > 0
+			if present && strings.Contains(strings.ToLower(got), strings.ToLower(v)) {
 				m.Score += 2
 				m.Reasons = append(m.Reasons, "header "+k)
 			}

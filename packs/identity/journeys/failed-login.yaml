@@ -1,0 +1,38 @@
+# Edge journeys: wrong passwords, unknown users and forged tokens must be
+# refused quickly and with the right OAuth error, never a 5xx.
+apiVersion: stampede.dev/v1
+kind: Scenario
+metadata:
+  name: identity-failed-login
+  tags: [pack:identity, edge]
+target:
+  baseURL: ${env.TARGET_URL}
+vars:
+  clientId: web
+data:
+  users: { csv: ../data/users.csv, mode: random }
+journeys:
+  - name: wrong-password
+    weight: 6
+    steps:
+      - post: /oauth/token
+        form: { grant_type: password, username: "${data.users.email}", password: not-the-password, client_id: "${vars.clientId}" }
+        check: { status: [400, 401], json: { "$.error": invalid_grant } }
+  - name: unknown-user
+    weight: 3
+    steps:
+      - post: /oauth/token
+        form: { grant_type: password, username: "${randEmail()}", password: whatever, client_id: "${vars.clientId}" }
+        check: { status: [400, 401], json: { "$.error": invalid_grant } }
+  - name: forged-token
+    weight: 1
+    steps:
+      - get: /userinfo
+        headers: { Authorization: "Bearer eyJhbGciOiJub25lIn0.eyJzdWIiOiJhZG1pbiJ9." }
+        check: { status: 401 }
+load:
+  mode: rate
+  rate: 10/s
+  duration: 1m
+targets:
+  - http.p95 < 800ms

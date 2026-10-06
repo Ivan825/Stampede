@@ -1,0 +1,8 @@
+# Default targets for streaming LLM APIs. A stream's latency is the whole
+# reply, so it is loose; the number users feel is time to first token,
+# which the report shows per streaming step (first p50/p95/p99) next to
+# events per second.
+targets:
+  - chat.p95 < 20s
+  - errors < 1%
+  - models.p95 < 300ms

@@ -86,8 +86,8 @@ change `speed` instead.
 
 ## Targeted stresses
 
-Some stresses are journeys rather than shapes. The [e-commerce
-pack](packs.md) and ShopLab's scenarios include:
+Some stresses are journeys rather than shapes. The [product
+packs](packs.md) and ShopLab's scenarios include:
 
 | Stress | Exposes | Where |
 |---|---|---|
@@ -96,6 +96,14 @@ pack](packs.md) and ShopLab's scenarios include:
 | Cold cache spike | everyone hitting an empty cache at once | `examples/shoplab/scenarios/cold-cache-spike.yaml` |
 | Login soak | memory growth in the session store | `examples/shoplab/scenarios/login-soak.yaml` |
 | Data growth | the same test against more rows | `examples/shoplab/scenarios/order-history.yaml` after reseeding |
+| Seat-lock contention | double-sold seats, lock contention across events | `packs/ticketing/stresses/seat-lock-contention.yaml` |
+| On-sale rush | a waiting room and everything behind it under a thirtyfold spike | `packs/ticketing/stresses/on-sale-rush.yaml` |
+| Login storm | the sign-in ceiling when password hashing is the cost | `packs/identity/stresses/login-storm.yaml` |
+| Refresh wave | token refreshes arriving together, wave after wave | `packs/identity/stresses/refresh-wave.yaml` |
+| Rate-limit burst | fast 429s with Retry-After for a client over its limit | `packs/public-apis/stresses/rate-limit-burst.yaml` |
+| Noisy neighbour or tenant | one client or tenant slowing everyone else | `packs/public-apis/stresses/noisy-neighbour.yaml`, `packs/saas/stresses/noisy-tenant.yaml` |
+| Fan-out and reconnect storm | message delivery to a crowded room; every client reconnecting at once | `packs/chat/stresses/fan-out.yaml`, `packs/chat/stresses/reconnect-storm.yaml` |
+| Long context, long streams | first-token time behind long prompts; streams held open for minutes | `packs/llm-apps/stresses/long-context.yaml`, `packs/llm-apps/stresses/long-streams.yaml` |
 
 ## Slower networks
 

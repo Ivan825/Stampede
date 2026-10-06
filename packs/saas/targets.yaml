@@ -1,0 +1,7 @@
+# Default targets for B2B apps. Dashboards and record edits are what users
+# wait on all day and are held tight; reports are allowed longer.
+targets:
+  - http.p95 < 500ms
+  - errors < 1%
+  - "dashboard/dashboard.p95 < 300ms"
+  - "reports.p95 < 2s"

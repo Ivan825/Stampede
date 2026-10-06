@@ -1,0 +1,36 @@
+# Many buyers race for the same ten front-row seats. Losers must get a
+# clean 409, and afterwards every buyer checks the event: no seat may be
+# sold twice (oversold must stay false).
+apiVersion: stampede.dev/v1
+kind: Scenario
+metadata:
+  name: ticketing-seat-lock
+  tags: [pack:ticketing, contention, correctness]
+target:
+  baseURL: ${env.TARGET_URL}
+vars:
+  # TicketLab's small club show; row A has the seats everyone wants.
+  eventId: 2
+journeys:
+  - name: front-row
+    steps:
+      - name: hold seats
+        post: /api/holds
+        json: { eventId: "${vars.eventId}", seats: ["A${rand(1, 5)}", "A${rand(6, 10)}"] }
+        check: { status: [201, 409] }
+        extract: { held: status }
+      - name: order
+        if: "${held == 201}"
+        post: /api/orders
+        json: {}
+        check: { status: 201 }
+      - name: not oversold
+        get: /api/events/${vars.eventId}
+        check: { status: 200, json: { "$.oversold": false } }
+load:
+  mode: vus
+  vus: 60
+  iterations: 300
+targets:
+  - "front-row/hold seats.p95 < 300ms"
+  - errors < 1%

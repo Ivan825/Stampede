@@ -1,0 +1,43 @@
+# Access tokens issued together expire together, so their refreshes arrive
+# in waves. Users join quickly, then each refreshes on the same fixed
+# interval; refresh latency should stay flat from the first wave to the
+# last, however many tokens have been issued by then.
+apiVersion: stampede.dev/v1
+kind: Scenario
+metadata:
+  name: identity-refresh-wave
+  tags: [pack:identity, wave]
+target:
+  baseURL: ${env.TARGET_URL}
+vars:
+  clientId: web
+data:
+  users: { csv: ../data/users.csv, mode: unique, onExhausted: wrap }
+journeys:
+  - name: session
+    steps:
+      - name: password grant
+        post: /oauth/token
+        form: { grant_type: password, username: "${data.users.email}", password: "${data.users.password}", client_id: "${vars.clientId}" }
+        check: { status: 200 }
+        extract: { refresh: "$.refresh_token" }
+      - loop: 10
+        steps:
+          - think: 5s
+          - name: refresh
+            post: /oauth/token
+            form: { grant_type: refresh_token, refresh_token: "${refresh}", client_id: "${vars.clientId}" }
+            check: { status: 200 }
+            extract: { access: "$.access_token", refresh: "$.refresh_token" }
+          - name: userinfo
+            get: /userinfo
+            headers: { Authorization: "Bearer ${access}" }
+            check: { status: 200 }
+load:
+  mode: vus
+  stages:
+    - { duration: 10s, target: "200" }
+    - { duration: 3m, target: "200" }
+targets:
+  - "session/refresh.p95 < 200ms"
+  - errors < 1%

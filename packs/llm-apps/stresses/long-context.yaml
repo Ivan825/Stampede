@@ -1,0 +1,47 @@
+# A few users paste long documents while everyone else asks short
+# questions. Watch the short chats' first-token time: when prompt
+# processing is not chunked or scheduled fairly, one long prompt stalls
+# everyone behind it.
+apiVersion: stampede.dev/v1
+kind: Scenario
+metadata:
+  name: llm-long-context
+  tags: [pack:llm-apps, contention]
+target:
+  baseURL: ${env.TARGET_URL}
+  timeout: 2m
+data:
+  prompts: { csv: ../data/prompts.csv, mode: random }
+journeys:
+  - name: short-chat
+    weight: 9
+    steps:
+      - name: completion
+        sse: /v1/chat/completions
+        json:
+          model: lab-small
+          stream: true
+          max_tokens: 32
+          messages: [{ role: user, content: "${data.prompts.prompt}" }]
+        until: { match: '"finish_reason":"stop"', duration: 2m }
+        check: { status: 200 }
+  - name: long-document
+    weight: 1
+    steps:
+      - name: completion
+        sse: /v1/chat/completions
+        json:
+          model: lab-large
+          stream: true
+          max_tokens: 64
+          # About 16,000 characters of text (randString is capped at 4096).
+          messages: [{ role: user, content: "Summarise this document: ${randString(4096)} ${randString(4096)} ${randString(4096)} ${randString(4096)}" }]
+        until: { match: '"finish_reason":"stop"', duration: 2m }
+        check: { status: 200 }
+load:
+  mode: rate
+  rate: 4/s
+  duration: 3m
+targets:
+  - short-chat.p95 < 10s
+  - errors < 1%

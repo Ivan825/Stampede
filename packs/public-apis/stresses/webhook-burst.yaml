@@ -1,0 +1,43 @@
+# Events arrive in a burst and every one must reach its webhook. Each user
+# sends an event and waits for its delivery; delivery lag shows as the
+# journey's duration and polls, and a delivery that never lands within 30
+# seconds fails.
+apiVersion: stampede.dev/v1
+kind: Scenario
+metadata:
+  name: public-api-webhook-burst
+  tags: [pack:public-apis, spike]
+target:
+  baseURL: ${env.TARGET_URL}
+data:
+  keys: { csv: ../data/api-keys.csv, mode: random }
+journeys:
+  - name: webhook
+    steps:
+      - name: send test event
+        post: /v1/webhooks/test
+        headers: { X-API-Key: "${data.keys.key}" }
+        check: { status: 202 }
+        extract: { deliveryId: "$.id", state: "$.status" }
+      - while: "${state != 'delivered'}"
+        max: 150
+        steps:
+          - think: 200ms
+          - name: poll delivery
+            get: /v1/deliveries/${deliveryId}
+            headers: { X-API-Key: "${data.keys.key}" }
+            check: { status: 200 }
+            extract: { state: "$.status" }
+      - name: delivered
+        get: /v1/deliveries/${deliveryId}
+        headers: { X-API-Key: "${data.keys.key}" }
+        check: { status: 200, json: { "$.status": delivered } }
+load:
+  shape: spike
+  mode: rate
+  start: 10/s
+  max: 80/s
+  duration: 3m
+targets:
+  - webhook.p95 < 5s
+  - errors < 1%

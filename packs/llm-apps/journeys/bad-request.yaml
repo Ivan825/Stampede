@@ -1,0 +1,26 @@
+# Edge journey: an unknown model or an empty prompt must be refused at once
+# with a 4xx, never by opening a stream that hangs or fails later.
+apiVersion: stampede.dev/v1
+kind: Scenario
+metadata:
+  name: llm-bad-request
+  tags: [pack:llm-apps, edge]
+target:
+  baseURL: ${env.TARGET_URL}
+journeys:
+  - name: unknown-model
+    steps:
+      - post: /v1/chat/completions
+        json: { model: no-such-model, stream: true, messages: [{ role: user, content: hello }] }
+        check: { status: [400, 404] }
+  - name: empty-prompt
+    steps:
+      - post: /v1/chat/completions
+        json: { model: lab-small, stream: true, messages: [] }
+        check: { status: [400, 422] }
+load:
+  mode: rate
+  rate: 5/s
+  duration: 1m
+targets:
+  - http.p95 < 300ms

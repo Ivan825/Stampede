@@ -1,0 +1,24 @@
+apiVersion: stampede.dev/v1
+kind: Pack
+name: identity
+title: Login and identity
+description: >
+  OAuth 2.0 and OpenID Connect token services: sign-in with the password
+  grant, long sessions kept alive with refresh tokens, service tokens,
+  sign-out, a login storm and a refresh wave. Built for token endpoints
+  shaped like AuthLab (form-encoded /oauth/token, /userinfo); adjust paths
+  and client ids to match your identity provider.
+status: shipped
+protocols: [http]
+referenceApp: examples/packlab/authlab
+detect:
+  # OpenID Connect discovery endpoints count as paths (see stampede init).
+  paths: ["/.well-known/openid-configuration", "/oauth/token", "/oauth2/token", "/connect/token", "/userinfo", "/oauth/introspect", "/oauth/revoke"]
+  openapiTags: [oauth, oidc, identity, tokens]
+  htmlMeta: []
+  headers: {}
+variables:
+  TARGET_URL: { description: Base URL of the identity provider (the issuer) }
+targets:
+  - http.p95 < 500ms
+  - errors < 1%

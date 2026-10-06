@@ -1,0 +1,22 @@
+apiVersion: stampede.dev/v1
+kind: Pack
+name: llm-apps
+title: AI and LLM apps
+description: >
+  Streaming chat completions measured the way users feel them: time to
+  first token, tokens per second and long streams held open. Built for
+  OpenAI-compatible APIs (vLLM, Ollama, LiteLLM and most gateways) shaped
+  like LLMLab; adjust model names and paths to match yours.
+status: shipped
+protocols: [sse, http]
+referenceApp: examples/packlab/llmlab
+detect:
+  paths: ["/v1/chat/completions", "/v1/completions", "/v1/models", "/v1/embeddings", "/api/chat", "/api/generate"]
+  openapiTags: [chat, completions, models, embeddings]
+  htmlMeta: []
+  headers: {}
+variables:
+  TARGET_URL: { description: Base URL of the OpenAI-compatible API (without /v1) }
+targets:
+  - chat.p95 < 20s
+  - errors < 1%

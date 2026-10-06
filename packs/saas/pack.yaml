@@ -1,0 +1,23 @@
+apiVersion: stampede.dev/v1
+kind: Pack
+name: saas
+title: SaaS dashboards and B2B tools
+description: >
+  Multi-tenant B2B apps: sign in, open dashboards over GraphQL, create and
+  edit records over REST and GraphQL, run heavy reports, plus a noisy
+  tenant and a Monday-morning report spike, and a check that one tenant
+  cannot read another's records. Built for apps shaped like SaaSLab;
+  adjust paths, queries and fields to match yours.
+status: shipped
+protocols: [http, graphql]
+referenceApp: examples/packlab/saaslab
+detect:
+  paths: ["/api/reports", "/api/dashboards", "/api/tenants", "/api/workspaces", "/api/organizations", "/api/records", "/graphql"]
+  openapiTags: [reports, dashboards, tenants, workspaces, organizations, records]
+  htmlMeta: []
+  headers: {}
+variables:
+  TARGET_URL: { description: Base URL of the app's API }
+targets:
+  - http.p95 < 500ms
+  - errors < 1%

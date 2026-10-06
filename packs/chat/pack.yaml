@@ -1,0 +1,23 @@
+apiVersion: stampede.dev/v1
+kind: Pack
+name: chat
+title: Chat and collaboration
+description: >
+  Rooms over WebSocket: conversations whose messages fan out to every
+  member, idle connections held open, history over HTTP, a crowded room,
+  thousands of open connections and a reconnect storm. Built for chat
+  services shaped like ChatLab (JSON messages with a type field); adjust
+  the message shapes and paths to match yours.
+status: shipped
+protocols: [websocket, http]
+referenceApp: examples/packlab/chatlab
+detect:
+  paths: ["/api/rooms", "/api/channels", "/api/conversations", "/ws", "/socket", "/realtime"]
+  openapiTags: [rooms, channels, messages, conversations, realtime, presence]
+  htmlMeta: []
+  headers: {}
+variables:
+  TARGET_URL: { description: Base URL of the chat service (HTTP; WebSocket paths are joined to it) }
+targets:
+  - chat/ack.p95 < 250ms
+  - errors < 1%
