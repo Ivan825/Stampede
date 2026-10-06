@@ -1,6 +1,11 @@
 import { delay, http, HttpResponse, type JsonBodyType } from 'msw';
 import type {
   ApiErrorBody,
+  Integration,
+  IntegrationCreate,
+  NotificationChannelCreate,
+  NotificationChannelCreated,
+  NotificationDelivery,
   LoginRequest,
   ProjectCreate,
   RunCreate,
@@ -40,6 +45,8 @@ function err(status: number, code: string, message: string, details?: string[]) 
 const notFound = (what: string) => err(404, 'not_found', `${what} not found.`);
 const ok = (body: JsonBodyType, status = 200) => HttpResponse.json(body, { status });
 const noContent = () => new HttpResponse(null, { status: 204 });
+
+const nameRe = /^[A-Za-z0-9][A-Za-z0-9_.-]{0,99}$/;
 
 const rank: Record<Role, number> = { viewer: 0, runner: 1, editor: 2, admin: 3, owner: 4 };
 
@@ -648,6 +655,128 @@ export function createHandlers(initial: MockOptions, opts: MockHandlerOptions = 
       return ok(db.workers);
     }),
     http.get(`${B}/audit`, async () => (await auth()) ?? need('admin') ?? ok(db.audit)),
+
+    // ------------------------------------------------------------ integrations
+    http.get(`${B}/integrations`, async () => (await auth()) ?? ok(db.integrations)),
+    http.post(`${B}/integrations`, async ({ request }) => {
+      const a = (await auth()) ?? need('admin');
+      if (a) return a;
+      const body = (await request.json()) as IntegrationCreate;
+      if (!nameRe.test(body.name ?? '')) return err(422, 'invalid', 'name is not valid');
+      if (db.integrations.some((i) => i.name === body.name)) {
+        return err(409, 'conflict', `an integration named "${body.name}" already exists`);
+      }
+      if (body.kind === 'traces' && !body.url.includes('{traceId}')) {
+        return err(422, 'invalid', 'url must contain {traceId}');
+      }
+      const now = new Date().toISOString();
+      const i: Integration = {
+        id: uuid(),
+        name: body.name,
+        kind: body.kind,
+        url: body.url.replace(/\/+$/, ''),
+        hasToken: !!body.bearerToken,
+        createdAt: now,
+        updatedAt: now,
+      };
+      db.integrations = [...db.integrations, i].sort((x, y) => x.name.localeCompare(y.name));
+      return ok(i, 201);
+    }),
+    http.delete(`${B}/integrations/:id`, async ({ params }) => {
+      const a = (await auth()) ?? need('admin');
+      if (a) return a;
+      if (!db.integrations.some((i) => i.id === params.id)) return notFound('Integration');
+      db.integrations = db.integrations.filter((i) => i.id !== params.id);
+      return noContent();
+    }),
+    http.get(`${B}/notifications/channels`, async () => {
+      const a = (await auth()) ?? need('admin');
+      if (a) return a;
+      return ok(db.channels.map(({ url: _u, ...c }) => c));
+    }),
+    http.post(`${B}/notifications/channels`, async ({ request }) => {
+      const a = (await auth()) ?? need('admin');
+      if (a) return a;
+      const body = (await request.json()) as NotificationChannelCreate;
+      if (!nameRe.test(body.name ?? '')) return err(422, 'invalid', 'name is not valid');
+      if (db.channels.some((c) => c.name === body.name)) {
+        return err(409, 'conflict', `a channel named "${body.name}" already exists`);
+      }
+      let u: URL;
+      try {
+        u = new URL(body.url);
+      } catch {
+        return err(422, 'invalid', 'url: invalid URL');
+      }
+      if (!body.allowPrivate && /^(localhost|127\.|10\.|192\.168\.|169\.254\.)/.test(u.hostname)) {
+        return err(
+          422,
+          'invalid',
+          'the URL points to a private, loopback or link-local address; set allowPrivate to deliver there',
+        );
+      }
+      const secret =
+        body.kind === 'webhook'
+          ? body.secret ||
+            `whsec_${uuid().replace(/-/g, '')}${uuid().replace(/-/g, '').slice(0, 11)}`
+          : undefined;
+      const channel = {
+        id: uuid(),
+        name: body.name,
+        kind: body.kind,
+        events: body.events ?? ['run.finished', 'run.target_failed', 'run.killed'],
+        allowPrivate: body.allowPrivate ?? false,
+        urlHint: `${u.protocol}//${u.host}`,
+        hasSecret: !!secret,
+        createdAt: new Date().toISOString(),
+      };
+      db.channels = [...db.channels, { ...channel, url: body.url }].sort((x, y) =>
+        x.name.localeCompare(y.name),
+      );
+      db.deliveries[channel.id] = [];
+      const out: NotificationChannelCreated = { channel, ...(secret ? { secret } : {}) };
+      return ok(out, 201);
+    }),
+    http.delete(`${B}/notifications/channels/:id`, async ({ params }) => {
+      const a = (await auth()) ?? need('admin');
+      if (a) return a;
+      if (!db.channels.some((c) => c.id === params.id)) return notFound('Notification channel');
+      db.channels = db.channels.filter((c) => c.id !== params.id);
+      db.deliveries = Object.fromEntries(
+        Object.entries(db.deliveries).filter(([k]) => k !== params.id),
+      );
+      return noContent();
+    }),
+    http.post(`${B}/notifications/channels/:id/test`, async ({ params }) => {
+      const a = (await auth()) ?? need('admin');
+      if (a) return a;
+      const c = db.channels.find((x) => x.id === params.id);
+      if (!c) return notFound('Notification channel');
+      const log = db.deliveries[c.id] ?? [];
+      // A channel whose URL mentions "fail" demonstrates a failed delivery.
+      const failed = c.url.includes('fail');
+      const d: NotificationDelivery = {
+        id: (log[0]?.id ?? 0) + 1,
+        deliveryId: uuid(),
+        event: 'test',
+        runId: null,
+        attempt: 1,
+        ok: !failed,
+        statusCode: failed ? 404 : 200,
+        error: failed ? 'HTTP 404: no_service' : '',
+        durationMs: 140 + Math.round(Math.random() * 120),
+        at: new Date().toISOString(),
+      };
+      db.deliveries[c.id] = [d, ...log].slice(0, 50);
+      c.lastDelivery = d;
+      return ok(d);
+    }),
+    http.get(`${B}/notifications/channels/:id/deliveries`, async ({ params }) => {
+      const a = (await auth()) ?? need('admin');
+      if (a) return a;
+      if (!db.channels.some((c) => c.id === params.id)) return notFound('Notification channel');
+      return ok(db.deliveries[params.id as string] ?? []);
+    }),
   ];
 
   return { handlers, getDb: () => db, reset: (o: MockOptions) => (db = createDb(o)) };
