@@ -101,8 +101,8 @@ push; 19 more product types are catalogued as planned
 
 **AI journey generation** (optional, bring your own key, never during
 load). Anthropic, OpenAI, Gemini, Ollama or any OpenAI-compatible server
-turns a description, an OpenAPI spec, a HAR file or an access log into a
-scenario. Every journey is dry-run against your target and repaired until it
+turns a description, an OpenAPI spec, a GraphQL schema, a HAR file or an
+access log into a scenario. Every journey is dry-run against your target and repaired until it
 works before you approve it; recorded traffic is redacted before anything
 reaches a model ([AI generation](docs/ai.md)). The pipeline is tested with a
 scripted model; it has not yet been run against a real provider in this
@@ -115,8 +115,8 @@ per server and per target; audit log ([safety](docs/safety.md)).
 ## Planned for v1.0
 
 Browser (Playwright) workers, the plugin interface with MQTT, Kafka, Redis,
-SQL and UDP plugins, the other 19 product packs, AI generation from GraphQL
-introspection and browser crawls, AI report narratives, the fault-injection
+SQL and UDP plugins, the other 19 product packs, AI generation from browser
+crawls, AI report narratives, the fault-injection
 agent, mutual TLS between server and workers, several
 active server replicas (today extra replicas are hot standbys), scheduled runs, side-by-side benchmarks with k6 and
 wrk2, a packaged GitHub Action, and the website.

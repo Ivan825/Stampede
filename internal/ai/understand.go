@@ -24,6 +24,10 @@ type Inputs struct {
 	OpenAPI []byte
 	// HAR is a browser or proxy recording (HTTP Archive 1.2).
 	HAR []byte
+	// GraphQL is a GraphQL schema: an introspection result (JSON) or SDL.
+	GraphQL []byte
+	// GraphQLPath is where the GraphQL API is served (default /graphql).
+	GraphQLPath string
 	// AccessLog is a web server access log (common, combined or any format
 	// with a quoted "METHOD /path" request line).
 	AccessLog []byte
@@ -102,8 +106,8 @@ const (
 // Understand builds the dependency map and the model's context from the
 // inputs. Traffic is redacted with red; documents lose credentials only.
 func Understand(in Inputs, red *Redactor) (*Understanding, error) {
-	if strings.TrimSpace(in.Description) == "" && len(in.OpenAPI) == 0 && len(in.HAR) == 0 && len(in.AccessLog) == 0 {
-		return nil, errors.New("give at least one input: a description, an OpenAPI spec, a HAR file or an access log")
+	if strings.TrimSpace(in.Description) == "" && len(in.OpenAPI) == 0 && len(in.HAR) == 0 && len(in.AccessLog) == 0 && len(in.GraphQL) == 0 {
+		return nil, errors.New("give at least one input: a description, an OpenAPI spec, a GraphQL schema, a HAR file or an access log")
 	}
 	u := &Understanding{}
 	var ctx strings.Builder
@@ -114,6 +118,13 @@ func Understand(in Inputs, red *Redactor) (*Understanding, error) {
 	}
 	if len(in.OpenAPI) > 0 {
 		digest, err := u.fromOpenAPI(in.OpenAPI, red)
+		if err != nil {
+			return nil, err
+		}
+		ctx.WriteString(digest)
+	}
+	if len(in.GraphQL) > 0 {
+		digest, err := u.fromGraphQL(in.GraphQL, in.GraphQLPath)
 		if err != nil {
 			return nil, err
 		}

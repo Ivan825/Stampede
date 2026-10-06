@@ -1,14 +1,17 @@
 package cli
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
+	"net/http"
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/spf13/cobra"
 
@@ -22,6 +25,8 @@ const ExitUnvalidated = 4
 
 type generateFlags struct {
 	openapi, har, accessLog string
+	graphql, graphqlPath    string
+	introspect              bool
 	describe                string
 	target                  string
 	providerName, model     string
@@ -74,6 +79,9 @@ OPENAI_API_KEY when it is set.`,
 	}
 	fl := cmd.Flags()
 	fl.StringVar(&f.openapi, "from-openapi", "", "OpenAPI 3.x spec (YAML or JSON)")
+	fl.StringVar(&f.graphql, "from-graphql", "", "GraphQL schema: SDL (.graphql) or an introspection result (.json)")
+	fl.StringVar(&f.graphqlPath, "graphql-path", "/graphql", "path of the GraphQL API on the target")
+	fl.BoolVar(&f.introspect, "introspect", false, "fetch the GraphQL schema from --target by introspection")
 	fl.StringVar(&f.har, "from-har", "", "HAR recording of real use (browser devtools or a proxy)")
 	fl.StringVar(&f.accessLog, "from-log", "", "web server access log, used to estimate the journey mix")
 	fl.StringVar(&f.describe, "describe", "", "plain-language description of your users and what they do")
@@ -134,6 +142,18 @@ func runGenerate(ctx context.Context, stdout, stderr io.Writer, f *generateFlags
 	}
 	if in.HAR, err = readOptional(f.har); err != nil {
 		return err
+	}
+	if in.GraphQL, err = readOptional(f.graphql); err != nil {
+		return err
+	}
+	in.GraphQLPath = f.graphqlPath
+	if f.introspect {
+		if f.target == "" {
+			return errors.New("--introspect needs --target")
+		}
+		if in.GraphQL, err = introspect(ctx, strings.TrimRight(f.target, "/")+f.graphqlPath); err != nil {
+			return err
+		}
 	}
 	if in.AccessLog, err = readOptional(f.accessLog); err != nil {
 		return err
@@ -266,4 +286,27 @@ func printGenerateSummary(w io.Writer, res *ai.Result) {
 		}
 		fmt.Fprintf(w, "  %s: %s\n", sev, p)
 	}
+}
+
+// introspect fetches a GraphQL schema with the standard introspection query.
+func introspect(ctx context.Context, url string) ([]byte, error) {
+	body, _ := json.Marshal(map[string]string{"query": ai.IntrospectionQuery})
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewReader(body))
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Set("Content-Type", "application/json")
+	resp, err := (&http.Client{Timeout: 30 * time.Second}).Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("introspection: %w", err)
+	}
+	defer resp.Body.Close()
+	b, err := io.ReadAll(io.LimitReader(resp.Body, 32<<20))
+	if err != nil {
+		return nil, err
+	}
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("introspection at %s returned HTTP %d (is introspection disabled? pass the schema with --from-graphql)", url, resp.StatusCode)
+	}
+	return b, nil
 }

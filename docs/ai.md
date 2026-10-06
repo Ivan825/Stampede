@@ -26,6 +26,11 @@ The pipeline has six stages.
    - *Description*: plain language about your users and what they do.
    - *OpenAPI 3.x spec* (YAML or JSON): endpoints, parameters, examples,
      security requirements and response schemas.
+   - *GraphQL schema*: SDL, an introspection result, or fetched from the
+     target with `--introspect`. Queries and mutations with their
+     arguments and return fields go to the model, which writes `graphql:`
+     steps; a mutation returning a token (such as `login`) feeds signed-in
+     operations, and objects with ids feed operations taking those ids.
    - *HAR file*: a recording from browser devtools or a proxy. Static
      assets and third-party calls are ignored. Dependencies are found by
      seeing which response values later requests reuse.
@@ -153,6 +158,9 @@ ShopLab's 860-line spec becomes about 13 KB.
 ```
 stampede generate
   --from-openapi spec.yaml      OpenAPI 3.x spec
+  --from-graphql schema.graphql GraphQL schema (SDL or introspection JSON)
+  --introspect                  fetch the GraphQL schema from --target
+  --graphql-path /graphql       where the GraphQL API is served
   --from-har session.har        HAR recording
   --from-log access.log         access log (journey mix)
   --describe "..."              plain-language description
@@ -208,7 +216,7 @@ address.
 
 ## Limitations
 
-- GraphQL introspection and browser crawling are **planned**, not built.
+- Browser crawling as an input is **planned**, not built.
 - A dry run proves one user can complete each journey. It does not prove
   the journey is realistic, or that the weights match production. Review
   the proposal.
