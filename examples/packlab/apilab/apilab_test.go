@@ -2,6 +2,7 @@ package apilab
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -126,9 +127,12 @@ func TestWebhooksBottleneck(t *testing.T) {
 		}
 		wg.Wait()
 		deadline := time.Now().Add(5 * time.Second)
+		polls := 0
 		for _, id := range ids {
 			for {
-				_, m := do(t, "GET", base+"/v1/deliveries/"+id, "sk_test_00003", "")
+				// A fresh key per poll keeps the poller under its rate limit.
+				polls++
+				_, m := do(t, "GET", base+"/v1/deliveries/"+id, fmt.Sprintf("sk_test_%05d", 100+polls), "")
 				if m["status"] == "delivered" {
 					break
 				}
