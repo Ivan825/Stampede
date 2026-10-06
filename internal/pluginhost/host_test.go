@@ -265,6 +265,8 @@ func TestTargetHosts(t *testing.T) {
 		{"app:pw@unix(/tmp/mysql.sock)/shop", "localhost"},
 		{"postgres:///shop?host=/var/run/postgresql", "localhost"},
 		{"redis://:pw@cache:6379/0", "cache"},
+		{"file:/tmp/shop.db?_pragma=busy_timeout(100)", "localhost"},
+		{":memory:", "localhost"},
 	}
 	for _, tc := range tests {
 		got, err := pluginhost.TargetHosts(tc.in)

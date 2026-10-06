@@ -165,8 +165,9 @@ func toJSONSchemaValue(v any) any {
 // TargetHosts returns the hosts a config's target value names. It
 // understands URLs (mqtt://host:1883, postgres://u@h1,h2/db), host:port
 // lists, PostgreSQL key=value DSNs (host=db port=5432) and MySQL DSNs
-// (user:pw@tcp(db:3306)/app). Unix sockets count as localhost. An address
-// it cannot read is an error, so the policy fails closed.
+// (user:pw@tcp(db:3306)/app). Unix sockets and SQLite file: URIs count as
+// localhost. An address it cannot read is an error, so the policy fails
+// closed.
 func TargetHosts(v any) ([]string, error) {
 	switch x := v.(type) {
 	case nil:
@@ -201,6 +202,9 @@ func addrHosts(s string) ([]string, error) {
 	switch {
 	case s == "":
 		return nil, nil
+	case s == ":memory:", strings.HasPrefix(s, "file:") && !strings.HasPrefix(s, "file://"):
+		// An SQLite database: a local file or memory.
+		return []string{"localhost"}, nil
 	case strings.Contains(s, "://"):
 		u, err := url.Parse(s)
 		if err != nil {
