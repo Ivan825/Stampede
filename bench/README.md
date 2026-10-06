@@ -45,5 +45,40 @@ published with the release notes.
 | Comparison | Status |
 |---|---|
 | Ground truth from the calibrated echo server | Shipped |
-| Side-by-side with k6 on the same workload | Planned |
-| Side-by-side with wrk2 on the same workload | Planned |
+| Side-by-side with k6 on the same workload | Shipped (`bench/compare`, nightly) |
+| Side-by-side with wrk2 on the same workload | Shipped (`bench/compare`, nightly; wrk2 is built from source on Linux) |
+
+## Comparing with k6 and wrk2
+
+```sh
+go run ./bench/compare                      # uses k6 and wrk2 from PATH when installed
+go run ./bench/compare -quick -out compare.json
+go run ./bench/compare -k6 ~/bin/k6 -wrk2 ~/src/wrk2/wrk
+```
+
+Each case runs the same open-model workload (a constant arrival rate) through
+each tool in turn against one echo server. The server's exact percentiles are
+read and reset after every tool, so each tool is judged against the ground
+truth of its own run. The table says where each tool starts its clock:
+
+- **scheduled**: Stampede's latency and wrk2 count from when the request
+  should have been sent, so a generator that falls behind cannot hide it
+  (coordinated omission corrected).
+- **sent**: Stampede's service time and k6's `http_req_duration` count from
+  when the request actually left.
+
+On an idle generator both agree with the truth; the scheduled clock is the
+one that stays honest when the generator is overloaded. A tool that is not
+installed is reported as such, never guessed. The nightly CI job installs
+k6, builds wrk2 and uploads the JSON results.
+
+Example (Apple M-series laptop, busy with other work, 5-second case):
+
+```
+lognormal median 20ms  (300/s for 5s)
+                             clock from    p50 ms    p95 ms    p99 ms
+✓  stampede                   scheduled      21.09     52.45     76.61
+     truth for that run                      20.77     52.20     75.61
+✓  k6                         sent           20.53     52.96     80.10
+     truth for that run                      20.21     52.81     79.92
+```

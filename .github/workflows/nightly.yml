@@ -24,3 +24,36 @@ jobs:
           name: accuracy-nightly-${{ github.run_number }}
           path: accuracy-*.json
           retention-days: 90
+
+  compare:
+    # The same workload through Stampede, k6 and wrk2, each checked against
+    # the echo server's ground truth.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - name: install k6
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release download --repo grafana/k6 --pattern 'k6-*-linux-amd64.tar.gz' --dir "$RUNNER_TEMP"
+          tar -xzf "$RUNNER_TEMP"/k6-*-linux-amd64.tar.gz -C "$RUNNER_TEMP"
+          sudo install "$RUNNER_TEMP"/k6-*-linux-amd64/k6 /usr/local/bin/k6
+          k6 version
+      - name: build wrk2
+        continue-on-error: true
+        run: |
+          sudo apt-get update -qq && sudo apt-get install -y -qq libssl-dev zlib1g-dev
+          git clone --depth 1 https://github.com/giltene/wrk2 "$RUNNER_TEMP/wrk2"
+          make -C "$RUNNER_TEMP/wrk2" -j"$(nproc)"
+          sudo install "$RUNNER_TEMP/wrk2/wrk" /usr/local/bin/wrk2
+      - name: compare with k6 and wrk2
+        run: go run ./bench/compare -out compare-${{ github.run_number }}.json
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: compare-nightly-${{ github.run_number }}
+          path: compare-*.json
+          retention-days: 90
