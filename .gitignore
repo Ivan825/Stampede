@@ -5,6 +5,13 @@
 *.out
 coverage.*
 
+# Plugin binaries built in place (go build in plugins/<name>)
+/plugins/kafka/kafka
+/plugins/mqtt/mqtt
+/plugins/redis/redis
+/plugins/sql/sql
+/plugins/udp/udp
+
 # Go workspace
 go.work.sum
 
