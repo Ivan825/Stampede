@@ -18,8 +18,13 @@ type series struct {
 	Right bool
 }
 
-// lineChart renders a responsive SVG line chart. xs are seconds.
+// lineChart renders a responsive SVG line chart over time (xs in seconds).
 func lineChart(title string, xs []float64, ss []series) template.HTML {
+	return lineChartX(title, xs, fmtSecs, ss)
+}
+
+// lineChartX renders a line chart with a custom x axis label format.
+func lineChartX(title string, xs []float64, xFmt func(float64) string, ss []series) template.HTML {
 	const (
 		w, h         = 760.0, 240.0
 		padL, padR   = 56.0, 56.0
@@ -74,7 +79,7 @@ func lineChart(title string, xs []float64, ss []series) template.HTML {
 	}
 	for i := 0; i <= 5; i++ {
 		x := padL + plotW*float64(i)/5
-		fmt.Fprintf(&b, `<text class="axis" x="%.1f" y="%.1f" text-anchor="middle">%s</text>`, x, h-8, fmtSecs(xMax*float64(i)/5))
+		fmt.Fprintf(&b, `<text class="axis" x="%.1f" y="%.1f" text-anchor="middle">%s</text>`, x, h-8, html.EscapeString(xFmt(xMax*float64(i)/5)))
 	}
 	for _, s := range ss {
 		top := lMax

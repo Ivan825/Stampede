@@ -39,7 +39,10 @@ type Report struct {
 	Errors     []ErrorRow  `json:"errors"`
 	Timeline   []Point     `json:"timeline"`
 	Breakpoint *Breakpoint `json:"breakpoint,omitempty"`
-	Notes      []string    `json:"notes,omitempty"`
+	// Curve and Knee are set for runs whose load changed over time.
+	Curve []CurvePoint `json:"curve,omitempty"`
+	Knee  *Knee        `json:"knee,omitempty"`
+	Notes []string     `json:"notes,omitempty"`
 	// Workers describes each worker of a distributed run (empty for a
 	// single in-process engine).
 	Workers []WorkerRow `json:"workers,omitempty"`
@@ -281,6 +284,11 @@ func Build(in Input) *Report {
 		r.Timeline = append(r.Timeline, p)
 	}
 
+	if len(in.Plan.Stages) > 0 {
+		r.Curve = buildCurve(snaps, secs, planned)
+		r.Knee = findKnee(r.Curve, in.Plan.Mode)
+	}
+
 	// Targets.
 	r.Thresholds = Evaluate(in.Program, in.Program.Thresholds, total, dur)
 	r.Verdict = VerdictNoTargets
@@ -292,7 +300,19 @@ func Build(in Input) *Report {
 			}
 		}
 	}
-	if in.StopReason != "" && in.StopReason != "completed" {
+	// A breakpoint run pushes past the targets on purpose, so judging the
+	// whole run against them would always fail it. Targets are judged per
+	// level instead: the run passes when at least one level held.
+	if bp := in.Breakpoint; bp != nil && len(r.Thresholds) > 0 {
+		if bp.LastPass > 0 {
+			r.Verdict = VerdictPass
+			r.Notes = append(r.Notes, "In a breakpoint run targets are judged per load level; the targets table covers the whole run, including the levels past the breakpoint.")
+		} else {
+			r.Verdict = VerdictFail
+			r.Notes = append(r.Notes, "Targets failed at the first load level of the breakpoint search.")
+		}
+	}
+	if in.StopReason != "" && in.StopReason != "completed" && in.StopReason != "breakpoint reached" {
 		r.Notes = append(r.Notes, "Run ended early: "+in.StopReason+".")
 	}
 	if total.Dropped > 0 {

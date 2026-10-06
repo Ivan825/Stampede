@@ -110,6 +110,15 @@ footer a { color: var(--accent); }
 </div>
 {{end}}
 
+{{if .CurveChart}}
+<h2>Throughput against load</h2>
+<div class="card">
+  {{with .Knee}}{{if .Found}}<p>Throughput kept up with load to <b>{{num .At.Offered}}{{.Unit}}</b>. At <b>{{num .Next.Offered}}{{.Unit}}</b> {{.Reason}}: {{rate .Next.Throughput}} it/s, p95 {{ms .Next.P95}}.</p>
+  {{else}}<p>No knee: throughput kept up with load at every level up to {{num .At.Offered}}{{.Unit}}.</p>{{end}}{{end}}
+  {{.CurveChart}}
+</div>
+{{end}}
+
 <h2>Over time</h2>
 <div class="card"><h3>Throughput and users</h3>{{.ThroughputChart}}</div>
 <div class="card"><h3>Latency (from scheduled send)</h3>{{.LatencyChart}}</div>

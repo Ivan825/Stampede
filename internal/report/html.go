@@ -29,6 +29,7 @@ type htmlData struct {
 	ThroughputChart template.HTML
 	LatencyChart    template.HTML
 	ErrorChart      template.HTML
+	CurveChart      template.HTML
 	Unit            string
 }
 
@@ -72,6 +73,19 @@ func (r *Report) WriteHTML(w io.Writer) error {
 		ErrorChart: lineChart("Errors", xs, []series{
 			{Name: "error rate", Class: "s5", Ys: errs, Fmt: func(f float64) string { return fmt.Sprintf("%.1f%%", f*100) }},
 		}),
+	}
+	if len(r.Curve) >= 2 {
+		cx := make([]float64, len(r.Curve))
+		thr := make([]float64, len(r.Curve))
+		cp95 := make([]float64, len(r.Curve))
+		for i, c := range r.Curve {
+			cx[i], thr[i], cp95[i] = c.Offered, c.Throughput, c.P95
+		}
+		unit := Unit(r.Load.Mode)
+		d.CurveChart = lineChartX("Throughput against load", cx, func(f float64) string { return num(math.Round(f)) + unit }, []series{
+			{Name: "completed iterations per second", Class: "s1", Ys: thr, Fmt: rateFmt},
+			{Name: "p95 latency", Class: "s5", Ys: cp95, Fmt: Ms, Right: true},
+		})
 	}
 	return htmlTmpl.Execute(w, d)
 }

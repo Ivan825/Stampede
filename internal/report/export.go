@@ -108,6 +108,15 @@ func (r *Report) WriteText(w io.Writer) {
 		}
 	}
 
+	if k := r.Knee; k != nil {
+		if k.Found {
+			fmt.Fprintf(w, "\n  knee         scaled to %s%s (%.1f it/s, p95 %s); at %s%s %s (%.1f it/s, p95 %s)\n",
+				num(k.At.Offered), k.Unit, k.At.Throughput, Ms(k.At.P95), num(k.Next.Offered), k.Unit, k.Reason, k.Next.Throughput, Ms(k.Next.P95))
+		} else {
+			fmt.Fprintf(w, "\n  knee         none: throughput kept up with load up to %s%s\n", num(k.At.Offered), k.Unit)
+		}
+	}
+
 	fmt.Fprintf(w, "\n  %-44s %8s %8s %9s %9s %9s\n", "step", "reqs", "errors", "p50", "p95", "p99")
 	for _, j := range r.Journeys {
 		for _, s := range j.Steps {
