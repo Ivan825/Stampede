@@ -1,0 +1,408 @@
+package server
+
+import (
+	"bytes"
+	"context"
+	"encoding/json"
+	"errors"
+	"fmt"
+	"net/url"
+	"strings"
+	"time"
+
+	"github.com/google/uuid"
+
+	"github.com/Ivan825/Stampede/internal/api/gen"
+	"github.com/Ivan825/Stampede/internal/auth"
+	"github.com/Ivan825/Stampede/internal/report"
+	"github.com/Ivan825/Stampede/internal/safety"
+	"github.com/Ivan825/Stampede/internal/scenario"
+	"github.com/Ivan825/Stampede/internal/store/db"
+)
+
+func runOf(r db.GetRunRow) gen.Run {
+	out := gen.Run{
+		Id: r.ID, ProjectId: r.ProjectID, ScenarioId: r.ScenarioID, ScenarioName: &r.ScenarioName,
+		ScenarioVersion: int(r.ScenarioVersion), TargetId: r.TargetID, TargetURL: &r.TargetUrl,
+		Status: gen.RunStatus(r.Status), StopReason: r.StopReason, Error: r.Error,
+		CreatedAt: r.CreatedAt, StartedAt: r.StartedAt, EndedAt: r.EndedAt, Workers: ptr(int(r.Workers)),
+	}
+	if r.Verdict != nil {
+		v := gen.RunVerdict(*r.Verdict)
+		out.Verdict = &v
+	}
+	if r.Note != "" {
+		out.Note = &r.Note
+	}
+	var ov gen.RunOverrides
+	if json.Unmarshal(r.Overrides, &ov) == nil {
+		out.Overrides = &ov
+	}
+	if len(r.Plan) > 0 {
+		var ps gen.PlanSummary
+		if json.Unmarshal(r.Plan, &ps) == nil {
+			out.Plan = &ps
+		}
+	}
+	if len(r.Summary) > 0 {
+		var sm gen.RunSummary
+		if json.Unmarshal(r.Summary, &sm) == nil {
+			out.Summary = &sm
+		}
+	}
+	return out
+}
+
+func listRowToRun(r db.ListRunsRow) gen.Run {
+	return runOf(db.GetRunRow(r))
+}
+
+func (h *handlers) CreateRun(ctx context.Context, req gen.CreateRunRequestObject) (gen.CreateRunResponseObject, error) {
+	p, pr, err := h.project(ctx, req.ProjectId, auth.PermRun)
+	if err != nil {
+		return nil, err
+	}
+	b := req.Body
+	sc, err := h.st.GetScenario(ctx, db.GetScenarioParams{ID: b.ScenarioId, OrgID: p.OrgID})
+	if err != nil || sc.ProjectID != pr.ID {
+		return nil, errInvalid("scenario not found in this project")
+	}
+	tg, err := h.st.GetTarget(ctx, db.GetTargetParams{ID: b.TargetId, OrgID: p.OrgID})
+	if err != nil || tg.ProjectID != pr.ID {
+		return nil, errInvalid("target not found in this project")
+	}
+	var ver db.ScenarioVersion
+	if b.Version != nil {
+		ver, err = h.st.GetScenarioVersion(ctx, db.GetScenarioVersionParams{ScenarioID: sc.ID, Version: int32(*b.Version)}) //nolint:gosec // small
+	} else {
+		ver, err = h.st.GetLatestScenarioVersion(ctx, sc.ID)
+	}
+	if err != nil {
+		return nil, notFoundOr(err, "scenario version")
+	}
+
+	s, err := scenario.Decode([]byte(ver.Yaml))
+	if err != nil {
+		return nil, errInvalid(err.Error())
+	}
+	var ov gen.RunOverrides
+	if b.Overrides != nil {
+		ov = *b.Overrides
+		o := scenario.Overrides{}
+		if ov.Shape != nil {
+			o.Shape = *ov.Shape
+		}
+		if ov.Mode != nil {
+			o.Mode = string(*ov.Mode)
+		}
+		if ov.Vus != nil {
+			o.VUs = *ov.Vus
+		}
+		if ov.Rate != nil {
+			o.Rate = *ov.Rate
+		}
+		if ov.Duration != nil {
+			o.Duration = *ov.Duration
+		}
+		if ov.Start != nil {
+			o.Start = *ov.Start
+		}
+		if ov.Max != nil {
+			o.Max = *ov.Max
+		}
+		if err := o.Apply(s); err != nil {
+			return nil, errInvalid("overrides: " + err.Error())
+		}
+	}
+	// The run's target always wins over the file's base URL.
+	s.Target.BaseURL = tg.BaseUrl
+	if err := s.Validate(); err != nil {
+		var ve *scenario.ValidationError
+		if errors.As(err, &ve) {
+			return nil, errInvalid("the scenario has problems", ve.Problems...)
+		}
+		return nil, errInvalid(err.Error())
+	}
+	prog, err := scenario.Compile(s)
+	if err != nil {
+		return nil, errInvalid(err.Error())
+	}
+	plan, err := s.Load.Plan()
+	if err != nil {
+		return nil, errInvalid(err.Error())
+	}
+	if plan.StopOnFail && len(prog.Thresholds) == 0 {
+		return nil, errInvalid("the breakpoint shape needs at least one target, such as \"http.p95 < 500ms\"")
+	}
+	if err := h.checkCaps(tg, plan); err != nil {
+		return nil, err
+	}
+
+	secrets, err := h.projectSecrets(ctx, pr.ID)
+	if err != nil {
+		return nil, err
+	}
+	env := map[string]string{}
+	if b.Env != nil {
+		env = *b.Env
+	}
+	yamlOut, err := s.Marshal()
+	if err != nil {
+		return nil, err
+	}
+	workers := 0
+	if b.Workers != nil {
+		workers = *b.Workers
+	}
+	note := ""
+	if b.Note != nil {
+		note = *b.Note
+	}
+	ovJSON, _ := json.Marshal(ov)
+	planJSON, _ := json.Marshal(planSummary(s))
+	envJSON, _ := json.Marshal(redactedEnv(env))
+	id, uid := uuid.New(), p.UserID
+	err = h.st.CreateRun(ctx, db.CreateRunParams{
+		ID: id, ProjectID: pr.ID, ScenarioID: sc.ID, ScenarioVersion: ver.Version, TargetID: tg.ID,
+		Overrides: ovJSON, Plan: planJSON, Env: envJSON, Workers: int32(workers), Note: note, CreatedBy: &uid, //nolint:gosec // small
+	})
+	if err != nil {
+		return nil, err
+	}
+	h.audit(ctx, "run.start", sc.Name+" → "+tg.BaseUrl, map[string]any{
+		"run": id, "version": ver.Version, "peak": plan.Peak(), "mode": plan.Mode, "duration": plan.TotalDuration().String(),
+	})
+
+	h.runs.launch(&activeRun{id: id, org: p.OrgID, project: pr.ID, target: tg.ID, scenario: sc.ID},
+		ExecSpec{
+			RunID: id.String(), Scenario: s, YAML: yamlOut, Env: env, Secrets: secrets,
+			AllowHosts: tg.AllowHosts, TargetHost: tg.Host, Workers: workers,
+		}, prog, plan)
+
+	row, err := h.st.GetRun(ctx, db.GetRunParams{ID: id, OrgID: p.OrgID})
+	if err != nil {
+		return nil, err
+	}
+	return gen.CreateRun201JSONResponse(runOf(row)), nil
+}
+
+// redactedEnv keeps env names for the record but not values, which may be
+// sensitive even though they are not declared as secrets.
+func redactedEnv(env map[string]string) map[string]string {
+	out := make(map[string]string, len(env))
+	for k := range env {
+		out[k] = "…"
+	}
+	return out
+}
+
+// checkCaps applies, in order: the server's hard caps, the low caps for
+// unverified public targets, and the target's own caps.
+func (h *handlers) checkCaps(tg db.Target, plan *scenario.Plan) error {
+	if err := safety.CheckPlan(plan, h.cfg.HardCaps); err != nil {
+		return errForbidden("over the server's limits: " + err.Error())
+	}
+	if !tg.Private && tg.VerifiedAt == nil {
+		if err := safety.CheckPlan(plan, safety.UnverifiedPublicCaps); err != nil {
+			return errForbidden(fmt.Sprintf("%s is public and its ownership is not verified, so load is capped: %v. Verify the target to lift this", tg.Host, err))
+		}
+	}
+	c := safety.Caps{}
+	if tg.MaxRate != nil {
+		c.MaxRate = *tg.MaxRate
+	}
+	if tg.MaxVus != nil {
+		c.MaxVUs = int(*tg.MaxVus)
+	}
+	if tg.MaxDurationS != nil {
+		c.MaxDuration = time.Duration(*tg.MaxDurationS) * time.Second
+	}
+	if err := safety.CheckPlan(plan, c); err != nil {
+		return errForbidden("over this target's caps: " + err.Error())
+	}
+	return nil
+}
+
+func (h *handlers) run(ctx context.Context, id uuid.UUID, min auth.Role) (db.GetRunRow, error) {
+	p, err := need(ctx, min)
+	if err != nil {
+		return db.GetRunRow{}, err
+	}
+	r, err := h.st.GetRun(ctx, db.GetRunParams{ID: id, OrgID: p.OrgID})
+	if err != nil {
+		return db.GetRunRow{}, notFoundOr(err, "run")
+	}
+	return r, nil
+}
+
+func (h *handlers) ListRuns(ctx context.Context, req gen.ListRunsRequestObject) (gen.ListRunsResponseObject, error) {
+	_, pr, err := h.project(ctx, req.ProjectId, auth.PermView)
+	if err != nil {
+		return nil, err
+	}
+	limit, before := 50, time.Now().Add(time.Hour)
+	if req.Params.Limit != nil {
+		limit = min(max(*req.Params.Limit, 1), 200)
+	}
+	if req.Params.Before != nil {
+		before = *req.Params.Before
+	}
+	rows, err := h.st.ListRuns(ctx, db.ListRunsParams{ProjectID: pr.ID, Limit: int32(limit), Before: before, ScenarioID: req.Params.ScenarioId}) //nolint:gosec // bounded
+	if err != nil {
+		return nil, err
+	}
+	out := gen.ListRuns200JSONResponse{}
+	for _, r := range rows {
+		out = append(out, listRowToRun(r))
+	}
+	return out, nil
+}
+
+func (h *handlers) GetRun(ctx context.Context, req gen.GetRunRequestObject) (gen.GetRunResponseObject, error) {
+	r, err := h.run(ctx, req.RunId, auth.PermView)
+	if err != nil {
+		return nil, err
+	}
+	return gen.GetRun200JSONResponse(runOf(r)), nil
+}
+
+func (h *handlers) StopRun(ctx context.Context, req gen.StopRunRequestObject) (gen.StopRunResponseObject, error) {
+	r, err := h.run(ctx, req.RunId, auth.PermRun)
+	if err != nil {
+		return nil, err
+	}
+	if !h.runs.stop(r.ID) {
+		return nil, errConflict("the run is not active")
+	}
+	if a := h.runs.get(r.ID); a != nil {
+		h.runs.setStatus(ctx, a, statusStopping)
+	}
+	h.audit(ctx, "run.stop", r.ID.String(), nil)
+	return gen.StopRun202Response{}, nil
+}
+
+func (h *handlers) KillRun(ctx context.Context, req gen.KillRunRequestObject) (gen.KillRunResponseObject, error) {
+	r, err := h.run(ctx, req.RunId, auth.PermRun)
+	if err != nil {
+		return nil, err
+	}
+	h.runs.kill(r.ID)
+	h.audit(ctx, "run.kill", r.ID.String(), nil)
+	return gen.KillRun202Response{}, nil
+}
+
+func (h *handlers) KillAllRuns(ctx context.Context, _ gen.KillAllRunsRequestObject) (gen.KillAllRunsResponseObject, error) {
+	p, err := need(ctx, auth.PermRun)
+	if err != nil {
+		return nil, err
+	}
+	ids, err := h.st.ListActiveRuns(ctx, p.OrgID)
+	if err != nil {
+		return nil, err
+	}
+	killed := []uuid.UUID{}
+	for _, id := range ids {
+		if h.runs.kill(id) {
+			killed = append(killed, id)
+		}
+	}
+	h.audit(ctx, "run.kill_all", "", map[string]any{"runs": killed})
+	return gen.KillAllRuns200JSONResponse{Killed: killed}, nil
+}
+
+func (h *handlers) StreamRun(context.Context, gen.StreamRunRequestObject) (gen.StreamRunResponseObject, error) {
+	// Served by Server.streamRun, which is mounted ahead of the generated router.
+	return nil, errors.New("unreachable")
+}
+
+func (h *handlers) GetRunTimeline(ctx context.Context, req gen.GetRunTimelineRequestObject) (gen.GetRunTimelineResponseObject, error) {
+	r, err := h.run(ctx, req.RunId, auth.PermView)
+	if err != nil {
+		return nil, err
+	}
+	rows, err := h.st.ListRunPoints(ctx, r.ID)
+	if err != nil {
+		return nil, err
+	}
+	out := gen.GetRunTimeline200JSONResponse{}
+	for _, row := range rows {
+		out = append(out, pointRow(row))
+	}
+	return out, nil
+}
+
+func (h *handlers) GetRunReport(ctx context.Context, req gen.GetRunReportRequestObject) (gen.GetRunReportResponseObject, error) {
+	r, err := h.run(ctx, req.RunId, auth.PermView)
+	if err != nil {
+		return nil, err
+	}
+	raw, err := h.st.GetReport(ctx, r.ID)
+	if err != nil {
+		if r.Status == statusFailed {
+			return nil, errConflict("the run failed before producing a report")
+		}
+		return nil, notFoundOr(err, "report (the run has not finished)")
+	}
+	rep, err := report.ReadJSON(bytes.NewReader(raw))
+	if err != nil {
+		return nil, err
+	}
+	format := gen.Json
+	if req.Params.Format != nil {
+		format = *req.Params.Format
+	}
+	var buf bytes.Buffer
+	name := "stampede-" + rep.Scenario + "-" + r.ID.String()[:8]
+	setDownload := func(ext string) {
+		if w, _ := httpFrom(ctx); w != nil {
+			w.Header().Set("Content-Disposition", fmt.Sprintf(`attachment; filename="%s.%s"`, url.PathEscape(name), ext))
+		}
+	}
+	switch format {
+	case gen.Html:
+		if err := rep.WriteHTML(&buf); err != nil {
+			return nil, err
+		}
+		setDownload("html")
+		return gen.GetRunReport200TexthtmlResponse{Body: &buf, ContentLength: int64(buf.Len())}, nil
+	case gen.Junit:
+		if err := rep.WriteJUnit(&buf); err != nil {
+			return nil, err
+		}
+		setDownload("xml")
+		return gen.GetRunReport200ApplicationxmlResponse{Body: &buf, ContentLength: int64(buf.Len())}, nil
+	case gen.Markdown:
+		rep.WriteMarkdown(&buf)
+		setDownload("md")
+		return gen.GetRunReport200TextmarkdownResponse{Body: &buf, ContentLength: int64(buf.Len())}, nil
+	default:
+		var m map[string]any
+		if err := json.Unmarshal(raw, &m); err != nil {
+			return nil, err
+		}
+		return gen.GetRunReport200JSONResponse(m), nil
+	}
+}
+
+func (h *handlers) ListWorkers(ctx context.Context, _ gen.ListWorkersRequestObject) (gen.ListWorkersResponseObject, error) {
+	if _, err := need(ctx, auth.PermView); err != nil {
+		return nil, err
+	}
+	out := gen.ListWorkers200JSONResponse{}
+	if h.cfg.Workers == nil {
+		return out, nil
+	}
+	for _, w := range h.cfg.Workers() {
+		labels := w.Labels
+		gw := gen.Worker{
+			Id: w.ID, Name: w.Name, Region: w.Region, Version: &w.Version, Labels: &labels,
+			Cpus: &w.CPUs, MemoryBytes: ptr(int(w.MemoryBytes)), Status: gen.WorkerStatus(strings.ToLower(w.Status)),
+			ConnectedAt: w.ConnectedAt, LastSeenAt: w.LastSeenAt,
+		}
+		if w.RunID != "" {
+			gw.RunId = &w.RunID
+		}
+		out = append(out, gw)
+	}
+	return out, nil
+}
