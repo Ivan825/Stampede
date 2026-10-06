@@ -1,0 +1,19 @@
+# A tiny scenario for the kind smoke test: the server load-tests its own
+# health endpoint for ten seconds through the in-cluster workers.
+apiVersion: stampede.dev/v1
+kind: Scenario
+metadata:
+  name: kind-smoke
+target:
+  baseURL: http://stampede:8080
+journeys:
+  - name: health
+    steps:
+      - get: /healthz
+        check: { status: 200 }
+load:
+  mode: rate
+  rate: 20/s
+  duration: 10s
+targets:
+  - errors < 1%
