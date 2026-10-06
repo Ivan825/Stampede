@@ -29,6 +29,9 @@ the files it runs. This page lists what is defended today and what is not.
 | Load sent to a site the user does not own | private-only by default for unverified public hosts (low caps), ownership verification by DNS TXT or well-known file, per-request host policy (target host, private hosts, explicit allow list), server and target caps, audit log | built |
 | A scenario reading server files and sending them to the target | file feeders confined to `--data-dir`, path traversal rejected | built |
 | A scenario reading the server's environment | server runs see only the run's own env and the project's secrets | built |
+| A scenario making the server fetch internal URLs (SSRF) | server runs refuse `observe.prometheus.url`; Prometheus is reached only through integrations an admin configured; trace templates only build links | built |
+| Notification webhooks aimed at internal services | destinations on loopback, private, link-local (cloud metadata), CGNAT, multicast and reserved addresses refused unless an admin allows private destinations per channel; checked at creation and on every dialled address (no DNS rebinding), environment proxies ignored, redirects not followed | built |
+| Webhook URLs and signing secrets leaking | encrypted with the master key, never returned (only scheme and host); webhook bodies signed with HMAC-SHA256 | built |
 | Code execution from a scenario | expressions are CEL (no I/O, no loops beyond the language); JavaScript script steps are not built | built |
 | Password guessing | argon2id hashing, per-email and per-address throttling, constant-time comparison, same timing for unknown users | built |
 | Address spoofing to dodge throttling | forwarded headers trusted only from configured proxies | built |

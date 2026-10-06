@@ -18,11 +18,70 @@
 | `--abort-errors`, `--abort-for` | `STAMPEDE_ABORT_ERRORS` | `90%`, `30s` | stop any run whose error rate stays at or above this; `0` disables |
 | `--trusted-proxy` | `STAMPEDE_TRUSTED_PROXIES` (comma separated) | none | reverse proxies whose `X-Forwarded-For` is believed |
 | `--secure-cookies` | `STAMPEDE_SECURE_COOKIES=true` | `false` | mark the session cookie Secure (behind HTTPS) |
+| `--public-url` | `STAMPEDE_PUBLIC_URL` | — | external URL of the web UI; notifications link to `<url>/runs/<id>` when set |
 | `--log-level`, `--log-format` | `STAMPEDE_LOG_LEVEL`, `STAMPEDE_LOG_FORMAT` | `info`, `json` | logging |
 | `--migrate-only`, `--migrate-dry-run` | — | — | apply or report migrations, then exit |
 
 Back up the master key with the database: secrets cannot be decrypted
 without it. See [upgrades and backups](../deploy/upgrades.md).
+
+Integrations (Prometheus, trace links) and notification channels are
+configured per organisation through the API or Settings in the web UI, not
+here; see [integrations](../guides/integrations.md).
+
+### Tracing (OpenTelemetry)
+
+The server traces its own HTTP API and every run with OpenTelemetry. Tracing
+is off unless the standard OTLP exporter variables are set; there is
+nothing Stampede-specific to configure.
+
+| Environment | Meaning |
+|---|---|
+| `OTEL_EXPORTER_OTLP_ENDPOINT` (or `OTEL_EXPORTER_OTLP_TRACES_ENDPOINT`) | turns tracing on and sets the collector, e.g. `http://otel-collector:4318` |
+| `OTEL_EXPORTER_OTLP_PROTOCOL` (or `..._TRACES_PROTOCOL`) | `http/protobuf` (default) or `grpc` (then use port 4317) |
+| `OTEL_EXPORTER_OTLP_HEADERS`, `OTEL_EXPORTER_OTLP_INSECURE`, ... | read by the OpenTelemetry SDK as usual |
+| `OTEL_SERVICE_NAME`, `OTEL_RESOURCE_ATTRIBUTES` | override the default `service.name=stampede-server` |
+| `OTEL_TRACES_SAMPLER`, `OTEL_TRACES_SAMPLER_ARG` | sampling (default: parent-based, always on) |
+
+What is traced:
+
+- one span per API request (`otelhttp`), named after the route, such as
+  `POST /api/v1/projects/{projectId}/runs`, with the `http.route` attribute;
+  incoming W3C `traceparent` headers are honoured;
+- one span per run, named `run`, from scheduling to the stored report. It is
+  the root of its own trace and links to the request that started the run.
+  Attributes: `stampede.run.id`, `stampede.project.id`, `stampede.scenario`,
+  `stampede.target`, `stampede.load.mode`, `stampede.load.peak`,
+  `stampede.run.status`, `stampede.run.verdict`, `stampede.requests`,
+  `stampede.error_rate`, `stampede.p95_seconds`; events mark when load
+  started and ended. A run that fails sets the span's status to error.
+
+The load itself is not traced by this: virtual users send their own W3C
+`traceparent` to your target so you can find their requests in your
+tracing system (see [integrations](../guides/integrations.md#trace-links)).
+
+Workers and `stampede run` do not export spans.
+
+### Metrics and the Grafana dashboard
+
+`GET /metrics` (no authentication; keep it on an internal network) serves
+Prometheus metrics:
+
+| Metric | Meaning |
+|---|---|
+| `stampede_runs_active` | runs executing now |
+| `stampede_runs_finished_total{status}` | finished runs by status: `completed`, `aborted`, `failed` |
+| `stampede_http_request_duration_seconds{method,route,code}` | API latency histogram (live run streams excluded) |
+| `go_*`, `process_*` | Go runtime and process metrics |
+
+[`deploy/grafana/stampede-server.json`](../../deploy/grafana/stampede-server.json)
+is a Grafana dashboard for them: runs active and finished, API request
+rate, latency percentiles, 5xx ratio and the slowest routes, and CPU,
+memory, goroutines, garbage collection and file descriptors. Import it in
+Grafana (Dashboards → New → Import) and pick your Prometheus data source; the
+`job` and `instance` variables select the servers. A test checks that every
+`stampede_*` and `go_*` metric the dashboard queries is served by
+`/metrics`.
 
 ## Worker (`stampede worker`)
 

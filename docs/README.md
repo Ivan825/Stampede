@@ -22,7 +22,8 @@ not built yet are marked **planned**.
 - [Test types](guides/test-types.md): every traffic shape and the targeted stresses
 - [Reading a report](guides/reports.md)
 - [Comparing releases](guides/comparing.md)
-- [CI integration](guides/ci.md)
+- [CI integration](guides/ci.md): exit codes, JUnit, the GitHub Action
+- [Integrations](guides/integrations.md): Prometheus target metrics, trace links, notifications
 - [AI journey generation](ai.md)
 - [Product packs](guides/packs.md): using and writing them
 - [Protocols](protocols.md): HTTP/1.1, HTTP/2, GraphQL, WebSocket, SSE, gRPC

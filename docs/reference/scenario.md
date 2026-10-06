@@ -26,6 +26,8 @@ The authoritative definition is the [JSON Schema](../../schema/scenario.schema.j
 | `journeys[]` | | `name`, `weight` (default 1), `tags`, `target` (p50/p90/p95/p99/errors), `steps` |
 | `load` | | see below |
 | `targets[]` | string | `[scope.]metric op value` |
+| `observe.prometheus` | `{url \| integration, bearerToken?, queries}` | PromQL queries charted in the report after the run; `url` (may use `${env.X}`) for `stampede run`, `integration` (a server integration's name) on the server; up to 20 `name: query` pairs ([integrations](../guides/integrations.md)) |
+| `observe.traces` | `{url \| integration}` | link template containing `{traceId}` for the slowest requests' traces |
 
 ## Load
 
