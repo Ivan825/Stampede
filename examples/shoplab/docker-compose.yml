@@ -1,0 +1,88 @@
+# Standalone ShopLab: Postgres + Redis + a one-shot seeder + the API.
+#
+#   docker compose up --build            # all bottlenecks active
+#   SHOPLAB_FIX_ALL=1 docker compose up -d shoplab   # everything fixed
+#
+# Postgres and Redis are published on localhost:55432 / localhost:56379 so
+# integration tests and psql can reach them; change with SHOPLAB_PG_PORT /
+# SHOPLAB_REDIS_PORT.
+name: shoplab
+
+services:
+  postgres:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_USER: shoplab
+      POSTGRES_PASSWORD: shoplab
+      POSTGRES_DB: shoplab
+    command: ["postgres", "-c", "max_connections=200", "-c", "shared_buffers=256MB"]
+    ports:
+      - "127.0.0.1:${SHOPLAB_PG_PORT:-55432}:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U shoplab -d shoplab"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+
+  redis:
+    image: redis:7-alpine
+    command: ["redis-server", "--save", "", "--appendonly", "no", "--maxmemory", "256mb", "--maxmemory-policy", "allkeys-lru"]
+    ports:
+      - "127.0.0.1:${SHOPLAB_REDIS_PORT:-56379}:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+
+  # Runs migrations and seeds once; a no-op when data already exists.
+  seed:
+    build: .
+    image: shoplab:local
+    command:
+      - seed
+      - --if-empty
+      - --products=${SHOPLAB_SEED_PRODUCTS:-10000}
+      - --users=${SHOPLAB_SEED_USERS:-1000}
+      - --orders-per-user=${SHOPLAB_SEED_ORDERS_PER_USER:-20}
+    environment:
+      DATABASE_URL: postgres://shoplab:shoplab@postgres:5432/shoplab?sslmode=disable
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: "no"
+
+  shoplab:
+    build: .
+    image: shoplab:local
+    command: ["serve"]
+    ports:
+      - "${SHOPLAB_PORT:-8090}:8090"
+    environment:
+      SHOPLAB_ADDR: ":8090"
+      DATABASE_URL: postgres://shoplab:shoplab@postgres:5432/shoplab?sslmode=disable
+      REDIS_URL: redis://redis:6379/0
+      SHOPLAB_ADMIN: ${SHOPLAB_ADMIN:-1}
+      SHOPLAB_LOG_LEVEL: ${SHOPLAB_LOG_LEVEL:-info}
+      SHOPLAB_CACHE_TTL: ${SHOPLAB_CACHE_TTL:-10s}
+      SHOPLAB_SESSION_TTL: ${SHOPLAB_SESSION_TTL:-15m}
+      SHOPLAB_FIX_ALL: ${SHOPLAB_FIX_ALL:-0}
+      SHOPLAB_FIX_N1: ${SHOPLAB_FIX_N1:-0}
+      SHOPLAB_FIX_INDEX: ${SHOPLAB_FIX_INDEX:-0}
+      SHOPLAB_FIX_POOL: ${SHOPLAB_FIX_POOL:-0}
+      SHOPLAB_FIX_CACHE: ${SHOPLAB_FIX_CACHE:-0}
+      SHOPLAB_FIX_RACE: ${SHOPLAB_FIX_RACE:-0}
+      SHOPLAB_FIX_LEAK: ${SHOPLAB_FIX_LEAK:-0}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      seed:
+        condition: service_completed_successfully
+    restart: unless-stopped
+
+volumes:
+  pgdata:
