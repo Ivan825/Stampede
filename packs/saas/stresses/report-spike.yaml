@@ -1,0 +1,45 @@
+# Monday 9:00: every tenant opens its dashboard and runs its reports at
+# once. Traffic spikes tenfold on the heaviest endpoints; reports may slow
+# down but must finish, and dashboards must stay usable.
+apiVersion: stampede.dev/v1
+kind: Scenario
+metadata:
+  name: saas-report-spike
+  tags: [pack:saas, spike]
+target:
+  baseURL: ${env.TARGET_URL}
+data:
+  users: { csv: ../data/users.csv, mode: random }
+journeys:
+  - name: monday-morning
+    steps:
+      - name: sign in
+        post: /api/login
+        json: { email: "${data.users.email}", password: "${data.users.password}" }
+        check: { status: 200 }
+        extract: { token: "$.token" }
+      - name: dashboard
+        graphql: /graphql
+        headers: { Authorization: "Bearer ${token}" }
+        operationName: Dashboard
+        persisted: true
+        query: |
+          query Dashboard {
+            dashboard { tenant openRecords wonAmount recent(limit: 10) { id title status owner { name } } }
+          }
+        check: { json: { "$.data.dashboard.tenant": exists } }
+      - name: report
+        graphql: /graphql
+        headers: { Authorization: "Bearer ${token}" }
+        query: 'query { report(name: "revenue-by-month") { name records rows { key revenue } } }'
+        check: { json: { "$.data.report.name": revenue-by-month } }
+load:
+  shape: spike
+  mode: rate
+  start: 5/s
+  max: 50/s
+  duration: 3m
+targets:
+  - monday-morning/dashboard.p95 < 500ms
+  - monday-morning/report.p95 < 3s
+  - errors < 1%

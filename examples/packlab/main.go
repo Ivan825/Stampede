@@ -26,6 +26,7 @@ import (
 	"github.com/Ivan825/Stampede/examples/packlab/chatlab"
 	"github.com/Ivan825/Stampede/examples/packlab/labkit"
 	"github.com/Ivan825/Stampede/examples/packlab/llmlab"
+	"github.com/Ivan825/Stampede/examples/packlab/saaslab"
 	"github.com/Ivan825/Stampede/examples/packlab/ticketlab"
 )
 
@@ -39,6 +40,7 @@ type product struct {
 }
 
 var products = map[string]product{
+	"saas":        {pack: "saas", addr: ":8091", new: saaslab.New},
 	"llm-apps":    {pack: "llm-apps", addr: ":8092", new: llmlab.New},
 	"chat":        {pack: "chat", addr: ":8093", new: chatlab.New},
 	"ticketing":   {pack: "ticketing", addr: ":8094", new: ticketlab.New},
