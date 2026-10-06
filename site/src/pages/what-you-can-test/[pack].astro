@@ -1,0 +1,29 @@
+---
+import Site from '../../layouts/Site.astro';
+import Status from '../../components/Status.astro';
+import Term from '../../components/Term.astro';
+import { packs, packFiles, GITHUB, type Pack } from '../../lib/data';
+export function getStaticPaths() {
+  return packs().map((p) => ({ params: { pack: p.name }, props: { p } }));
+}
+const { p } = Astro.props as { p: Pack };
+const files = p.status === 'shipped' ? packFiles(p.name) : [];
+---
+<Site title={p.title} description={`${p.title}: ${p.signature}`}>
+  <div class="wrap">
+    <header class="page-head"><span class="num">PACK · {p.name}</span><h1>{p.title}</h1><p>{p.signature}</p>
+      <p style="margin-top:14px"><Status status={p.status} /> <span class="mono muted" style="font-size:13px;margin-left:8px">drivers: {p.drivers.join(', ')}</span></p></header>
+    {p.status === 'shipped' ? (
+      <section class="block">
+        <Term title="set it up"><span class="p">$</span> stampede init --target https://staging.example.com
+<span class="m"># or: stampede pack install {p.name}</span></Term>
+        <div class="grid" style="margin-top:20px">
+          {files.map((g) => <div class="card"><h3>{g.dir}</h3><ul class="mono" style="font-size:14px;padding-left:18px;margin:0">{g.files.map((f) => <li><a href={`${GITHUB}/blob/main/packs/${p.name}/${g.dir}/${f}`}>{f}</a></li>)}</ul></div>)}
+        </div>
+      </section>
+    ) : (
+      <section class="block"><p class="lede">This pack is planned. It will ship once it has a reference app and its journeys pass in CI. Until then, write a scenario for it by hand or generate one from your API spec.</p>
+        <p><a href="/docs/concepts/scenarios/">Write a scenario →</a></p></section>
+    )}
+  </div>
+</Site>

@@ -1,0 +1,49 @@
+---
+import '../styles/site.css';
+import { GITHUB } from '../lib/data';
+interface Props { title?: string; description?: string }
+const { title, description = 'Self-hosted, open-source load testing. Describe your users; Stampede checks each journey, then runs thousands of them across distributed workers and shows where your product breaks.' } = Astro.props;
+const full = title ? `${title} · Stampede` : 'Stampede · Your launch-day traffic, before launch day';
+---
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>{full}</title>
+    <meta name="description" content={description} />
+    <meta property="og:title" content={full} />
+    <meta property="og:description" content={description} />
+    <meta name="theme-color" content="#18181b" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+  </head>
+  <body>
+    <nav class="nav" aria-label="Main">
+      <div class="wrap">
+        <a class="brand" href="/"><img src="/logo-dark.svg" alt="Stampede" /></a>
+        <ul>
+          <li class="hide-sm"><a href="/#demo">See it run</a></li>
+          <li class="hide-sm"><a href="/how-it-works">How it works</a></li>
+          <li class="hide-sm"><a href="/test-types">Test types</a></li>
+          <li><a href="/docs/">Docs</a></li>
+          <li><a class="btn btn-primary" href={GITHUB}>Run it locally ↗</a></li>
+        </ul>
+      </div>
+    </nav>
+    <main><slot /></main>
+    <footer class="foot">
+      <div class="wrap">
+        <img src="/logo-dark.svg" alt="Stampede" />
+        <span>© 2026 Stampede · Apache-2.0</span>
+        <ul>
+          <li><a href={GITHUB}>GitHub</a></li>
+          <li><a href="/docs/">Docs</a></li>
+          <li><a href="/what-you-can-test">What you can test</a></li>
+          <li><a href="/safety">Safety</a></li>
+          <li><a href="/benchmarks">Benchmarks</a></li>
+          <li><a href={`${GITHUB}/blob/main/LICENSE`}>Licence</a></li>
+        </ul>
+      </div>
+    </footer>
+  </body>
+</html>

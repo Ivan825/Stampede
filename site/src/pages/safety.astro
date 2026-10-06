@@ -1,0 +1,17 @@
+---
+import Site from '../layouts/Site.astro';
+---
+<Site title="Safety" description="Ownership verification, caps, host confinement, auto-abort and the kill switch.">
+  <div class="wrap">
+    <header class="page-head"><span class="num">SAFETY</span><h1>Load you can only aim at yourself.</h1><p>Some load tests look exactly like attacks. These rules are built in, and no scenario file can switch them off.</p></header>
+    <section class="block"><div class="grid">
+      <div class="card"><span class="k">TARGETS</span><h3>Prove ownership</h3><p>Private and loopback hosts just work. Public hosts stay under low caps until a DNS TXT record or a well-known file proves you own them.</p></div>
+      <div class="card"><span class="k">CONFINED</span><h3>Requests stay home</h3><p>A scenario can only reach the target, private hosts and hosts you allow. Anything else is blocked and reported.</p></div>
+      <div class="card"><span class="k">CAPS</span><h3>Hard limits</h3><p>Server-wide and per-target caps on rate, users and duration, checked before a run starts.</p></div>
+      <div class="card"><span class="k">STOP</span><h3>Kill switch</h3><p>Always on screen in the UI, <code>stampede kill --all</code> in the terminal, one API call in CI. Workers stop by themselves if they lose the server.</p></div>
+      <div class="card"><span class="k">ABORT</span><h3>Auto-abort</h3><p>Runs stop when errors or latency stay too high, so a target that fell over is not hammered for the rest of the test.</p></div>
+      <div class="card"><span class="k">RECORD</span><h3>Audit log</h3><p>Every run, stop, kill, target, secret and token change, with who did it.</p></div>
+    </div>
+    <p style="margin-top:24px"><a href="/docs/safety/">Safety in the docs →</a> · <a href="/docs/threat-model/">Threat model →</a></p></section>
+  </div>
+</Site>

@@ -1,0 +1,67 @@
+---
+import Site from '../layouts/Site.astro';
+import Status from '../components/Status.astro';
+import { features, GITHUB } from '../lib/data';
+const groups = features();
+---
+<Site title="How it works" description="Architecture, the engine, how Stampede measures, distributed execution and the AI pipeline.">
+  <div class="wrap">
+    <header class="page-head"><span class="num">HOW IT WORKS</span><h1>One binary. Numbers you can trust.</h1>
+      <p>Stampede is a server, a worker, a CLI and a terminal console in one Go binary. The engine was built and checked against ground truth before anything else was built on it.</p></header>
+
+    <section class="block"><span class="num">01</span><h2>Architecture</h2>
+      <div class="flow">
+        <div class="card"><span class="k">CLIENTS</span><h3>CLI · console · web UI · CI</h3><p>All speak the same public REST API, defined first in OpenAPI.</p></div>
+        <div class="arrow">→</div>
+        <div class="card"><span class="k">CONTROL PLANE</span><h3>stampede server</h3><p>Run manager, auth and roles, safety checks, reports, optional AI pipeline. One active replica; others stand by.</p></div>
+        <div class="arrow">→</div>
+        <div class="card"><span class="k">LOAD</span><h3>stampede worker × N</h3><p>Generate and measure load only. Connect out over gRPC, so they run behind NAT or in other regions.</p></div>
+      </div>
+    </section>
+
+    <section class="block"><span class="num">02</span><h2>The engine</h2>
+      <div class="grid">
+        <div class="card"><h3>Open and closed models</h3><p>Fixed arrival rates like real traffic, or a fixed population of users. Arrival times are computed exactly from the plan, so a run starts precisely the planned number of iterations.</p></div>
+        <div class="card"><h3>Latency from the scheduled time</h3><p>When a request is late, the wait counts. Reports show latency and service time side by side, so queueing is never hidden.</p></div>
+        <div class="card"><h3>Lossless histograms</h3><p>HdrHistogram bucketing at three significant digits, stored sparsely. Workers send histograms, not percentiles; the server merges them exactly.</p></div>
+        <div class="card"><h3>Every phase timed</h3><p>DNS, connect, TLS, time to first byte and download for every request; time to first event for streams.</p></div>
+      </div>
+    </section>
+
+    <section class="block"><span class="num">03</span><h2>Distributed execution</h2>
+      <div class="table-wrap"><table><thead><tr><th>Step</th><th>What happens</th></tr></thead><tbody>
+        <tr><td>Shard</td><td>Load split by worker capacity; each worker takes a non-overlapping share of arrivals and of unique test data.</td></tr>
+        <tr><td>Synchronise</td><td>Clock offsets measured over several round trips; one start time sent ahead in each worker's own clock.</td></tr>
+        <tr><td>Stream</td><td>Histograms and counters every second with sequence numbers; a resend is never counted twice.</td></tr>
+        <tr><td>Survive</td><td>Three missed heartbeats mark a worker lost; its data is kept, the window is marked, the run continues.</td></tr>
+        <tr><td>Stop</td><td>Kill reaches every worker at once; a worker that loses the server stops by itself after 10 seconds.</td></tr>
+      </tbody></table></div>
+      <p class="muted" style="margin-top:16px">In the project's tests: workers with clocks set seconds apart start within 0.4 ms of each other; a kill reaches three workers in under 0.5 ms; 200 workers register and run in one test.</p>
+    </section>
+
+    <section class="block"><span class="num">04</span><h2>AI journey generation</h2>
+      <div class="grid">
+        <div class="card"><span class="k">1 UNDERSTAND</span><p>Build a dependency map from an OpenAPI spec, a HAR file or access logs.</p></div>
+        <div class="card"><span class="k">2 DRAFT</span><p>The model writes journeys constrained to the scenario schema.</p></div>
+        <div class="card"><span class="k">3 CHECK</span><p>Compile, variable flow, endpoints exist, no payment or SMS hosts.</p></div>
+        <div class="card"><span class="k">4 DRY RUN</span><p>Each journey runs once with one user against your target.</p></div>
+        <div class="card"><span class="k">5 REPAIR</span><p>Failures go back with redacted evidence, up to three rounds.</p></div>
+        <div class="card"><span class="k">6 APPROVE</span><p>You review and save; nothing is saved without you.</p></div>
+      </div>
+      <p class="muted" style="margin-top:16px">Optional and bring-your-own-key: Anthropic, OpenAI, Gemini, Ollama or any OpenAI-compatible server. Never called while load runs.</p>
+    </section>
+
+    <section class="block"><span class="num">05</span><h2>What works today</h2>
+      <p class="lede">Read from the repository's <a href={`${GITHUB}/blob/main/features.yaml`}>features.yaml</a>, so this list cannot drift from the code.</p>
+      <div class="grid">
+        {groups.map((g) => (
+          <div class="card"><h3>{g.name}</h3>
+            <ul style="list-style:none;padding:0;margin:0;display:grid;gap:8px">
+              {g.features.map((f) => <li style="display:flex;justify-content:space-between;gap:10px;font-size:.92rem"><span>{f.name}</span><Status status={f.status} /></li>)}
+            </ul>
+          </div>
+        ))}
+      </div>
+    </section>
+  </div>
+</Site>

@@ -1,0 +1,36 @@
+---
+import Site from '../layouts/Site.astro';
+const shapes = [
+  ['smoke', 'Do the journeys work at all?', '2 users or 1/s for a minute'],
+  ['baseline', 'How does it behave at normal traffic?', 'ramp to normal, hold'],
+  ['stress', 'What happens past the expected peak?', 'peak, then twice the peak'],
+  ['spike', 'Does it survive a sudden jump?', 'tenfold jump in 10 seconds, hold, drop back'],
+  ['soak', 'Do leaks or slow degradation show over hours?', 'hold for hours'],
+  ['breakpoint', 'At exactly what load does it fail?', 'steps up; stops at the first level that misses a target'],
+  ['steps', 'How does each increment change latency?', 'steps up, never stops early'],
+  ['recovery', 'How fast does it return to normal after overload?', 'normal, threefold overload, normal'],
+  ['wave', 'Does it cope with repeated peaks and troughs?', 'cycles between levels'],
+];
+---
+<Site title="Test types" description="Nine traffic shapes on one engine, targeted stresses, network emulation and auto-abort.">
+  <div class="wrap">
+    <header class="page-head"><span class="num">TEST TYPES</span><h1>Every question, one engine.</h1><p>Shapes are presets: any scenario runs with any shape. One flag in the CLI, one choice in the UI, one slash command in the console.</p></header>
+    <section class="block"><span class="num">01</span><h2>Traffic shapes</h2>
+      <div class="table-wrap"><table><thead><tr><th>Shape</th><th>Question</th><th>What it does</th><th>Command</th></tr></thead><tbody>
+        {shapes.map(([n, q, d]) => <tr><td><b>{n}</b></td><td>{q}</td><td class="muted">{d}</td><td><code>/run {n}</code></td></tr>)}
+      </tbody></table></div>
+    </section>
+    <section class="block"><span class="num">02</span><h2>The breakpoint and the knee</h2>
+      <p class="lede">A breakpoint run checks your targets at the end of each level and stops at the first one that fails, naming the last load that held. For any run whose load changes, the report also finds the knee: the last level where extra load still bought extra throughput.</p>
+    </section>
+    <section class="block"><span class="num">03</span><h2>Conditions</h2>
+      <div class="grid">
+        <div class="card"><h3>Slower networks</h3><p><code>network: {"{ profile: 3g }"}</code> adds round-trip time and bandwidth limits to every user's connections: slow-3g, 3g, 4g, slow-wifi, or your own values.</p></div>
+        <div class="card"><h3>Auto-abort</h3><p>Stop a run when errors or p95 stay above a limit for a set time. The server applies a floor to every run.</p></div>
+        <div class="card"><h3>Contention and spikes</h3><p>Last-item races and flash-sale spikes ship in the e-commerce pack.</p></div>
+        <div class="card"><h3>Planned</h3><p>Packet loss and jitter, connection floods, slow clients, large payloads, and failing a dependency mid-run with an in-environment agent.</p></div>
+      </div>
+      <p style="margin-top:24px"><a href="/docs/guides/test-types/">Test types in the docs →</a></p>
+    </section>
+  </div>
+</Site>

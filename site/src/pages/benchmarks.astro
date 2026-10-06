@@ -1,0 +1,17 @@
+---
+import Site from '../layouts/Site.astro';
+import { GITHUB } from '../lib/data';
+---
+<Site title="Benchmarks" description="How Stampede checks its own accuracy against ground truth.">
+  <div class="wrap">
+    <header class="page-head"><span class="num">BENCHMARKS</span><h1>Checked against ground truth.</h1><p>Stampede's numbers are tested on every push against a server whose response times are known exactly.</p></header>
+    <section class="block"><span class="num">01</span><h2>Method</h2>
+      <p class="lede">A calibrated echo server delays each response by a value from a known distribution (fixed, uniform, lognormal, bimodal) and records exactly how long it held every request. Stampede drives it at a fixed arrival rate from a separate process, and its p50, p95 and p99 must land within 2% or 1 ms of the server's exact values, whichever is larger. A case also fails if a single request is dropped or counted twice.</p>
+      <p><a href={`${GITHUB}/tree/main/bench`}>The harness and its README →</a></p>
+    </section>
+    <section class="block"><span class="num">02</span><h2>Where results are published</h2>
+      <p class="lede">A quick version gates every push in CI, and the full version runs nightly on a dedicated Linux runner; results are attached to each CI run. Results for each release will be published here and in its release notes once v1.0 is tagged.</p>
+      <p class="muted">Side-by-side comparisons with k6 and wrk2, and the scale targets (200 workers, 100,000 requests per second, 50,000 WebSocket connections), are planned and will appear here only once measured.</p>
+    </section>
+  </div>
+</Site>

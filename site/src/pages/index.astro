@@ -1,0 +1,271 @@
+---
+import Site from '../layouts/Site.astro';
+import Term from '../components/Term.astro';
+import Status from '../components/Status.astro';
+import { GITHUB, packs, isShipped } from '../lib/data';
+
+const shapes = [
+  ['smoke', 'Do the journeys work at all?'],
+  ['baseline', 'How does it behave at normal traffic?'],
+  ['stress', 'What happens past the expected peak?'],
+  ['spike', 'Does it survive a sudden jump?'],
+  ['soak', 'Do leaks show up over hours?'],
+  ['breakpoint', 'At what load does it fail?'],
+  ['steps', 'What does each extra increment cost?'],
+  ['recovery', 'How fast does it recover from overload?'],
+  ['wave', 'Does it cope with repeated peaks?'],
+];
+const protocols = [
+  ['HTTP/1.1', 'Protocols'], ['HTTP/2', 'Protocols'], ['GraphQL', 'Protocols'], ['WebSocket', 'Protocols'],
+  ['SSE', 'Protocols'], ['gRPC', 'Protocols'],
+];
+const browserShipped = isShipped('Browser (Playwright) workers');
+const pluginsShipped = isShipped('Plugins: MQTT, Kafka, Redis, SQL, UDP');
+const allPacks = packs();
+const stats = [
+  {
+    big: '8.4%',
+    text: 'more retail conversions from a mobile site just 0.1 seconds faster.',
+    cite: 'Deloitte for Google, “Milliseconds Make Millions”, 2020',
+    href: 'https://www2.deloitte.com/content/dam/Deloitte/ie/Documents/Consulting/Milliseconds_Make_Millions_report.pdf',
+  },
+  {
+    big: '7%',
+    text: 'lower conversion rates from a 100-millisecond delay in page load.',
+    cite: 'Akamai, State of Online Retail Performance, Spring 2017',
+    href: 'https://www.akamai.com/site/ja/documents/analyst-report/akamai-state-of-online-retail-performance-spring-2017.pdf',
+  },
+  {
+    big: '$300,000+',
+    text: 'what one hour of downtime costs over 90% of mid-size and large enterprises.',
+    cite: 'ITIC 2024 Hourly Cost of Downtime Survey',
+    href: 'https://calyptix.com/wp-content/uploads/ITIC-2024-Hourly-Cost-of-Downtime-Survey-Results-Part-2.pdf',
+  },
+];
+---
+<Site>
+  <section class="hero">
+    <div class="wrap">
+      <img class="bull" src="/favicon.svg" alt="" aria-hidden="true" />
+      <h1>Your launch&#8209;day traffic,<br />before launch day.</h1>
+      <p class="sub">Describe your users. Stampede becomes a thousand of them, and shows you exactly where your product breaks.</p>
+      <div class="ctas">
+        <a class="btn btn-primary" href={GITHUB}>Run it locally ↗</a>
+        <a class="btn btn-ghost" href="/how-it-works">See how it works</a>
+      </div>
+      <div class="chips" aria-label="Protocols">
+        {protocols.map(([p]) => <span class="chip on">{p}</span>)}
+        <span class="chip">{browserShipped ? 'Browser' : 'Browser · planned'}</span>
+        <span class="chip">{pluginsShipped ? 'MQTT · Kafka · Redis · SQL · UDP' : 'MQTT · Kafka · Redis · SQL · UDP · planned'}</span>
+      </div>
+    </div>
+  </section>
+
+  <section class="block" aria-label="The reality">
+    <div class="wrap">
+      <div class="stats" id="stats">
+        {stats.map((s, i) => (
+          <div class={`stat ${i === 0 ? 'on' : ''}`}>
+            <b>{s.big}</b>
+            <p>{s.text}</p>
+            <cite>Source: <a href={s.href}>{s.cite}</a></cite>
+          </div>
+        ))}
+        <div class="stat-nav">
+          <button type="button" data-step="-1" aria-label="Previous">←</button>
+          <span class="dots">{stats.map((_, i) => <i class={i === 0 ? 'on' : ''}></i>)}</span>
+          <button type="button" data-step="1" aria-label="Next">→</button>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="block" id="demo">
+    <div class="wrap">
+      <span class="num">LIVE ON A LAPTOP</span>
+      <h2>Find the breaking point. Fix it. Prove it.</h2>
+      <p class="lede">ShopLab ships with Stampede: a small shop API with six performance problems planted on purpose. This is real output from one laptop, the same breakpoint scenario before and after turning the fixes on.</p>
+      <div class="grid">
+        <Term title="before: every bottleneck active"><span class="p">$</span> stampede run breakpoint.yaml
+  requests     17302  failed 0 (0.00%)
+  latency      p50 9.51ms  p95 <span class="bad">28.6s</span>
+
+  <span class="bad">✗</span> http.p95 &lt; 250ms        observed 28.57s
+
+  breakpoint   targets held up to <b>483/s</b>,
+               failed at 700/s
+  knee         p95 latency rose sharply</Term>
+        <Term title="after: SHOPLAB_FIX_ALL=1"><span class="p">$</span> stampede run breakpoint.yaml
+  requests     97220  failed 0 (0.00%)
+  latency      p50 1.70ms  p95 <span class="ok">60.5ms</span>
+
+  <span class="ok">✓</span> http.p95 &lt; 250ms        observed 60.5ms
+
+  breakpoint   targets held up to <b class="ok">1567/s</b>,
+               failed at 1783/s</Term>
+      </div>
+    </div>
+  </section>
+
+  <section class="block">
+    <div class="wrap">
+      <span class="num">01</span>
+      <h2>The problem</h2>
+      <p class="lede">Load generators are good at sending traffic. The hard parts are everything around it: writing journeys that actually work, and trusting the numbers that come back.</p>
+      <div class="table-wrap"><table>
+        <thead><tr><th></th><th>Hand-written load scripts</th><th>Stampede</th></tr></thead>
+        <tbody>
+          <tr><td>Authoring</td><td>Scripts per endpoint, by hand</td><td>Weighted journeys in YAML, generated from an OpenAPI spec or a description with AI, or a ready-made product pack</td></tr>
+          <tr><td>Validation</td><td>Find out mid-test that login was broken</td><td>Every journey is dry-run with one user before it joins a load test</td></tr>
+          <tr><td>Measurement</td><td>Latency from when the request left; percentiles averaged across machines</td><td>Latency from when it should have left; histograms merged without loss</td></tr>
+          <tr><td>Trust</td><td>An overloaded generator blames your app</td><td>Workers report their own saturation; the verdict says generator-limited</td></tr>
+          <tr><td>Answer</td><td>Graphs to interpret</td><td>The breakpoint, the knee, pass or fail against your targets</td></tr>
+        </tbody>
+      </table></div>
+    </div>
+  </section>
+
+  <section class="block">
+    <div class="wrap">
+      <span class="num">02</span>
+      <h2>Describe. Validate. Stampede.</h2>
+      <div class="grid">
+        <div class="card"><span class="k">DESCRIBE</span><h3>Journeys, not requests</h3><p>Write how users behave, point at an API spec, or let AI draft it. Weighted journeys, data feeders, checks and extractors in one YAML file.</p></div>
+        <div class="card"><span class="k">VALIDATE</span><h3>One user first</h3><p>Every journey runs once against your target. Broken ones are repaired or flagged before any load is sent.</p></div>
+        <div class="card"><span class="k">STAMPEDE</span><h3>Then thousands</h3><p>Open or closed load models, nine traffic shapes, across as many workers as you run. Reports say where it broke and why.</p></div>
+      </div>
+      <p style="margin-top:24px"><a href="/how-it-works">How it works →</a></p>
+    </div>
+  </section>
+
+  <section class="block">
+    <div class="wrap">
+      <span class="num">03</span>
+      <h2>Your machines. Your data.</h2>
+      <p class="lede">Self-hosted and open source. Nothing leaves your network unless you point an AI provider at it, and even then recorded traffic is redacted first.</p>
+      <div class="flow">
+        <div class="card"><span class="k">YOU</span><h3>CLI, web UI, CI</h3><p>One binary. <code>stampede run</code> needs nothing else.</p></div>
+        <div class="arrow">→</div>
+        <div class="card"><span class="k">SERVER</span><h3>stampede server</h3><p>API, run manager, reports. PostgreSQL / TimescaleDB.</p></div>
+        <div class="arrow">→</div>
+        <div class="card"><span class="k">WORKERS</span><h3>stampede worker × N</h3><p>Connect out over gRPC from any region, start in sync, merge exactly.</p></div>
+        <div class="arrow">→</div>
+        <div class="card"><span class="k">TARGET</span><h3>A system you own</h3><p>Private hosts just work. Public ones need ownership proof to go beyond low caps.</p></div>
+      </div>
+    </div>
+  </section>
+
+  <section class="block">
+    <div class="wrap">
+      <span class="num">04</span>
+      <h2>Mission control</h2>
+      <div class="grid" style="align-items:start">
+        <div>
+          <p class="lede">Watch a run live in the web UI or the terminal, with the kill switch always one click away.</p>
+          <ul class="muted">
+            <li>Live throughput, latency percentiles, errors and users per second</li>
+            <li>Worker health, saturation and loss marked as they happen</li>
+            <li>Stop gracefully or kill instantly; a worker that loses the server stops by itself</li>
+            <li>Reports in HTML, JSON, JUnit and Markdown</li>
+          </ul>
+        </div>
+        <Term title="stampede · ShopLab shop mix, 30 s"><span class="p">$</span> stampede run shop-mix.yaml --duration 30s
+  <span class="ok">PASS</span>  shoplab-mix  (constant-rate, 38s, stop: completed)
+
+  requests     2721  (71.4/s)   failed 0 (0.00%)
+  iterations   1500  failed 0  dropped 0
+  latency      p50 2.97ms  p95 10.6ms  p99 22.9ms
+
+  <span class="ok">✓</span> http.p95 &lt; 300ms              observed 10.6ms
+  <span class="ok">✓</span> errors &lt; 1%                    observed 0.00%
+  <span class="ok">✓</span> order-history.p95 &lt; 800ms     observed 6.0ms
+  <span class="ok">✓</span> checkout.p95 &lt; 1s             observed 5.9ms</Term>
+      </div>
+    </div>
+  </section>
+
+  <section class="block" id="start">
+    <div class="wrap">
+      <span class="num">05</span>
+      <h2>Two commands</h2>
+      <Term title="get started"><span class="p">$</span> git clone https://github.com/Ivan825/Stampede &amp;&amp; cd Stampede
+<span class="p">$</span> docker compose up -d --build
+<span class="m"># web UI on localhost:8080 · two workers · ShopLab demo on localhost:8090</span></Term>
+      <div class="table-wrap" style="margin-top:20px"><table>
+        <thead><tr><th>Command</th><th>Does</th></tr></thead>
+        <tbody>
+          <tr><td><code>stampede init --target URL</code></td><td>Detects the product type, installs the matching pack, dry-runs it</td></tr>
+          <tr><td><code>stampede run file.yaml</code></td><td>Runs a scenario with no server; exit 3 when a target fails</td></tr>
+          <tr><td><code>stampede generate --from-openapi spec.yaml</code></td><td>Drafts journeys with AI and proves each one works</td></tr>
+          <tr><td><code>stampede compare --a ... --b ...</code></td><td>Judges two versions with confidence intervals; exit 4 on regression</td></tr>
+          <tr><td><code>stampede</code></td><td>Opens the terminal console: <code>/run spike</code>, <code>/kill all</code>, plain language</td></tr>
+        </tbody>
+      </table></div>
+      <p style="margin-top:20px"><a href="/docs/quickstart/">Read the quick start →</a></p>
+      <div style="margin-top:24px"><a class="btn btn-primary" href={GITHUB}>Run it locally ↗</a></div>
+    </div>
+  </section>
+
+  <section class="block">
+    <div class="wrap">
+      <span class="num">06</span>
+      <h2>Every test type, one engine</h2>
+      <div class="grid">
+        {shapes.map(([name, q]) => <div class="card"><span class="k">/run {name}</span><p>{q}</p></div>)}
+      </div>
+      <p style="margin-top:24px"><a href="/test-types">All test types →</a></p>
+    </div>
+  </section>
+
+  <section class="block">
+    <div class="wrap">
+      <span class="num">07</span>
+      <h2>Journeys at scale</h2>
+      <div class="grid">
+        <div class="card"><h3>Weighted mix <Status status="shipped" /></h3><p>Browse 60%, search 20%, checkout 5%, with branches such as abandoned carts.</p></div>
+        <div class="card"><h3>Dry-run validation <Status status="shipped" /></h3><p>Every journey proven with one user, by hand or by the AI pipeline.</p></div>
+        <div class="card"><h3>Product packs <Status status="shipped" /></h3><p>Ready-made journeys, stresses and targets, detected by <code>stampede init</code>.</p></div>
+        <div class="card"><h3>Endpoint coverage map <Status status="planned" /></h3><p>Which endpoints in your spec no journey touches.</p></div>
+        <div class="card"><h3>Drift detection <Status status="planned" /></h3><p>Scheduled dry runs that flag journeys an API change broke.</p></div>
+      </div>
+    </div>
+  </section>
+
+  <section class="block">
+    <div class="wrap">
+      <span class="num">08</span>
+      <h2>What you can test</h2>
+      <p class="lede">Packs are folders of journeys for one kind of product. A pack is marked shipped only when it passes against a reference app in CI.</p>
+      <div class="chips" style="justify-content:flex-start">
+        {allPacks.map((p) => <a class={`chip ${p.status === 'shipped' ? 'on' : ''}`} href={`/what-you-can-test/${p.name}`}>{p.title}{p.status === 'planned' ? ' · planned' : ''}</a>)}
+      </div>
+      <p style="margin-top:24px"><a href="/what-you-can-test">See all →</a></p>
+    </div>
+  </section>
+
+  <section class="final">
+    <div class="wrap">
+      <img src="/favicon.svg" alt="" aria-hidden="true" style="height:56px;image-rendering:pixelated;margin-bottom:20px" />
+      <h2>The herd is ready.</h2>
+      <p>Clone it, run it, find out where your product breaks before your users do.</p>
+      <a class="btn btn-primary" href={GITHUB}>Run it locally ↗</a>
+    </div>
+  </section>
+
+  <script>
+    const root = document.getElementById('stats');
+    if (root) {
+      const slides = [...root.querySelectorAll('.stat')];
+      const dots = [...root.querySelectorAll('.dots i')];
+      let i = 0;
+      const show = (n: number) => {
+        i = (n + slides.length) % slides.length;
+        slides.forEach((s, k) => s.classList.toggle('on', k === i));
+        dots.forEach((d, k) => d.classList.toggle('on', k === i));
+      };
+      root.querySelectorAll<HTMLButtonElement>('button[data-step]').forEach((b) =>
+        b.addEventListener('click', () => show(i + Number(b.dataset.step))),
+      );
+    }
+  </script>
+</Site>

@@ -1,0 +1,59 @@
+# What Stampede does today and what is planned. The website reads this file,
+# so "Shipped" and "Planned" labels always match the repository. Change a
+# status only when the feature works and is tested in this repo.
+groups:
+  - name: Measurement
+    features:
+      - { name: Latency from the scheduled send time (coordinated omission), status: shipped, doc: docs/concepts/measurement }
+      - { name: Merged HDR-style histograms, never averaged percentiles, status: shipped, doc: docs/concepts/measurement }
+      - { name: DNS, connect, TLS, wait and download timing per request, status: shipped }
+      - { name: Generator saturation detection and generator-limited verdicts, status: shipped }
+      - { name: Accuracy gate against a calibrated server in CI, status: shipped, doc: benchmarks }
+      - { name: Side-by-side benchmarks with k6 and wrk2, status: planned }
+  - name: Load
+    features:
+      - { name: Open (arrival rate) and closed (virtual users) models, status: shipped, doc: docs/concepts/load-models }
+      - { name: "Shapes: smoke, baseline, stress, spike, soak, breakpoint, steps, recovery, wave", status: shipped, doc: test-types }
+      - { name: Breakpoint search and the knee of the throughput curve, status: shipped, doc: test-types }
+      - { name: Network emulation per user (latency and bandwidth), status: shipped, doc: test-types }
+      - { name: Packet loss and jitter emulation, status: planned }
+      - { name: Auto-abort on sustained errors or latency, status: shipped, doc: safety }
+      - { name: Replay of recorded traffic, status: planned }
+      - { name: Fault injection agent (dependency failures mid-run), status: planned }
+  - name: Protocols
+    features:
+      - { name: HTTP/1.1 and HTTP/2 (TLS and h2c), status: shipped, doc: docs/protocols }
+      - { name: GraphQL with persisted queries, status: shipped, doc: docs/protocols }
+      - { name: WebSocket, status: shipped, doc: docs/protocols }
+      - { name: Server-sent events with time to first event, status: shipped, doc: docs/protocols }
+      - { name: gRPC unary and server streaming, status: shipped, doc: docs/protocols }
+      - { name: Browser (Playwright) workers, status: planned }
+      - { name: "Plugins: MQTT, Kafka, Redis, SQL, UDP", status: planned }
+  - name: Scale
+    features:
+      - { name: Distributed workers over gRPC, synchronised start, lossless merge, status: shipped, doc: how-it-works }
+      - { name: Worker loss marked in reports, dead man's switch, status: shipped }
+      - { name: Active-passive server replicas, status: shipped }
+      - { name: Mutual TLS with a built-in certificate authority, status: planned }
+  - name: Workflow
+    features:
+      - { name: Web UI with scenario editor, live runs and reports, status: shipped }
+      - { name: Terminal console with plain-language commands, status: shipped }
+      - { name: HTML, JSON, JUnit and Markdown reports; CI exit codes, status: shipped, doc: docs/guides/ci }
+      - { name: Release comparison with confidence intervals, status: shipped, doc: docs/guides/comparing }
+      - { name: AI journey generation with dry-run validation, status: shipped, doc: docs/ai }
+      - { name: AI report narratives, status: planned }
+      - { name: Scheduled runs, status: planned }
+      - { name: Packaged GitHub Action, status: planned }
+  - name: Operate
+    features:
+      - { name: Docker Compose stack with the ShopLab demo app, status: shipped, doc: docs/deploy/compose }
+      - { name: Helm chart, status: shipped, doc: docs/deploy/helm }
+      - { name: Kubernetes operator (alpha), status: shipped, doc: docs/deploy/operator }
+      - { name: Terraform examples for multi-region workers, status: shipped, doc: docs/deploy/terraform }
+  - name: Safety
+    features:
+      - { name: Ownership verification and caps for public targets, status: shipped, doc: safety }
+      - { name: Requests confined to the target and allowed hosts, status: shipped, doc: safety }
+      - { name: Kill switch in the UI, CLI and API, status: shipped, doc: safety }
+      - { name: Roles, API tokens, encrypted secrets, audit log, status: shipped }

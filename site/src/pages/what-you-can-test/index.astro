@@ -1,0 +1,14 @@
+---
+import Site from '../../layouts/Site.astro';
+import Status from '../../components/Status.astro';
+import { packs } from '../../lib/data';
+const all = packs();
+---
+<Site title="What you can test" description="Product packs: journeys, stresses and targets for twenty kinds of product.">
+  <div class="wrap">
+    <header class="page-head"><span class="num">WHAT YOU CAN TEST</span><h1>Twenty kinds of product.</h1><p>A pack is a folder of journeys, stresses and default targets. It is marked shipped only when it passes against a reference app in CI; the rest are on the roadmap.</p></header>
+    <div class="table-wrap" style="margin-bottom:72px"><table><thead><tr><th>Product</th><th>Signature journeys and stresses</th><th>Drivers</th><th></th></tr></thead><tbody>
+      {all.map((p) => <tr><td><a href={`/what-you-can-test/${p.name}`}>{p.title}</a></td><td class="muted">{p.signature}</td><td class="mono" style="font-size:13px">{p.drivers.join(', ')}</td><td><Status status={p.status} /></td></tr>)}
+    </tbody></table></div>
+  </div>
+</Site>
