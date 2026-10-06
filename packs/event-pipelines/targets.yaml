@@ -1,0 +1,8 @@
+# Default targets for event pipelines. "publish" is the producer's round
+# trip with acks=all; "enriched" is the age of the processed event when it
+# is read back: the pipeline's end-to-end delay, which grows with consumer
+# lag.
+targets:
+  - order/publish.p99 < 100ms
+  - order/enriched.p95 < 1s
+  - errors < 1%

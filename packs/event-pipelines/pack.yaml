@@ -1,0 +1,26 @@
+apiVersion: stampede.dev/v1
+kind: Pack
+name: event-pipelines
+title: Event pipelines, queues
+description: >
+  Events through Kafka: producers write orders, a consumer group
+  processes them and writes the results to another topic, and each
+  journey times how long its own event takes to come out the other end;
+  plus an ingest ramp and a backlog that has to drain. Needs the kafka
+  plugin (stampede plugin install kafka). Built for pipelines shaped like
+  PipelineLab (orders in, orders.enriched out with the same key and
+  partition); adjust the topics and payloads to match yours.
+status: shipped
+protocols: [kafka, http]
+referenceApp: examples/packlab/pipelinelab
+detect:
+  paths: ["/api/topics", "/api/consumer-groups", "/api/consumers", "/topics", "/consumers", "/v3/clusters", "/api/pipeline"]
+  openapiTags: [topics, consumer-groups, consumers, pipelines, streams]
+  htmlMeta: []
+  headers: {}
+variables:
+  TARGET_URL: { description: "Base URL of the pipeline's HTTP admin API (topics, consumer lag)" }
+  KAFKA_BROKERS: { description: "A seed broker, host:port" }
+targets:
+  - order/enriched.p95 < 1s
+  - errors < 1%
