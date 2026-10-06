@@ -347,6 +347,7 @@ func TestAIJourneyGeneration(t *testing.T) {
 	if err := srv2.Recover(context.Background()); err != nil {
 		t.Fatal(err)
 	}
+	t.Cleanup(func() { srv2.Shutdown(context.Background()) })
 	var j3 aiJob
 	c.do("GET", "/ai/jobs/"+stale.String(), nil, &j3)
 	if j3.Status != "failed" || !strings.Contains(j3.Error, "interrupted") {

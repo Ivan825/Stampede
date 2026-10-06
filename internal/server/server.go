@@ -20,6 +20,8 @@ import (
 	"github.com/prometheus/client_golang/prometheus/collectors"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 
+	"github.com/google/uuid"
+
 	"github.com/Ivan825/Stampede/internal/api/gen"
 	"github.com/Ivan825/Stampede/internal/auth"
 	"github.com/Ivan825/Stampede/internal/keyring"
@@ -62,6 +64,12 @@ type Config struct {
 	Notify NotifyConfig
 	// OIDC turns on single sign-on (see oidc.go).
 	OIDC *OIDCConfig
+	// ReplicaAddr is this replica's address, recorded for operators.
+	ReplicaAddr string
+	// ReplicaHeartbeat and ReplicaStale tune how often a replica refreshes
+	// its row and how old a row may get before its runs are settled
+	// (defaults 5s and 30s).
+	ReplicaHeartbeat, ReplicaStale time.Duration
 	// SchedulerInterval is how often StartScheduler looks for due
 	// schedules (default 15s).
 	SchedulerInterval time.Duration
@@ -71,6 +79,7 @@ type Config struct {
 type Server struct {
 	cfg       Config
 	oidc      *oidcSSO
+	replica   replica
 	st        *store.Store
 	log       *slog.Logger
 	runs      *runManager
@@ -113,6 +122,13 @@ func New(cfg Config) (*Server, error) {
 		ipLimiter: auth.NewLimiter(100, 15*time.Minute),
 		reg:       prometheus.NewRegistry(),
 	}
+	s.replica.id = uuid.New()
+	if s.cfg.ReplicaHeartbeat <= 0 {
+		s.cfg.ReplicaHeartbeat = 5 * time.Second
+	}
+	if s.cfg.ReplicaStale <= 0 {
+		s.cfg.ReplicaStale = 30 * time.Second
+	}
 	s.reg.MustRegister(collectors.NewGoCollector(), collectors.NewProcessCollector(collectors.ProcessCollectorOpts{}))
 	s.runs = newRunManager(s)
 	s.ai = newAIManager(s)
@@ -153,10 +169,18 @@ func (s *Server) Handler() http.Handler { return s.handler }
 
 // Recover marks runs that were in progress when the server last stopped.
 func (s *Server) Recover(ctx context.Context) error {
-	if err := s.ai.recover(ctx); err != nil {
+	if err := s.startReplica(ctx); err != nil {
 		return err
 	}
-	return s.runs.recover(ctx)
+	if err := s.ai.recover(ctx); err != nil {
+		s.stopReplica()
+		return err
+	}
+	if err := s.runs.recover(ctx); err != nil {
+		s.stopReplica()
+		return err
+	}
+	return nil
 }
 
 // Shutdown stops the scheduler and every active run, and waits for
@@ -166,6 +190,7 @@ func (s *Server) Shutdown(ctx context.Context) {
 	s.ai.shutdown(ctx)
 	s.runs.shutdown(ctx)
 	s.notify.shutdown(ctx)
+	s.stopReplica()
 }
 
 func (s *Server) routes() http.Handler {

@@ -347,11 +347,11 @@ func (h *handlers) StopRun(ctx context.Context, req gen.StopRunRequestObject) (g
 	if err != nil {
 		return nil, err
 	}
-	if !h.runs.stop(r.ID) {
-		return nil, errConflict("the run is not active")
-	}
-	if a := h.runs.get(r.ID); a != nil {
-		h.runs.setStatus(ctx, a, statusStopping)
+	if err := h.controlRun(ctx, r, "stop", auth.FromContext(ctx).Actor()); err != nil {
+		if errors.Is(err, errRunNotActive) {
+			return nil, errConflict("the run is not active")
+		}
+		return nil, err
 	}
 	h.audit(ctx, "run.stop", r.ID.String(), nil)
 	return gen.StopRun202Response{}, nil
@@ -362,7 +362,9 @@ func (h *handlers) KillRun(ctx context.Context, req gen.KillRunRequestObject) (g
 	if err != nil {
 		return nil, err
 	}
-	h.runs.kill(r.ID, auth.FromContext(ctx).Actor())
+	if err := h.controlRun(ctx, r, "kill", auth.FromContext(ctx).Actor()); err != nil && !errors.Is(err, errRunNotActive) {
+		return nil, err
+	}
 	h.audit(ctx, "run.kill", r.ID.String(), nil)
 	return gen.KillRun202Response{}, nil
 }
@@ -376,12 +378,15 @@ func (h *handlers) KillAllRuns(ctx context.Context, _ gen.KillAllRunsRequestObje
 	if err != nil {
 		return nil, err
 	}
-	killed := []uuid.UUID{}
-	for _, id := range ids {
-		if h.runs.kill(id, p.Actor()) {
-			killed = append(killed, id)
+	// Runs here die now; the other replicas kill theirs when the message
+	// arrives. Every active run of the organisation is reported.
+	h.runs.killOrg(p.OrgID, p.Actor())
+	if len(ids) > 0 {
+		if err := h.publishControl(ctx, controlMsg{Op: "kill_all", Org: p.OrgID, By: p.Actor()}); err != nil {
+			h.log.Error("could not tell other replicas to kill their runs", "error", err)
 		}
 	}
+	killed := append([]uuid.UUID{}, ids...)
 	h.audit(ctx, "run.kill_all", "", map[string]any{"runs": killed})
 	return gen.KillAllRuns200JSONResponse{Killed: killed}, nil
 }

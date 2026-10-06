@@ -92,7 +92,7 @@ func newAIManager(s *Server) *aiManager {
 }
 
 func (m *aiManager) recover(ctx context.Context) error {
-	n, err := m.s.st.FailInterruptedAIJobs(ctx)
+	n, err := m.s.st.FailOrphanedAIJobs(ctx, m.s.cfg.Now().Add(-m.s.cfg.ReplicaStale))
 	if err != nil {
 		return err
 	}
@@ -540,6 +540,9 @@ func (h *handlers) CreateAIJob(ctx context.Context, req gen.CreateAIJobRequestOb
 		TargetID: targetID, ScenarioID: scenarioID, DryRun: dryRun, Inputs: inputsJSON, CreatedBy: &uid,
 	})
 	if err != nil {
+		return nil, err
+	}
+	if err := h.st.SetAIJobOwner(ctx, db.SetAIJobOwnerParams{ID: id, OwnerReplica: &h.replica.id}); err != nil {
 		return nil, err
 	}
 	h.audit(ctx, "ai.job.create", pr.Name, map[string]any{"job": id, "provider": prow.Name, "model": client.Model(), "inputs": sizes, "dryRun": dryRun, "target": opts.Target})

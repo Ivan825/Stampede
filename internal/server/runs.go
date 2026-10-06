@@ -34,6 +34,10 @@ const (
 	statusFailed     = "failed"
 )
 
+func isTerminalStatus(s string) bool {
+	return s == statusCompleted || s == statusAborted || s == statusFailed
+}
+
 type activeRun struct {
 	id       uuid.UUID
 	org      uuid.UUID
@@ -107,6 +111,9 @@ func (m *runManager) scenarioHasActiveRun(id uuid.UUID) bool {
 
 // launch registers a run and executes it in the background.
 func (m *runManager) launch(r *activeRun, spec ExecSpec, prog *scenario.Program, plan *scenario.Plan) {
+	if err := m.s.st.SetRunOwner(context.Background(), db.SetRunOwnerParams{ID: r.id, OwnerReplica: &m.s.replica.id}); err != nil {
+		m.s.log.Error("record run owner", "run", r.id, "error", err)
+	}
 	r.hub = newHub()
 	r.done = make(chan struct{})
 	m.mu.Lock()
@@ -394,9 +401,25 @@ func (m *runManager) kill(id uuid.UUID, by string) bool {
 	return true
 }
 
+// killOrg kills every run of an organisation running on this replica.
+func (m *runManager) killOrg(org uuid.UUID, by string) {
+	m.mu.Lock()
+	var ids []uuid.UUID
+	for id, r := range m.active {
+		if r.org == org {
+			ids = append(ids, id)
+		}
+	}
+	m.mu.Unlock()
+	for _, id := range ids {
+		m.kill(id, by)
+	}
+}
+
 // recover settles runs left unfinished by a previous server process.
 func (m *runManager) recover(ctx context.Context) error {
-	ids, err := m.s.st.ListUnfinishedRuns(ctx)
+	// Only runs whose replica is gone: other live replicas keep theirs.
+	ids, err := m.s.st.ListOrphanedRuns(ctx, m.s.cfg.Now().Add(-m.s.cfg.ReplicaStale))
 	if err != nil {
 		return err
 	}

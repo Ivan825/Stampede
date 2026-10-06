@@ -1,6 +1,7 @@
 package server
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -143,13 +144,9 @@ func (s *Server) streamRun(w http.ResponseWriter, r *http.Request) {
 	fl.Flush()
 
 	if live == nil {
-		// Finished, or not started on this replica: send the final status.
-		if row, err := s.st.GetRun(ctx, db.GetRunParams{ID: id, OrgID: p.OrgID}); err == nil {
-			b, _ := json.Marshal(runOf(row))
-			send("status", b)
-		}
-		send("end", []byte("{}"))
-		fl.Flush()
+		// The run is finished, or another replica runs it: follow it
+		// through the database until it ends.
+		s.followRemote(ctx, w, fl, send, id, p.OrgID, row.Status, last)
 		return
 	}
 
@@ -187,5 +184,61 @@ func pointRow(r db.ListRunPointsRow) gen.Point {
 	return gen.Point{
 		T: float64(r.Interval), Rps: r.Rps, ErrorRate: r.ErrorRate, P50: r.P50, P95: r.P95, P99: r.P99,
 		Vus: int(r.Vus), Planned: r.Planned, Dropped: int(r.Dropped), Iterations: &it, SchedLagP99: &lag,
+	}
+}
+
+// followRemote streams a run that another replica owns, from the points and
+// status that replica stores every second.
+func (s *Server) followRemote(ctx context.Context, w http.ResponseWriter, fl http.Flusher, send func(string, []byte),
+	id, org uuid.UUID, status string, last float64) {
+	end := func() {
+		if row, err := s.st.GetRun(ctx, db.GetRunParams{ID: id, OrgID: org}); err == nil {
+			b, _ := json.Marshal(runOf(row))
+			send("status", b)
+		}
+		send("end", []byte("{}"))
+		fl.Flush()
+	}
+	if isTerminalStatus(status) {
+		end()
+		return
+	}
+	tick := time.NewTicker(time.Second)
+	defer tick.Stop()
+	quiet := 0
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-tick.C:
+		}
+		row, err := s.st.GetRun(ctx, db.GetRunParams{ID: id, OrgID: org})
+		if err != nil {
+			return
+		}
+		if pts, err := s.st.ListRunPoints(ctx, id); err == nil {
+			for _, pt := range pts {
+				gp := pointRow(pt)
+				if gp.T <= last {
+					continue
+				}
+				b, _ := json.Marshal(gp)
+				send("point", b)
+				last = gp.T
+			}
+		}
+		if row.Status != status {
+			status = row.Status
+			b, _ := json.Marshal(runOf(row))
+			send("status", b)
+		}
+		if isTerminalStatus(status) {
+			end()
+			return
+		}
+		if quiet++; quiet%15 == 0 {
+			fmt.Fprint(w, ": ping\n\n")
+		}
+		fl.Flush()
 	}
 }
