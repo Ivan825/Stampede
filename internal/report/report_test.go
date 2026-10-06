@@ -2,6 +2,7 @@ package report
 
 import (
 	"bytes"
+	"encoding/csv"
 	"strings"
 	"testing"
 	"time"
@@ -215,5 +216,35 @@ load: {vus: 1, duration: 1s}`))
 	buf.Reset()
 	if err := r.WriteHTML(&buf); err != nil || !strings.Contains(buf.String(), "First event p95") {
 		t.Errorf("HTML report lacks the streams table (%v)", err)
+	}
+}
+
+func TestCSV(t *testing.T) {
+	r := build(t, 150*time.Millisecond, 10)
+	var buf bytes.Buffer
+	if err := r.WriteCSV(&buf); err != nil {
+		t.Fatal(err)
+	}
+	rows, err := csv.NewReader(&buf).ReadAll()
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Header, two steps, the journey and the run.
+	if len(rows) != 5 {
+		t.Fatalf("%d rows: %v", len(rows), rows)
+	}
+	if got := rows[2][:4]; got[0] != "shop" || got[1] != "GET /b" || got[2] != "300" || got[3] != "30" {
+		t.Errorf("step row %v", got)
+	}
+	if got := rows[4]; got[0] != "" || got[1] != "" || got[2] != "600" || got[8] != "150.000" {
+		t.Errorf("run row %v", got)
+	}
+	buf.Reset()
+	if err := r.WriteTimelineCSV(&buf); err != nil {
+		t.Fatal(err)
+	}
+	rows, err = csv.NewReader(&buf).ReadAll()
+	if err != nil || len(rows) != 4 || rows[1][1] != "200.000" {
+		t.Fatalf("timeline %v %v", err, rows)
 	}
 }

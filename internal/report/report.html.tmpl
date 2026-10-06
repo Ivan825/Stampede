@@ -38,6 +38,18 @@ h2 { font-size: 13px; font-family: var(--mono); text-transform: uppercase; lette
 .card { background: var(--surface); border: 1px solid var(--line); border-radius: 8px; padding: 14px 14px 10px; margin-bottom: 12px; }
 .card h3 { margin: 0 0 8px; font-size: 14px; font-weight: 600; }
 svg { width: 100%; height: auto; display: block; }
+@media print {
+  /* Paper is light whatever the reader's theme. */
+  :root {
+    --bg: #FFFFFF; --surface: #FFFFFF; --line: #E4E4E7; --fg: #18181B; --muted: #52525B;
+    --accent: #0D9488; --pass: #15803D; --fail: #D12D2D; --warn: #A86A00;
+    --s1: #0D9488; --s2: #2F6FD6; --s3: #9333EA; --s4: #71717A; --s5: #D12D2D;
+    color-scheme: light;
+  }
+  body { padding: 0; font-size: 12.5px; }
+  header, .tile, .card, tr, figure { break-inside: avoid; }
+  h2 { break-after: avoid; margin-top: 24px; }
+}
 .grid { stroke: var(--line); stroke-width: 1; }
 .axis { fill: var(--muted); font: 11px var(--mono); }
 .line { fill: none; stroke-width: 1.8; vector-effect: non-scaling-stroke; stroke-linejoin: round; }
