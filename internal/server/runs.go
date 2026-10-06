@@ -203,6 +203,9 @@ func (m *runManager) execute(r *activeRun, spec ExecSpec, prog *scenario.Program
 	}
 	m.setStatus(ctx, r, statusAnalyzing)
 
+	if res.Snapshots != nil {
+		snaps = res.Snapshots
+	}
 	in := report.Input{
 		RunID: r.id.String(), Program: prog, Plan: plan, Target: spec.Scenario.Target.BaseURL,
 		Started: res.T0, Ended: res.End, StopReason: res.StopReason, PeakVUs: res.PeakVUs,
@@ -213,6 +216,9 @@ func (m *runManager) execute(r *activeRun, spec ExecSpec, prog *scenario.Program
 	}
 	rep := report.Build(in)
 	rep.Notes = append(rep.Notes, res.Notes...)
+	if res.Annotate != nil {
+		res.Annotate(rep)
+	}
 	repJSON, err := json.Marshal(rep)
 	if err != nil {
 		fail(err)
