@@ -7,7 +7,9 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log/slog"
 	"net/http"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
@@ -16,6 +18,8 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/Ivan825/Stampede/internal/ai"
+	"github.com/Ivan825/Stampede/internal/crawl"
+	"github.com/Ivan825/Stampede/internal/safety"
 )
 
 // ExitUnvalidated is returned by generate when the proposal was not
@@ -39,6 +43,8 @@ type generateFlags struct {
 	allowHosts              []string
 	env                     []string
 	maxTokens               int
+	crawl                   string
+	crawlPages, crawlDepth  int
 }
 
 func newGenerateCmd() *cobra.Command {
@@ -97,6 +103,9 @@ OPENAI_API_KEY when it is set.`,
 	fl.StringSliceVar(&f.allowHosts, "allow-host", nil, "extra public hosts the dry run may reach besides the target")
 	fl.StringArrayVarP(&f.env, "env", "e", nil, "set ${env.KEY} for the dry run (KEY=VALUE, repeatable)")
 	fl.IntVar(&f.maxTokens, "max-tokens", 0, "maximum tokens per model reply (default 16000)")
+	fl.StringVar(&f.crawl, "crawl", "", "crawl this URL in headless Chrome and use what the pages load (documents and API calls) in place of a HAR file; also the default --target")
+	fl.IntVar(&f.crawlPages, "crawl-pages", 30, "most pages to visit with --crawl")
+	fl.IntVar(&f.crawlDepth, "crawl-depth", 3, "most clicks away from the --crawl URL")
 	return cmd
 }
 
@@ -118,6 +127,11 @@ func runGenerate(ctx context.Context, stdout, stderr io.Writer, f *generateFlags
 	if f.out == "" {
 		return errors.New("--out (-o) is required: where to write the scenario")
 	}
+	if f.crawl != "" && f.target == "" {
+		if u, err := url.Parse(f.crawl); err == nil {
+			f.target = u.Scheme + "://" + u.Host
+		}
+	}
 	if !f.noDryRun && f.target == "" {
 		return errors.New("--target is required for the dry run (or pass --no-dry-run)")
 	}
@@ -133,6 +147,29 @@ func runGenerate(ctx context.Context, stdout, stderr io.Writer, f *generateFlags
 	}
 	if in.HAR, err = readOptional(f.har); err != nil {
 		return err
+	}
+	if f.crawl != "" {
+		if len(in.HAR) > 0 {
+			return errors.New("--crawl records its own HAR; use either --crawl or --from-har")
+		}
+		cu, err := url.Parse(f.crawl)
+		if err != nil || cu.Host == "" {
+			return fmt.Errorf("--crawl %q is not an absolute URL", f.crawl)
+		}
+		policy := safety.NewHostPolicy(cu.Hostname(), f.allowHosts)
+		fmt.Fprintf(stderr, "stampede: crawling %s (at most %d pages, %d clicks deep; links only, no forms submitted)\n", f.crawl, f.crawlPages, f.crawlDepth)
+		res, err := crawl.Crawl(ctx, crawl.Options{
+			Start: f.crawl, MaxPages: f.crawlPages, MaxDepth: f.crawlDepth, Allow: policy.Allow,
+			Logger: slog.New(slog.NewTextHandler(io.Discard, nil)),
+		})
+		if err != nil {
+			return fmt.Errorf("crawl: %w", err)
+		}
+		fmt.Fprintf(stderr, "stampede: crawled %d pages, recorded %d requests, found %d forms\n", len(res.Pages), res.Requests, len(res.Forms))
+		in.HAR = res.HAR
+		if sum := res.Summary(); sum != "" {
+			in.Description = strings.TrimSpace(in.Description + "\n\n" + sum)
+		}
 	}
 	if in.GraphQL, err = readOptional(f.graphql); err != nil {
 		return err

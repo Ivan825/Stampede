@@ -45,6 +45,9 @@ stampede generate [flags]
       --allow-host strings    extra public hosts the dry run may reach besides the target
       --allow-unvalidated     write the scenario even if some journeys failed, marking them with a comment
       --base-url string       provider API base URL (required for openai-compatible; e.g. http://localhost:11434 for a remote Ollama)
+      --crawl string          crawl this URL in headless Chrome and use what the pages load (documents and API calls) in place of a HAR file; also the default --target
+      --crawl-depth int       most clicks away from the --crawl URL (default 3)
+      --crawl-pages int       most pages to visit with --crawl (default 30)
       --describe string       plain-language description of your users and what they do
       --diff-against string   show a diff against this scenario (default: the --out file if it exists)
   -e, --env stringArray       set ${env.KEY} for the dry run (KEY=VALUE, repeatable)

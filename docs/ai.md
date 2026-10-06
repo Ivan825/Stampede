@@ -34,6 +34,15 @@ The pipeline has six stages.
    - *HAR file*: a recording from browser devtools or a proxy. Static
      assets and third-party calls are ignored. Dependencies are found by
      seeing which response values later requests reuse.
+   - *Browser crawl* (`--crawl URL`): headless Chrome visits the site
+     like one visitor, following links on the same host breadth first (at
+     most `--crawl-pages`, `--crawl-depth` clicks deep). It records every
+     document and API call the pages make (XHR and fetch, with responses
+     up to 4 KiB) as a HAR recording, which is then treated exactly like a
+     HAR file, and lists the forms it saw for the model. It never submits
+     a form, skips links that look destructive (logout, delete, remove,
+     unsubscribe), and its requests stay on the target host and allowed
+     hosts.
    - *Access log* (common/combined format, or any line with a quoted
      `"METHOD /path"`): each endpoint's share of traffic and the most
      common visits per client, used to set journey weights.
@@ -163,6 +172,9 @@ stampede generate
   --graphql-path /graphql       where the GraphQL API is served
   --from-har session.har        HAR recording
   --from-log access.log         access log (journey mix)
+  --crawl URL                   crawl the site in headless Chrome instead of a HAR (default --target)
+  --crawl-pages 30              most pages to visit
+  --crawl-depth 3               most clicks away from the crawl URL
   --describe "..."              plain-language description
   --target URL                  system to dry-run against (required unless --no-dry-run)
   --provider NAME               anthropic (default), openai, gemini, ollama, openai-compatible
@@ -258,7 +270,10 @@ list the claims with their fact ids, and the JSON report stores it under
 
 ## Limitations
 
-- Browser crawling as an input is **planned**, not built.
+- A crawl sees only what the pages load by following links. Journeys
+  behind a login or a form need a description or a HAR recording of that
+  part, and an app that builds its links in JavaScript without `<a href>`
+  elements is only partly crawled.
 - A narrative's checks prove that its figures come from the report, not
   that its suspected causes are right. Suspected claims are leads to
   investigate.
