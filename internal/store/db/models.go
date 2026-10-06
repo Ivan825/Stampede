@@ -11,6 +11,51 @@ import (
 	"github.com/google/uuid"
 )
 
+type AiJob struct {
+	ID                 uuid.UUID
+	OrgID              uuid.UUID
+	ProjectID          uuid.UUID
+	ProviderID         *uuid.UUID
+	ProviderKind       string
+	Model              string
+	Status             string
+	Stage              string
+	Round              int32
+	TargetID           *uuid.UUID
+	ScenarioID         *uuid.UUID
+	DryRun             bool
+	Inputs             json.RawMessage
+	Yaml               string
+	Diff               string
+	Result             json.RawMessage
+	Error              string
+	InputTokens        int64
+	OutputTokens       int64
+	CreatedBy          *uuid.UUID
+	CreatedAt          time.Time
+	StartedAt          *time.Time
+	FinishedAt         *time.Time
+	ApprovedAt         *time.Time
+	ApprovedScenarioID *uuid.UUID
+	ApprovedVersion    *int32
+}
+
+type AiProvider struct {
+	ID              uuid.UUID
+	OrgID           uuid.UUID
+	Name            string
+	Kind            string
+	Model           string
+	BaseUrl         string
+	Ciphertext      []byte
+	WrappedKey      []byte
+	KeyID           *string
+	MonthlyTokenCap int64
+	CreatedBy       *uuid.UUID
+	CreatedAt       time.Time
+	UpdatedAt       time.Time
+}
+
 type ApiToken struct {
 	ID         uuid.UUID
 	OrgID      uuid.UUID
