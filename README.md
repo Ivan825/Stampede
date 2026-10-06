@@ -47,11 +47,16 @@ runs many of them at once and tells you where your product breaks.
   Requests can only reach the target host unless you allow others.
 - **Accuracy benchmark** against a calibrated server with exact ground truth
   (`bench/`).
+- **AI journey generation (optional, bring your own key).** `stampede
+  generate` drafts a scenario from a description, an OpenAPI spec, a HAR
+  file and/or an access log, then dry-runs every journey once with one
+  user and repairs failures. See [AI journey generation](#ai-journey-generation).
 
 ## Planned for v1.0
 
 Control plane with REST API and database, distributed workers over gRPC,
-web UI, terminal UI, AI journey generation with dry-run validation, HTTP/2
+web UI, terminal UI, AI generation from GraphQL introspection and browser
+crawls, AI report narratives, HTTP/2
 tuning, GraphQL, WebSocket, SSE, gRPC and browser drivers, plugins, product
 packs, Docker Compose stack with the ShopLab demo app, Helm chart and
 operator, comparison of releases, and the website.
@@ -128,6 +133,44 @@ Expressions are [CEL](https://cel.dev) with helpers: `rand(a, b)`,
 
 A failed step ends that iteration, as a real user would not carry on after
 an error. Failed requests and checks count as errors.
+
+## AI journey generation
+
+Optional and bring-your-own-key. A model writes the scenario before any
+load runs; it is never called during a test. Full guide:
+[docs/ai.md](docs/ai.md).
+
+```sh
+export ANTHROPIC_API_KEY=sk-ant-...
+stampede generate --from-openapi examples/shoplab/openapi.yaml \
+  --describe "most shoppers browse, some log in to check orders, a few buy" \
+  --target http://localhost:8090 -o shop.yaml
+```
+
+What works today:
+
+- **Providers:** Anthropic (default model `claude-sonnet-5-5`), OpenAI,
+  Google Gemini, Ollama (local, no key) and any OpenAI-compatible server
+  (`--base-url`). Keys come from `ANTHROPIC_API_KEY`, `OPENAI_API_KEY` or
+  `GEMINI_API_KEY`.
+- **Inputs:** a plain-language description, an OpenAPI 3.x spec, a HAR
+  recording and an access log (used to estimate the journey mix), in any
+  combination. Stampede builds a dependency map showing which call
+  produces the token, id or cookie that another call needs.
+- **Checked before you see it:** the scenario must compile (including
+  variable flow), use only endpoints in the spec or recording, and never
+  call payment, SMS, email or CAPTCHA hosts. Then every journey and branch
+  runs once with one user against `--target`. Failures go back to the
+  model with redacted evidence, up to 3 repair rounds. Journeys that still
+  fail are flagged for a human.
+- **Privacy:** tokens, cookies, Authorization headers, secrets, emails,
+  phone numbers and card numbers in recorded traffic are redacted before
+  anything is sent to a provider.
+- **You approve:** the CLI writes the file only when every journey passed
+  (or with `--allow-unvalidated`, which marks the failing journeys). The
+  server API (`/api/v1/ai/...`) runs generation jobs asynchronously, stores
+  provider keys encrypted, enforces a monthly token cap, and saves a
+  scenario version only through an explicit, audited approve call.
 
 ## Building from source
 
