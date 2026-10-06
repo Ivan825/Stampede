@@ -30,6 +30,7 @@ stampede server [flags]
       --data-dir string               directory holding CSV/JSON feeder files for runs
       --database-url string           PostgreSQL URL
       --executor string               auto (workers when connected, else in-process), workers or local (default "auto")
+      --ha string                     how replicas share the work: standby (one serves, others wait) or active (all serve; workers connect to every replica) (default "standby")
   -h, --help                          help for server
       --join-token string             secret workers present to join (required for workers)
       --log-format string             json or text (default "json")

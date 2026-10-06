@@ -43,7 +43,7 @@ stampede worker [flags]
       --mtls                    enroll with the server's built-in CA and connect with this worker's own certificate (server started with --worker-mtls)
       --name string             worker name (default the host name)
       --region string           region label used to split load by region
-      --server string           server address, host:port (required)
+      --server string           server address, host:port (required); with several active replicas, all of them comma-separated, or dns:host:port to connect to every address the name resolves to
       --token string            join token (default $STAMPEDE_JOIN_TOKEN)
   -v, --verbose                 debug logging
 ```

@@ -55,6 +55,7 @@ type serverFlags struct {
 	tlsKey        string
 	workerMTLS    bool
 	publicURL     string
+	ha            string
 	oidcIssuer    string
 	oidcClientID  string
 	oidcRedirect  string
@@ -103,6 +104,7 @@ Environment:
 	fl.BoolVar(&f.workerMTLS, "worker-mtls", os.Getenv("STAMPEDE_WORKER_MTLS") == "true", "mutual TLS with a CA built from the master key: workers enroll with stampede worker --mtls and the join token is never sent")
 	fl.StringVar(&f.abortErrors, "abort-errors", envOr("STAMPEDE_ABORT_ERRORS", "90%"), "stop any run whose error rate stays at or above this (0 disables)")
 	fl.DurationVar(&f.abortFor, "abort-for", 30*time.Second, "how long --abort-errors must hold before a run is stopped")
+	fl.StringVar(&f.ha, "ha", envOr("STAMPEDE_HA", "standby"), "how replicas share the work: standby (one serves, others wait) or active (all serve; workers connect to every replica)")
 	fl.StringVar(&f.publicURL, "public-url", os.Getenv("STAMPEDE_PUBLIC_URL"), "external URL of the web UI, for links in notifications and the SSO redirect (e.g. https://stampede.example.com)")
 	fl.StringVar(&f.oidcIssuer, "oidc-issuer", os.Getenv("STAMPEDE_OIDC_ISSUER"), "OpenID Connect issuer URL for single sign-on (the client secret is read from STAMPEDE_OIDC_CLIENT_SECRET)")
 	fl.StringVar(&f.oidcClientID, "oidc-client-id", os.Getenv("STAMPEDE_OIDC_CLIENT_ID"), "OIDC client ID")
@@ -199,7 +201,7 @@ func runServer(cmd *cobra.Command, f *serverFlags) error {
 		}
 		proxies = append(proxies, pfx)
 	}
-	cfg := server.Config{DataDir: f.dataDir}
+	cfg := server.Config{DataDir: f.dataDir, ReplicaAddr: f.addr}
 	local := &server.LocalExecutor{Logger: log}
 	switch f.executor {
 	case "local":
@@ -290,21 +292,31 @@ func runServer(cmd *cobra.Command, f *serverFlags) error {
 	if err != nil {
 		return err
 	}
-	// Only one replica runs load at a time. Others wait as standbys and take
-	// over when the leader's database session ends, so a crashed leader's
-	// runs are settled exactly once.
-	lock, err := becomeLeader(ctx, log, st, f.addr)
-	if err != nil {
-		return err
-	}
-	defer lock.Release()
 	ctx, cancel := context.WithCancelCause(ctx)
 	defer cancel(nil)
-	go watchLeadership(ctx, cancel, log, lock)
+	switch f.ha {
+	case "standby":
+		// One replica serves; others wait as standbys and take over when
+		// the leader's database session ends.
+		lock, err := becomeLeader(ctx, log, st, f.addr)
+		if err != nil {
+			return err
+		}
+		defer lock.Release()
+		go watchLeadership(ctx, cancel, log, lock)
+	case "active":
+		// Every replica serves. Each owns the runs it starts; stop and kill
+		// reach the owner through the database, and a replica that goes
+		// away has its runs settled by the others.
+		log.Info("serving as an active replica", "replica", srv.ReplicaID())
+	default:
+		return fmt.Errorf("--ha must be standby or active, got %q", f.ha)
+	}
 	if err := srv.Recover(ctx); err != nil {
 		return err
 	}
-	// Only the leader fires schedules, so a standby never starts a run.
+	// Standbys never get here. Active replicas all check schedules; each
+	// firing is claimed by exactly one of them.
 	if f.schedInterval > 0 {
 		srv.StartScheduler(ctx)
 	} else {
