@@ -1,4 +1,5 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 68 64">
-<style>.i{fill:#12161A}.a{fill:#E8590C}@media (prefers-color-scheme: dark){.i{fill:#F2F4F5}.a{fill:#FF7A2F}}</style>
-<polygon points="1,57 8.5,57 14.98,39 7.48,39" class="i"/><polygon points="11,57 18.5,57 27.86,31 20.36,31" class="i"/><polygon points="21,57 28.5,57 40.74,23 33.24,23" class="i"/><polygon points="31,57 38.5,57 53.62,15 46.12,15" class="i"/><polygon points="41,57 48.5,57 66.5,7 59,7" class="a"/>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20.0 20.0" role="img" aria-label="Stampede" shape-rendering="crispEdges">
+<title>Stampede</title>
+<rect width="20.0" height="20.0" rx="3.5" fill="#18181B"/>
+<path fill="#14B8A6" transform="translate(3.5 5)" d="M0 0h1v1h-1zM12 0h1v1h-1zM0 1h2v1h-2zM11 1h2v1h-2zM1 2h11v1h-11zM2 3h9v1h-9zM2 4h2v1h-2zM5 4h3v1h-3zM9 4h2v1h-2zM2 5h9v1h-9zM3 6h7v1h-7zM3 7h1v1h-1zM5 7h3v1h-3zM9 7h1v1h-1zM3 8h7v1h-7zM3 9h2v1h-2zM8 9h2v1h-2z"/>
 </svg>
