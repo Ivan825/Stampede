@@ -30,6 +30,83 @@ type Scenario struct {
 	// Observe links the run to the target's own telemetry: Prometheus
 	// metrics queried after the run and trace links for slow requests.
 	Observe *Observe `yaml:"observe,omitempty" json:"observe,omitempty"`
+	// Faults break dependencies on purpose during the run, through a
+	// stampede agent running next to them.
+	Faults *Faults `yaml:"faults,omitempty" json:"faults,omitempty"`
+}
+
+// Faults is a timeline of faults injected by a stampede agent.
+type Faults struct {
+	Agent    FaultAgent  `yaml:"agent" json:"agent"`
+	Timeline []FaultStep `yaml:"timeline" json:"timeline"`
+}
+
+// FaultAgent is where the agent's control API is. URL and Token may be
+// templated, for example ${env.AGENT_URL} and ${secret.AGENT_TOKEN}.
+type FaultAgent struct {
+	URL   string `yaml:"url" json:"url"`
+	Token string `yaml:"token" json:"token"`
+}
+
+// FaultStep is one fault: what to break, from At (after the load starts)
+// for For. Set exactly one of Proxy, Container or Deployment.
+type FaultStep struct {
+	Name string   `yaml:"name,omitempty" json:"name,omitempty"`
+	At   Duration `yaml:"at" json:"at"`
+	For  Duration `yaml:"for" json:"for"`
+
+	// Proxy names one of the agent's proxies.
+	Proxy     string   `yaml:"proxy,omitempty" json:"proxy,omitempty"`
+	Latency   Duration `yaml:"latency,omitempty" json:"latency,omitempty"`
+	Jitter    Duration `yaml:"jitter,omitempty" json:"jitter,omitempty"`
+	Bandwidth string   `yaml:"bandwidth,omitempty" json:"bandwidth,omitempty"`
+	Reset     bool     `yaml:"reset,omitempty" json:"reset,omitempty"`
+	Refuse    bool     `yaml:"refuse,omitempty" json:"refuse,omitempty"`
+	Blackhole bool     `yaml:"blackhole,omitempty" json:"blackhole,omitempty"`
+
+	// Container is a Docker container; Action is pause, stop, kill or
+	// restart.
+	Container string `yaml:"container,omitempty" json:"container,omitempty"`
+	Action    string `yaml:"action,omitempty" json:"action,omitempty"`
+
+	// Deployment is a Kubernetes deployment (namespace/name) scaled to
+	// Replicas.
+	Deployment string `yaml:"deployment,omitempty" json:"deployment,omitempty"`
+	Replicas   *int   `yaml:"replicas,omitempty" json:"replicas,omitempty"`
+}
+
+// Label names the fault in reports: Name, or a description of it.
+func (f FaultStep) Label() string {
+	if f.Name != "" {
+		return f.Name
+	}
+	switch {
+	case f.Proxy != "":
+		var parts []string
+		if f.Latency > 0 {
+			parts = append(parts, "+"+f.Latency.String()+" latency")
+		}
+		if f.Jitter > 0 {
+			parts = append(parts, f.Jitter.String()+" jitter")
+		}
+		if f.Bandwidth != "" {
+			parts = append(parts, f.Bandwidth)
+		}
+		for _, b := range []struct {
+			on   bool
+			name string
+		}{{f.Reset, "reset"}, {f.Refuse, "refuse"}, {f.Blackhole, "blackhole"}} {
+			if b.on {
+				parts = append(parts, b.name)
+			}
+		}
+		return f.Proxy + ": " + strings.Join(parts, ", ")
+	case f.Container != "":
+		return f.Action + " " + f.Container
+	case f.Deployment != "" && f.Replicas != nil:
+		return fmt.Sprintf("scale %s to %d", f.Deployment, *f.Replicas)
+	}
+	return "fault"
 }
 
 // Observe connects a run to the system under test's own telemetry.

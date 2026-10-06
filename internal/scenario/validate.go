@@ -5,6 +5,8 @@ import (
 	"net/url"
 	"regexp"
 	"strings"
+
+	"github.com/Ivan825/Stampede/internal/protocol/netem"
 )
 
 var nameRe = regexp.MustCompile(`^[a-z0-9]([a-z0-9._-]{0,98}[a-z0-9])?$`)
@@ -48,6 +50,10 @@ func (s *Scenario) Validate() error {
 		if _, err := n.Resolve(); err != nil {
 			add("target.network", "%v", err)
 		}
+	}
+
+	if s.Faults != nil {
+		s.validateFaults(add)
 	}
 
 	for name, f := range s.Data {
@@ -169,6 +175,79 @@ func walkSteps(steps []Step, fn func(Step)) {
 			walkSteps(st.Group.Steps, fn)
 		case StepWS:
 			walkSteps(st.WS.Steps, fn)
+		}
+	}
+}
+
+func (s *Scenario) validateFaults(add func(path, format string, args ...any)) {
+	fs := s.Faults
+	if strings.TrimSpace(fs.Agent.URL) == "" {
+		add("faults.agent.url", "required: the agent's control API, e.g. ${env.AGENT_URL}")
+	} else if !strings.Contains(fs.Agent.URL, "${") {
+		if u, err := url.Parse(fs.Agent.URL); err != nil || (u.Scheme != "http" && u.Scheme != "https") || u.Host == "" {
+			add("faults.agent.url", "must be an absolute http(s) URL, got %q", fs.Agent.URL)
+		}
+	}
+	if strings.TrimSpace(fs.Agent.Token) == "" {
+		add("faults.agent.token", "required, e.g. ${secret.AGENT_TOKEN}")
+	}
+	if len(fs.Timeline) == 0 {
+		add("faults.timeline", "add at least one fault")
+	}
+	for i, f := range fs.Timeline {
+		p := fmt.Sprintf("faults.timeline[%d]", i)
+		if f.At < 0 {
+			add(p+".at", "must not be negative")
+		}
+		if f.For <= 0 {
+			add(p+".for", "required: how long the fault lasts")
+		}
+		kinds := 0
+		for _, set := range []bool{f.Proxy != "", f.Container != "", f.Deployment != ""} {
+			if set {
+				kinds++
+			}
+		}
+		if kinds != 1 {
+			add(p, "set exactly one of proxy, container or deployment")
+			continue
+		}
+		proxyFields := f.Latency != 0 || f.Jitter != 0 || f.Bandwidth != "" || f.Reset || f.Refuse || f.Blackhole
+		switch {
+		case f.Proxy != "":
+			if !proxyFields {
+				add(p, "a proxy fault needs latency, jitter, bandwidth, reset, refuse or blackhole")
+			}
+			if f.Latency < 0 || f.Jitter < 0 {
+				add(p, "latency and jitter must not be negative")
+			}
+			if f.Bandwidth != "" {
+				if _, err := netem.ParseBandwidth(f.Bandwidth); err != nil {
+					add(p+".bandwidth", "%v", err)
+				}
+			}
+			if f.Action != "" || f.Replicas != nil {
+				add(p, "action and replicas apply to containers and deployments, not proxies")
+			}
+		case f.Container != "":
+			switch f.Action {
+			case "pause", "stop", "kill", "restart":
+			default:
+				add(p+".action", "must be pause, stop, kill or restart")
+			}
+			if proxyFields || f.Replicas != nil {
+				add(p, "a container fault takes only action")
+			}
+		default:
+			if ns, name, ok := strings.Cut(f.Deployment, "/"); !ok || ns == "" || name == "" {
+				add(p+".deployment", "use namespace/name")
+			}
+			if f.Replicas == nil || *f.Replicas < 0 {
+				add(p+".replicas", "required and must not be negative")
+			}
+			if proxyFields || f.Action != "" {
+				add(p, "a deployment fault takes only replicas")
+			}
 		}
 	}
 }

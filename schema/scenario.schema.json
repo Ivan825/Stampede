@@ -105,6 +105,48 @@
           "oneOf": [{ "required": ["url"] }, { "required": ["integration"] }]
         }
       }
+    },
+    "faults": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["agent", "timeline"],
+      "description": "Break dependencies on purpose during the run through a stampede agent. Every fault is reverted when it ends, when the run ends or is killed.",
+      "properties": {
+        "agent": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["url", "token"],
+          "properties": {
+            "url": { "type": "string", "description": "The agent's control API, e.g. ${env.AGENT_URL}." },
+            "token": { "type": "string", "description": "The agent's token, e.g. ${secret.AGENT_TOKEN}." }
+          }
+        },
+        "timeline": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["at", "for"],
+            "properties": {
+              "name": { "type": "string" },
+              "at": { "$ref": "#/$defs/duration", "description": "When the fault starts, after the load starts." },
+              "for": { "$ref": "#/$defs/duration", "description": "How long it lasts." },
+              "proxy": { "type": "string", "description": "One of the agent's proxies." },
+              "latency": { "$ref": "#/$defs/duration", "description": "Added to each direction." },
+              "jitter": { "$ref": "#/$defs/duration" },
+              "bandwidth": { "type": "string", "description": "Per connection and direction, in bits per second, e.g. 1mbps or 768kbps." },
+              "reset": { "type": "boolean", "description": "Reset open connections and new ones." },
+              "refuse": { "type": "boolean", "description": "Reset new connections." },
+              "blackhole": { "type": "boolean", "description": "Stop forwarding; requests time out." },
+              "container": { "type": "string", "description": "A Docker container the agent may act on." },
+              "action": { "enum": ["pause", "stop", "kill", "restart"] },
+              "deployment": { "type": "string", "description": "A Kubernetes deployment, namespace/name." },
+              "replicas": { "type": "integer", "minimum": 0 }
+            }
+          }
+        }
+      }
     }
   },
   "$defs": {

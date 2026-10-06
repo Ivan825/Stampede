@@ -1,0 +1,40 @@
+apiVersion: stampede.dev/v1
+kind: Scenario
+metadata:
+  name: checkout-under-faults
+target:
+  baseURL: ${env.TARGET_URL}
+journeys:
+  - name: checkout
+    steps:
+      - get: /api/products
+        check: { status: 200 }
+load:
+  mode: rate
+  rate: 50/s
+  duration: 5m
+targets:
+  - http.p95 < 800ms
+faults:
+  agent:
+    url: ${env.AGENT_URL}
+    token: ${secret.AGENT_TOKEN}
+  timeline:
+    - name: slow database
+      at: 1m
+      for: 1m
+      proxy: db
+      latency: 200ms
+      jitter: 50ms
+    - at: 2m30s
+      for: 30s
+      proxy: cache
+      reset: true
+    - at: 3m30s
+      for: 20s
+      container: shop-search
+      action: pause
+    - at: 4m
+      for: 30s
+      deployment: shop/api
+      replicas: 1
