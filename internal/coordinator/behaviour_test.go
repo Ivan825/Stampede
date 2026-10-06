@@ -193,3 +193,48 @@ func TestSilentWorkerIsLostAfterThreeHeartbeats(t *testing.T) {
 		}
 	}
 }
+
+func TestWorkerReconnectsAfterServerRestart(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		time.Sleep(5 * time.Millisecond)
+	}))
+	defer srv.Close()
+	c := newCluster(t, coordinator.Config{})
+	stopped := make(chan string, 4)
+	c.addWorker(worker.Config{Name: "phoenix", OnStop: func(_ string, kill bool, why string) {
+		if kill {
+			stopped <- why
+		}
+	}})
+	c.waitConnected(1, 5*time.Second)
+	r, err := c.coord.Start(context.Background(), coordinator.RunSpec{
+		ID: "orphan", StartDelay: 200 * time.Millisecond, Scenario: []byte(`
+metadata: {name: orphan}
+target: {baseURL: "` + srv.URL + `"}
+journeys: [{name: a, steps: [{get: /}]}]
+load: {vus: 1, duration: 1m}`),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	time.Sleep(time.Until(r.T0().Add(300 * time.Millisecond)))
+
+	// The server restarts and has never heard of the run, so the
+	// returning worker must not carry on with it.
+	restarted := time.Now()
+	c.restart(coordinator.Config{})
+	c.waitConnected(1, 10*time.Second)
+	t.Logf("worker reconnected %v after the server restart", time.Since(restarted).Round(time.Millisecond))
+	select {
+	case why := <-stopped:
+		t.Logf("orphaned run killed %v after the restart: %s", time.Since(restarted).Round(time.Millisecond), why)
+		if !strings.Contains(why, "no longer tracks") {
+			t.Errorf("stop reason %q", why)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("the new server did not stop the orphaned run")
+	}
+	if ws := c.coord.Workers(); len(ws) != 1 || ws[0].Name != "phoenix" || !ws[0].Connected {
+		t.Errorf("workers after restart %+v", ws)
+	}
+}
