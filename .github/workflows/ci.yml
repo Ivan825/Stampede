@@ -101,8 +101,9 @@ jobs:
       - run: pnpm build
       - name: committed build matches the source
         run: |
-          if ! git diff --exit-code -- dist; then
-            echo "web/dist is stale. Run pnpm build in web/ and commit it."
+          if ! git diff --quiet -- dist || [ -n "$(git status --porcelain -- dist)" ]; then
+            echo "::error title=web/dist is stale::$(git status --porcelain -- dist | head -20 | tr '\n' ' ')"
+            git diff --stat -- dist
             exit 1
           fi
 
