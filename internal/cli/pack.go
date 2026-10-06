@@ -195,7 +195,17 @@ its journeys once against the target.`,
 					filepath.Join(dir, best.Pack.Name), filepath.Join(dir, best.Pack.Name), target)
 				return err
 			}
-			fmt.Fprintf(out, "\nNext: stampede run %s -e TARGET_URL=%s\n", filepath.Join(dir, best.Pack.Name, "journeys", "shop-mix.yaml"), target)
+			next := "journeys"
+			if files, err := best.Pack.Files(); err == nil && len(files) > 0 {
+				next = files[0]
+				for _, f := range files {
+					if strings.HasSuffix(f, "-mix.yaml") {
+						next = f
+						break
+					}
+				}
+			}
+			fmt.Fprintf(out, "\nNext: stampede run %s -e TARGET_URL=%s\n", filepath.Join(dir, best.Pack.Name, filepath.FromSlash(next)), target)
 			return nil
 		},
 	}
