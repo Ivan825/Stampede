@@ -6,6 +6,7 @@ import type { Report, ReportJourney } from '@/api/types';
 import { verdictLabels } from '@/components/chips';
 import { Card, Notice, SectionTitle, Stat, Table } from '@/components/ui';
 import { bytes, count, dateTime, ms, num, pct, rate, secs } from '@/lib/format';
+import { NarrativePanel } from './NarrativePanel';
 import { ReportCharts, TargetMetricCharts } from './ReportCharts';
 
 const verdictStyle = {
@@ -115,7 +116,15 @@ export function SlowestRequests({ journeys }: { journeys: ReportJourney[] }) {
   );
 }
 
-export function ReportView({ report }: { report: Report }) {
+export function ReportView({
+  report,
+  runId,
+  canNarrate = false,
+}: {
+  report: Report;
+  runId?: string;
+  canNarrate?: boolean;
+}) {
   const o = report.overall;
   const unit = report.load.mode === 'rate' ? '/s' : ' VUs';
   const thresholds = report.thresholds ?? [];
@@ -150,6 +159,8 @@ export function ReportView({ report }: { report: Report }) {
           {n}
         </Notice>
       ))}
+
+      <NarrativePanel runId={runId} narrative={report.narrative} canWrite={canNarrate} />
 
       {thresholds.length > 0 && (
         <>

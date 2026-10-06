@@ -583,6 +583,70 @@ export function createHandlers(initial: MockOptions, opts: MockHandlerOptions = 
         },
       });
     }),
+    http.post(`${B}/runs/:id/narrative`, async ({ params }) => {
+      const a = (await auth()) ?? need('editor');
+      if (a) return a;
+      const r = db.runs.find((x) => x.id === params.id);
+      if (!r) return notFound('Run');
+      const rep = db.reports[r.id];
+      if (!rep) return err(404, 'not_found', 'report (the run has not finished) not found.');
+      await new Promise((res) => setTimeout(res, 900));
+      const o = rep.overall;
+      const msText = (s: number) => `${(s * 1000).toFixed(1)}ms`;
+      const failed = (rep.thresholds ?? []).findIndex((c) => !c.pass);
+      const facts = [
+        {
+          id: 'overall.latency',
+          where: 'summary',
+          text: `latency from scheduled send p50 ${msText(o.latency.p50)}, p95 ${msText(o.latency.p95)}, p99 ${msText(o.latency.p99)}`,
+        },
+        {
+          id: 'overall.requests',
+          where: 'summary',
+          text: `${o.requests} requests at ${o.rps.toFixed(1)}/s, ${(o.errorRate * 100).toFixed(2)}% failed`,
+        },
+        ...(failed >= 0
+          ? [
+              {
+                id: `target.${failed}`,
+                where: 'targets',
+                text: `target ${rep.thresholds![failed]!.source} failed (observed ${rep.thresholds![failed]!.observedText})`,
+              },
+            ]
+          : []),
+      ];
+      const narrative = {
+        model: 'mock-model',
+        summary:
+          failed >= 0
+            ? `The run missed ${rep.thresholds![failed]!.source}; p95 latency reached ${msText(o.latency.p95)}.`
+            : `Every target held; p95 latency was ${msText(o.latency.p95)}.`,
+        claims: [
+          {
+            text: `p95 latency from the scheduled send time was ${msText(o.latency.p95)}.`,
+            label: 'measured' as const,
+            refs: ['overall.latency'],
+          },
+          ...(failed >= 0
+            ? [
+                {
+                  text: `The target ${rep.thresholds![failed]!.source} failed.`,
+                  label: 'measured' as const,
+                  refs: [`target.${failed}`],
+                },
+              ]
+            : []),
+          {
+            text: 'The gap between p95 and p99 suggests a slow minority of requests, likely waiting on a shared resource.',
+            label: 'suspected' as const,
+            refs: ['overall.latency', 'overall.requests'],
+          },
+        ],
+        facts,
+      };
+      db.reports[r.id] = { ...rep, narrative };
+      return ok({ narrative, usage: { inputTokens: 1840, outputTokens: 220 } });
+    }),
     http.get(`${B}/runs/:id/live`, async ({ params, request }) => {
       const a = await auth();
       if (a) return a;

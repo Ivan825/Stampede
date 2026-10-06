@@ -101,6 +101,7 @@ function RunHeader({ run }: { run: Run }) {
 }
 
 export function RunPage() {
+  const canNarrate = permissions(useMe().role).editScenarios;
   const { runId } = useParams({ from: '/app/runs/$runId' });
   const qc = useQueryClient();
   const runQ = useRun(runId, (q) =>
@@ -152,7 +153,7 @@ export function RunPage() {
           <ErrorAlert error={report.error} />
         )
       ) : (
-        <ReportView report={report.data} />
+        <ReportView report={report.data} runId={run.id} canNarrate={canNarrate} />
       )}
     </div>
   );

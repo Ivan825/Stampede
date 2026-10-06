@@ -27,6 +27,10 @@ export type Scenario = S['Scenario'];
 export type ScenarioVersion = S['ScenarioVersion'];
 export type ScenarioVersionCreate = S['ScenarioVersionCreate'];
 export type RunStatus = S['RunStatus'];
+export type Narrative = S['Narrative'];
+export type NarrativeClaim = S['NarrativeClaim'];
+export type NarrativeFact = S['NarrativeFact'];
+export type NarrativeResult = S['NarrativeResult'];
 export type RunOverrides = S['RunOverrides'];
 export type RunCreate = S['RunCreate'];
 export type Run = S['Run'];
@@ -207,6 +211,8 @@ export interface Report {
   breakpoint?: Breakpoint;
   notes?: string[];
   targetMetrics?: TargetMetric[];
+  /** AI-written summary; every claim cites report figures. */
+  narrative?: Narrative;
 }
 
 export const shapes = [

@@ -152,7 +152,7 @@ func narrativeHTML(n *Narrative, facts []Fact) template.HTML {
 		var refs []string
 		for _, id := range c.Refs {
 			f := byID[id]
-			refs = append(refs, fmt.Sprintf(`<span class="ref" title="%s">%s</span>`, template.HTMLEscapeString(f.Text), template.HTMLEscapeString(f.Where)))
+			refs = append(refs, fmt.Sprintf(`<span class="ref" title="%s: %s">%s</span>`, template.HTMLEscapeString(f.Where), template.HTMLEscapeString(f.Text), template.HTMLEscapeString(id)))
 		}
 		fmt.Fprintf(&b, `<li><span class="label %s">%s</span> %s <span class="refs">%s</span></li>`,
 			template.HTMLEscapeString(c.Label), template.HTMLEscapeString(c.Label), template.HTMLEscapeString(c.Text), strings.Join(refs, " "))

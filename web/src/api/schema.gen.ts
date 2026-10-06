@@ -641,6 +641,36 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/runs/{runId}/narrative": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                runId: components["parameters"]["runId"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Write an AI summary of a finished run's report
+         * @description Asks the organisation's AI provider for a summary of the report.
+         *     Every claim cites the report figures it rests on and is labelled
+         *     measured or suspected; claims that cite unknown figures, or state
+         *     numbers the cited figures do not contain, are dropped. Only the
+         *     report's aggregate figures are sent, with error messages redacted.
+         *     The narrative is saved into the report, so the HTML and Markdown
+         *     downloads include it, and replaces any earlier one. Refused with
+         *     429 when the organisation's AI token use this month has reached
+         *     the provider's cap.
+         */
+        post: operations["createRunNarrative"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/ai/jobs/{jobId}": {
         parameters: {
             query?: never;
@@ -1208,6 +1238,37 @@ export interface components {
             inputTokens: number;
             /** Format: int64 */
             outputTokens: number;
+        };
+        NarrativeCreate: {
+            /**
+             * Format: uuid
+             * @description Provider to use; default the only one, or the one named "default".
+             */
+            providerId?: string;
+        };
+        NarrativeResult: {
+            narrative: components["schemas"]["Narrative"];
+            usage: components["schemas"]["AIUsage"];
+        };
+        Narrative: {
+            summary: string;
+            model?: string;
+            claims: components["schemas"]["NarrativeClaim"][];
+            /** @description The report figures the claims cite. */
+            facts?: components["schemas"]["NarrativeFact"][];
+        };
+        NarrativeClaim: {
+            text: string;
+            /** @enum {string} */
+            label: "measured" | "suspected";
+            /** @description Ids of the facts the claim rests on. */
+            refs: string[];
+        };
+        NarrativeFact: {
+            id: string;
+            text: string;
+            /** @description The report section that shows it. */
+            where: string;
         };
         /**
          * @description succeeded means every journey passed its dry run; needs_review means some journeys are flagged.
@@ -2703,6 +2764,54 @@ export interface operations {
             422: components["responses"]["Invalid"];
             /** @description Monthly AI token cap reached, or too many jobs queued */
             429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    createRunNarrative: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                runId: components["parameters"]["runId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["NarrativeCreate"];
+            };
+        };
+        responses: {
+            /** @description The narrative, now part of the report */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NarrativeResult"];
+                };
+            };
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            422: components["responses"]["Invalid"];
+            /** @description Monthly AI token cap reached */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description The AI provider failed or returned nothing usable */
+            502: {
                 headers: {
                     [name: string]: unknown;
                 };

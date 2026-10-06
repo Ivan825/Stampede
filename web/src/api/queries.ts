@@ -554,6 +554,20 @@ export function useReport(id: string, enabled: boolean) {
   });
 }
 
+/** Asks the server's AI provider for a narrative and puts it in the cached report. */
+export function useCreateNarrative(runId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: () =>
+      unwrap(api.POST('/runs/{runId}/narrative', { params: { path: { runId } }, body: {} })),
+    onSuccess: (res) => {
+      qc.setQueryData<Report>(keys.report(runId), (r) =>
+        r ? { ...r, narrative: res.narrative } : r,
+      );
+    },
+  });
+}
+
 export function useCreateRun(projectId: string) {
   const qc = useQueryClient();
   return useMutation({
