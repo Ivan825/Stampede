@@ -1,0 +1,354 @@
+---
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  annotations:
+    controller-gen.kubebuilder.io/version: v0.22.0
+  name: stampederuns.stampede.dev
+spec:
+  group: stampede.dev
+  names:
+    categories:
+    - stampede
+    kind: StampedeRun
+    listKind: StampedeRunList
+    plural: stampederuns
+    shortNames:
+    - str
+    singular: stampederun
+  scope: Namespaced
+  versions:
+  - additionalPrinterColumns:
+    - jsonPath: .status.phase
+      name: Phase
+      type: string
+    - jsonPath: .status.verdict
+      name: Verdict
+      type: string
+    - jsonPath: .status.runId
+      name: Run
+      priority: 1
+      type: string
+    - jsonPath: .status.reportURL
+      name: Report
+      priority: 1
+      type: string
+    - jsonPath: .metadata.creationTimestamp
+      name: Age
+      type: date
+    name: v1alpha1
+    schema:
+      openAPIV3Schema:
+        description: StampedeRun declares a Stampede load test run.
+        properties:
+          apiVersion:
+            description: |-
+              APIVersion defines the versioned schema of this representation of an object.
+              Servers should convert recognized schemas to the latest internal value, and
+              may reject unrecognized values.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources
+            type: string
+          kind:
+            description: |-
+              Kind is a string value representing the REST resource this object represents.
+              Servers may infer this from the endpoint the client submits requests to.
+              Cannot be updated.
+              In CamelCase.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds
+            type: string
+          metadata:
+            type: object
+          spec:
+            description: |-
+              StampedeRunSpec declares one load test run. The spec is immutable: to run
+              again, create a new StampedeRun.
+            properties:
+              apiTokenSecretRef:
+                description: |-
+                  APITokenSecretRef selects a Secret key holding a Stampede API token
+                  (stp_..., created under Settings > API tokens) with a role that may run
+                  tests (runner or above).
+                properties:
+                  key:
+                    description: The key of the secret to select from.  Must be a
+                      valid secret key.
+                    type: string
+                  name:
+                    default: ""
+                    description: |-
+                      Name of the referent.
+                      This field is effectively required, but due to backwards compatibility is
+                      allowed to be empty. Instances of this type with an empty value here are
+                      almost certainly wrong.
+                      More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names
+                    type: string
+                  optional:
+                    description: Specify whether the Secret or its key must be defined
+                    type: boolean
+                required:
+                - key
+                type: object
+                x-kubernetes-map-type: atomic
+              env:
+                additionalProperties:
+                  type: string
+                description: Env sets ${env.NAME} values for the scenario.
+                type: object
+              note:
+                description: Note is stored with the run.
+                maxLength: 300
+                type: string
+              overrides:
+                description: Overrides change the scenario's load for this run.
+                properties:
+                  duration:
+                    description: Duration, for example 5m.
+                    type: string
+                  max:
+                    description: Max is the peak load of a ramping shape.
+                    type: string
+                  mode:
+                    description: 'Mode: vus or rate.'
+                    enum:
+                    - vus
+                    - rate
+                    type: string
+                  rate:
+                    description: Rate, for example 100/s.
+                    type: string
+                  shape:
+                    description: 'Shape: smoke, baseline, stress, spike, soak, breakpoint,
+                      step, recovery, wave.'
+                    type: string
+                  start:
+                    description: Start is the starting load of a ramping shape.
+                    type: string
+                  vus:
+                    description: VUs is the number of virtual users.
+                    format: int32
+                    minimum: 1
+                    type: integer
+                type: object
+              project:
+                description: |-
+                  Project is the Stampede project, by ID, slug or name. It is created
+                  when no project matches.
+                minLength: 1
+                type: string
+              scaleWorkers:
+                description: |-
+                  ScaleWorkers scales a worker Deployment up before the run and back to
+                  its previous size afterwards.
+                properties:
+                  deployment:
+                    description: |-
+                      Deployment in the run's namespace. Defaults to the worker Deployment of
+                      server.clusterRef. Do not point it at a Deployment an HPA manages.
+                    type: string
+                  replicas:
+                    description: Replicas during the run.
+                    format: int32
+                    minimum: 1
+                    type: integer
+                  waitTimeoutSeconds:
+                    default: 300
+                    description: WaitTimeoutSeconds is how long to wait for the workers
+                      to connect.
+                    format: int32
+                    minimum: 10
+                    type: integer
+                required:
+                - replicas
+                type: object
+              scenario:
+                description: Scenario is the scenario to run.
+                properties:
+                  inline:
+                    description: |-
+                      Inline is a complete scenario document (YAML). It is saved in the
+                      project under its metadata.name, as a new version when it changed.
+                    type: string
+                  name:
+                    description: Name (or ID) of a scenario stored in the project.
+                    type: string
+                  version:
+                    description: 'Version of the stored scenario (default: latest).'
+                    format: int32
+                    minimum: 1
+                    type: integer
+                type: object
+              server:
+                description: Server is the Stampede server that runs the test.
+                properties:
+                  clusterRef:
+                    description: ClusterRef names a StampedeCluster in the run's namespace.
+                    type: string
+                  url:
+                    description: URL of the server, for example http://stampede.stampede.svc:8080.
+                    pattern: ^https?://
+                    type: string
+                type: object
+              target:
+                description: Target is the system under test.
+                properties:
+                  url:
+                    description: |-
+                      URL is the base URL. A project target with this URL is reused or
+                      created. Public targets must be verified in Stampede before they can
+                      take more than the low default caps.
+                    pattern: ^https?://
+                    type: string
+                required:
+                - url
+                type: object
+              workers:
+                description: Workers is how many connected workers share the run (0
+                  = all).
+                format: int32
+                minimum: 0
+                type: integer
+            required:
+            - apiTokenSecretRef
+            - project
+            - scenario
+            - server
+            - target
+            type: object
+            x-kubernetes-validations:
+            - message: spec is immutable; create a new StampedeRun
+              rule: self == oldSelf
+            - message: set exactly one of server.url and server.clusterRef
+              rule: has(self.server.url) != has(self.server.clusterRef)
+            - message: set exactly one of scenario.name and scenario.inline
+              rule: has(self.scenario.name) != has(self.scenario.inline)
+          status:
+            description: StampedeRunStatus reports progress and the result.
+            properties:
+              completedAt:
+                format: date-time
+                type: string
+              conditions:
+                description: 'Conditions: Ready (the run finished and resources were
+                  restored).'
+                items:
+                  description: Condition contains details for one aspect of the current
+                    state of this API Resource.
+                  properties:
+                    lastTransitionTime:
+                      description: |-
+                        lastTransitionTime is the last time the condition transitioned from one status to another.
+                        This should be when the underlying condition changed.  If that is not known, then using the time when the API field changed is acceptable.
+                      format: date-time
+                      type: string
+                    message:
+                      description: |-
+                        message is a human readable message indicating details about the transition.
+                        This may be an empty string.
+                      maxLength: 32768
+                      type: string
+                    observedGeneration:
+                      description: |-
+                        observedGeneration represents the .metadata.generation that the condition was set based upon.
+                        For instance, if .metadata.generation is currently 12, but the .status.conditions[x].observedGeneration is 9, the condition is out of date
+                        with respect to the current state of the instance.
+                      format: int64
+                      minimum: 0
+                      type: integer
+                    reason:
+                      description: |-
+                        reason contains a programmatic identifier indicating the reason for the condition's last transition.
+                        Producers of specific condition types may define expected values and meanings for this field,
+                        and whether the values are considered a guaranteed API.
+                        The value should be a CamelCase string.
+                        This field may not be empty.
+                      maxLength: 1024
+                      minLength: 1
+                      pattern: ^[A-Za-z]([A-Za-z0-9_,:]*[A-Za-z0-9_])?$
+                      type: string
+                    status:
+                      description: status of the condition, one of True, False, Unknown.
+                      enum:
+                      - "True"
+                      - "False"
+                      - Unknown
+                      type: string
+                    type:
+                      description: type of condition in CamelCase or in foo.example.com/CamelCase.
+                      maxLength: 316
+                      pattern: ^([a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*/)?(([A-Za-z0-9][-A-Za-z0-9_.]*)?[A-Za-z0-9])$
+                      type: string
+                  required:
+                  - lastTransitionTime
+                  - message
+                  - reason
+                  - status
+                  - type
+                  type: object
+                type: array
+                x-kubernetes-list-map-keys:
+                - type
+                x-kubernetes-list-type: map
+              message:
+                description: Message explains the phase.
+                type: string
+              phase:
+                description: 'Phase: Pending, Scaling, Running, Completed or Failed.'
+                type: string
+              projectId:
+                description: ProjectID, ScenarioID, ScenarioVersion and TargetID were
+                  resolved for the run.
+                type: string
+              reportURL:
+                description: ReportURL is the run's page in the web UI.
+                type: string
+              runId:
+                description: RunID is the Stampede run ID.
+                type: string
+              scaledDeployment:
+                description: |-
+                  ScaledDeployment is the worker Deployment scaled for this run, until it
+                  is restored.
+                type: string
+              scalingStartedAt:
+                description: ScalingStartedAt is when the operator began waiting for
+                  workers.
+                format: date-time
+                type: string
+              scenarioId:
+                type: string
+              scenarioVersion:
+                format: int32
+                type: integer
+              serverStatus:
+                description: ServerStatus is the run status reported by Stampede.
+                type: string
+              startedAt:
+                description: StartedAt and CompletedAt bracket the run.
+                format: date-time
+                type: string
+              summary:
+                description: Summary of the finished run.
+                properties:
+                  errorRate:
+                    type: string
+                  p95:
+                    type: string
+                  p99:
+                    type: string
+                  requests:
+                    format: int64
+                    type: integer
+                  rps:
+                    type: string
+                type: object
+              targetId:
+                type: string
+              verdict:
+                description: 'Verdict: pass, fail, generator-limited or no-targets.'
+                type: string
+            type: object
+        type: object
+    served: true
+    storage: true
+    subresources:
+      status: {}
