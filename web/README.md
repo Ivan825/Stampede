@@ -75,15 +75,17 @@ Why commit build output: `go install github.com/Ivan825/Stampede/cmd/stampede@la
 and plain `go build` cannot run pnpm, and the product is a single binary, so
 the UI has to be in the module. To keep the repository from growing with every
 UI change, vendor code is split into content-hashed chunks (`monaco`, `echarts`,
-`flow`, `vendor`, `yaml`) that only change when dependencies change; an
-ordinary UI change rewrites a few small app chunks (tens of KB).
+`flow`, `uplot`, `yaml`, `vendor`, plus Vite's preload helper in `runtime`)
+that never import app code, so they only change when dependencies change; an
+ordinary UI change rewrites a few small app chunks (tens of KB). The build is
+reproducible: building the same sources twice gives byte-identical files.
 
 **After changing anything under `src/`, run `pnpm build` and commit `dist/`
 with the change.** A CI check that `dist/` is up to date is a good follow-up.
 
 Build size (Vite 8, minified): about 6.4 MB on disk, most of it Monaco
 (3.6 MB, 0.9 MB gzipped) and its YAML worker (1 MB), which load only on the
-scenario editor. The first page needs about 455 KB (140 KB gzipped): the app
+scenario editor. The first page needs about 450 KB (140 KB gzipped): the app
 entry, the React/Router/Query/Radix vendor chunk and CSS. ECharts (550 KB)
 loads with run pages.
 

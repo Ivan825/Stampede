@@ -1,1 +1,0 @@
-import{Bt as e}from"./vendor-koQvENEB.js";import{a as t}from"./index-CPpPf96p.js";var n=e();function r({target:e}){return e.private?(0,n.jsx)(t,{tone:`info`,children:`private`}):e.verified?(0,n.jsx)(t,{tone:`pass`,children:`verified`}):(0,n.jsx)(t,{tone:`warn`,children:`unverified`})}export{r as t};
