@@ -177,10 +177,10 @@ func (s *Sender) Send(ctx context.Context, ch Channel, ev Event, record func(Att
 }
 
 func retryable(a Attempt) bool {
-	switch {
-	case a.Status == 0:
+	switch a.Status {
+	case 0:
 		return !strings.Contains(a.Err, ErrPrivateDestination.Error())
-	case a.Status == http.StatusRequestTimeout, a.Status == http.StatusTooEarly, a.Status == http.StatusTooManyRequests:
+	case http.StatusRequestTimeout, http.StatusTooEarly, http.StatusTooManyRequests:
 		return true
 	default:
 		return a.Status >= 500
@@ -370,7 +370,7 @@ func slackText(ev Event) string {
 }
 
 func discordText(ev Event) string {
-	esc := strings.NewReplacer("`", "'", "@", "@​")
+	esc := strings.NewReplacer("`", "'", "@", "@\u200b")
 	ls := lines(ev,
 		func(s string) string { return "**" + esc.Replace(s) + "**" },
 		func(s string) string { return "`" + esc.Replace(s) + "`" },
