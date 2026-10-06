@@ -48,7 +48,7 @@ CREATE TABLE reviews (
     body       text        NOT NULL,
     created_at timestamptz NOT NULL DEFAULT now()
 );
-CREATE INDEX reviews_product_created_idx ON reviews (product_id, created_at DESC);
+CREATE INDEX reviews_product_created_idx ON reviews (product_id, created_at DESC) INCLUDE (rating);
 
 CREATE TABLE orders (
     id               bigserial PRIMARY KEY,
