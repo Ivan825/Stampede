@@ -199,6 +199,37 @@ code 4 and writes nothing. With `--no-dry-run`, passing the static check
 is enough. The written file sets `target.baseURL` to `--target`, and its
 header comment records the provider, the model and the dry-run result.
 
+## In the web UI
+
+An admin adds a provider in **Settings → AI providers**: kind, model, base
+URL, API key and monthly token cap. The key is never shown again; leave it
+empty when replacing a provider to keep the stored one.
+
+Each project has an **AI studio** page listing its jobs with their status,
+stage, tokens used and who started them. Editors choose **Generate
+journeys** and give a description and any of an OpenAPI spec, a HAR
+recording or an access log, uploaded as a file or pasted. The dialog
+enforces the server's limits (20,000 characters of description, 5 MiB of
+OpenAPI, 20 MiB each of HAR and access log). A dry run needs a target. You
+can also pick an existing scenario to diff against, the provider when there
+are several, and the number of repair rounds.
+
+A job's page shows its stage and repair round while it runs, then:
+
+- one card per journey with its status (passed, flagged or not run), the
+  number of dry-run attempts, its problems, and each dry-run pass with every
+  request expandable to its headers, body, status, redacted response,
+  extracted values and checks
+- the proposed scenario in the read-only editor, and the diff against the
+  existing scenario
+- the tokens used
+
+Editors approve the proposal as a new scenario or as a new version of a
+scenario. A job that needs review asks for confirmation first, because its
+flagged journeys did not pass the dry run. After approval the page links to
+the saved version. Viewers and runners can read everything but not start or
+approve jobs.
+
 ## Server API
 
 All endpoints are under `/api/v1` with the `ai` tag. See
