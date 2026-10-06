@@ -3,6 +3,7 @@ package keyring
 import (
 	"bytes"
 	"encoding/base64"
+	"errors"
 	"testing"
 )
 
@@ -45,7 +46,7 @@ func TestSealOpen(t *testing.T) {
 func TestFromEnv(t *testing.T) {
 	t.Setenv("STAMPEDE_MASTER_KEY", "")
 	t.Setenv("STAMPEDE_MASTER_KEY_FILE", "")
-	if _, err := FromEnv(); err != ErrNoKey {
+	if _, err := FromEnv(); !errors.Is(err, ErrNoKey) {
 		t.Errorf("want ErrNoKey, got %v", err)
 	}
 	t.Setenv("STAMPEDE_MASTER_KEY", GenerateKey())

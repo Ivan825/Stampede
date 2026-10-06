@@ -100,7 +100,24 @@ func (s *Store) InTx(ctx context.Context, fn func(q *db.Queries) error) error {
 		return err
 	}
 	defer tx.Rollback(ctx) //nolint:errcheck // no-op after commit
-	if err := fn(s.Queries.WithTx(tx)); err != nil {
+	if err := fn(s.WithTx(tx)); err != nil {
+		return err
+	}
+	return tx.Commit(ctx)
+}
+
+// InTxLocked is InTx holding a transaction-scoped advisory lock on key, so
+// concurrent callers with the same key run one at a time.
+func (s *Store) InTxLocked(ctx context.Context, key int64, fn func(q *db.Queries) error) error {
+	tx, err := s.Pool.BeginTx(ctx, pgx.TxOptions{})
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback(ctx) //nolint:errcheck // no-op after commit
+	if _, err := tx.Exec(ctx, "SELECT pg_advisory_xact_lock($1)", key); err != nil {
+		return err
+	}
+	if err := fn(s.WithTx(tx)); err != nil {
 		return err
 	}
 	return tx.Commit(ctx)
