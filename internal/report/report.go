@@ -1,0 +1,309 @@
+// Package report turns run metrics into a verdict, per-journey and
+// per-step statistics, a timeline and exportable documents.
+package report
+
+import (
+	"sort"
+	"time"
+
+	"github.com/Ivan825/Stampede/internal/metrics"
+	"github.com/Ivan825/Stampede/internal/scenario"
+	"github.com/Ivan825/Stampede/internal/version"
+)
+
+// Verdicts.
+const (
+	VerdictPass           = "pass"
+	VerdictFail           = "fail"
+	VerdictGeneratorLimit = "generator-limited"
+	VerdictNoTargets      = "no-targets"
+)
+
+// Report is the complete result of a run. It is the JSON export format.
+type Report struct {
+	FormatVersion int       `json:"formatVersion"`
+	Stampede      string    `json:"stampede"`
+	RunID         string    `json:"runId,omitempty"`
+	Scenario      string    `json:"scenario"`
+	Target        string    `json:"target"`
+	Started       time.Time `json:"started"`
+	Ended         time.Time `json:"ended"`
+	// Duration is the measured load phase in seconds.
+	Duration   float64     `json:"duration"`
+	StopReason string      `json:"stopReason"`
+	Load       LoadInfo    `json:"load"`
+	Verdict    string      `json:"verdict"`
+	Thresholds []Check     `json:"thresholds"`
+	Overall    Stats       `json:"overall"`
+	Journeys   []Journey   `json:"journeys"`
+	Errors     []ErrorRow  `json:"errors"`
+	Timeline   []Point     `json:"timeline"`
+	Breakpoint *Breakpoint `json:"breakpoint,omitempty"`
+	Notes      []string    `json:"notes,omitempty"`
+}
+
+// LoadInfo summarises the plan.
+type LoadInfo struct {
+	Shape    string  `json:"shape,omitempty"`
+	Mode     string  `json:"mode"`
+	Executor string  `json:"executor"`
+	Peak     float64 `json:"peak"`
+	PeakVUs  int     `json:"peakVUs"`
+	Workers  int     `json:"workers"`
+}
+
+// Check is the outcome of one target.
+type Check struct {
+	Source   string  `json:"source"`
+	Scope    string  `json:"scope"`
+	Metric   string  `json:"metric"`
+	Op       string  `json:"op"`
+	Target   float64 `json:"target"`
+	Observed float64 `json:"observed"`
+	Pass     bool    `json:"pass"`
+	// Display strings in the metric's unit.
+	TargetText   string `json:"targetText"`
+	ObservedText string `json:"observedText"`
+}
+
+// Stats summarises a set of requests.
+type Stats struct {
+	Requests     uint64              `json:"requests"`
+	Failed       uint64              `json:"failed"`
+	ErrorRate    float64             `json:"errorRate"`
+	RPS          float64             `json:"rps"`
+	Latency      metrics.Percentiles `json:"latency"`
+	Service      metrics.Percentiles `json:"service"`
+	BytesIn      uint64              `json:"bytesIn"`
+	BytesOut     uint64              `json:"bytesOut"`
+	ChecksPassed uint64              `json:"checksPassed"`
+	ChecksFailed uint64              `json:"checksFailed"`
+	Status       map[int]uint64      `json:"status,omitempty"`
+	// Iteration-level figures (overall and per journey).
+	Iterations       uint64              `json:"iterations,omitempty"`
+	IterationsFailed uint64              `json:"iterationsFailed,omitempty"`
+	IterationTime    metrics.Percentiles `json:"iterationTime,omitzero"`
+	Dropped          uint64              `json:"dropped,omitempty"`
+}
+
+// Journey is per-journey output.
+type Journey struct {
+	Name  string `json:"name"`
+	Stats Stats  `json:"stats"`
+	Steps []Step `json:"steps"`
+}
+
+// Step is per-request-step output.
+type Step struct {
+	ID    int    `json:"id"`
+	Name  string `json:"name"`
+	Stats Stats  `json:"stats"`
+	// Phases holds mean and p95 seconds for dns, connect, tls, wait and download.
+	Phases map[string]PhaseStat `json:"phases"`
+}
+
+// PhaseStat is a timing phase summary in seconds.
+type PhaseStat struct {
+	Mean float64 `json:"mean"`
+	P95  float64 `json:"p95"`
+}
+
+// ErrorRow counts one kind of failure at one step.
+type ErrorRow struct {
+	Journey string `json:"journey"`
+	Step    string `json:"step"`
+	Error   string `json:"error"`
+	Count   uint64 `json:"count"`
+}
+
+// Point is one timeline interval.
+type Point struct {
+	T          float64 `json:"t"` // seconds since start
+	RPS        float64 `json:"rps"`
+	ErrorRate  float64 `json:"errorRate"`
+	P50        float64 `json:"p50"`
+	P95        float64 `json:"p95"`
+	P99        float64 `json:"p99"`
+	VUs        int     `json:"vus"`
+	Planned    float64 `json:"planned"`
+	Dropped    uint64  `json:"dropped"`
+	Iterations uint64  `json:"iterations"`
+	SchedLag99 float64 `json:"schedLagP99"`
+}
+
+// Breakpoint is the outcome of a breakpoint search.
+type Breakpoint struct {
+	// Found is false when every level passed.
+	Found bool `json:"found"`
+	// LastPass is the highest planned load that met every target.
+	LastPass float64 `json:"lastPass"`
+	// FirstFail is the lowest planned load that missed a target.
+	FirstFail float64  `json:"firstFail,omitempty"`
+	Unit      string   `json:"unit"`
+	FailedOn  []string `json:"failedOn,omitempty"`
+}
+
+// Input is everything needed to build a report.
+type Input struct {
+	RunID      string
+	Program    *scenario.Program
+	Plan       *scenario.Plan
+	Target     string
+	Started    time.Time
+	Ended      time.Time
+	StopReason string
+	PeakVUs    int
+	Workers    int
+	Interval   time.Duration
+	Snapshots  []*metrics.Snapshot // already merged per interval, any order
+	Phases     map[int]*[metrics.NumPhases]*metrics.Histogram
+	Breakpoint *Breakpoint
+}
+
+// Build computes a report.
+func Build(in Input) *Report {
+	if in.Interval <= 0 {
+		in.Interval = time.Second
+	}
+	snaps := append([]*metrics.Snapshot(nil), in.Snapshots...)
+	sort.Slice(snaps, func(i, j int) bool { return snaps[i].Interval < snaps[j].Interval })
+
+	total := metrics.NewSnapshot(0)
+	for _, s := range snaps {
+		total.Merge(s)
+	}
+	dur := in.Ended.Sub(in.Started).Seconds()
+	if dur <= 0 {
+		dur = float64(len(snaps)) * in.Interval.Seconds()
+	}
+
+	r := &Report{
+		FormatVersion: 1,
+		Stampede:      version.Version,
+		RunID:         in.RunID,
+		Scenario:      in.Program.Scenario.Metadata.Name,
+		Target:        in.Target,
+		Started:       in.Started,
+		Ended:         in.Ended,
+		Duration:      dur,
+		StopReason:    in.StopReason,
+		Load: LoadInfo{
+			Shape: in.Plan.Shape, Mode: in.Plan.Mode, Executor: in.Plan.Executor,
+			Peak: in.Plan.Peak(), PeakVUs: in.PeakVUs, Workers: max(in.Workers, 1),
+		},
+		Breakpoint: in.Breakpoint,
+	}
+
+	// Overall.
+	r.Overall = statsOf(total.Totals(), dur)
+	for _, j := range total.Journeys {
+		r.Overall.Iterations += j.Completed + j.Failed
+		r.Overall.IterationsFailed += j.Failed
+	}
+	r.Overall.Dropped = total.Dropped
+	allIter := metrics.NewHistogram()
+	for _, j := range total.Journeys {
+		allIter.Merge(j.Duration)
+	}
+	r.Overall.IterationTime = allIter.Summary()
+
+	// Journeys and steps.
+	for _, cj := range in.Program.Journeys {
+		jr := Journey{Name: cj.Name}
+		jTotal := &metrics.StepStats{Latency: metrics.NewHistogram(), Service: metrics.NewHistogram()}
+		for _, cs := range in.Program.Steps {
+			if cs.Journey != cj.Name {
+				continue
+			}
+			st := total.Steps[cs.ID]
+			if st == nil {
+				st = &metrics.StepStats{Latency: metrics.NewHistogram(), Service: metrics.NewHistogram()}
+			}
+			jTotal.Merge(st)
+			sr := Step{ID: cs.ID, Name: cs.Name, Stats: statsOf(st, dur), Phases: map[string]PhaseStat{}}
+			for p := metrics.Phase(0); p < metrics.NumPhases; p++ {
+				ps := PhaseStat{}
+				if st.Requests > 0 {
+					ps.Mean = float64(st.PhaseSum[p]) / float64(st.Requests) / 1e6
+				}
+				if ph := in.Phases[cs.ID]; ph != nil {
+					ps.P95 = ph[p].QuantileSeconds(0.95)
+				}
+				sr.Phases[metrics.PhaseNames[p]] = ps
+			}
+			jr.Steps = append(jr.Steps, sr)
+			for e, n := range st.Errors {
+				r.Errors = append(r.Errors, ErrorRow{Journey: cj.Name, Step: cs.Name, Error: e, Count: n})
+			}
+		}
+		jr.Stats = statsOf(jTotal, dur)
+		if js := total.Journeys[cj.Index]; js != nil {
+			jr.Stats.Iterations = js.Completed + js.Failed
+			jr.Stats.IterationsFailed = js.Failed
+			jr.Stats.IterationTime = js.Duration.Summary()
+		}
+		r.Journeys = append(r.Journeys, jr)
+	}
+	sort.Slice(r.Errors, func(i, j int) bool { return r.Errors[i].Count > r.Errors[j].Count })
+
+	// Timeline.
+	secs := in.Interval.Seconds()
+	for _, s := range snaps {
+		t := s.Totals()
+		p := Point{
+			T:       float64(s.Interval) * secs,
+			RPS:     float64(t.Requests) / secs,
+			VUs:     s.VUs,
+			Planned: s.Planned,
+			Dropped: s.Dropped,
+		}
+		if t.Requests > 0 {
+			p.ErrorRate = float64(t.Failed) / float64(t.Requests)
+			q := t.Latency.Quantiles(0.5, 0.95, 0.99)
+			p.P50, p.P95, p.P99 = float64(q[0])/1e6, float64(q[1])/1e6, float64(q[2])/1e6
+		}
+		for _, j := range s.Journeys {
+			p.Iterations += j.Completed + j.Failed
+		}
+		if s.SchedLag != nil {
+			p.SchedLag99 = s.SchedLag.QuantileSeconds(0.99)
+		}
+		r.Timeline = append(r.Timeline, p)
+	}
+
+	// Targets.
+	r.Thresholds = Evaluate(in.Program, in.Program.Thresholds, total, dur)
+	r.Verdict = VerdictNoTargets
+	if len(r.Thresholds) > 0 {
+		r.Verdict = VerdictPass
+		for _, c := range r.Thresholds {
+			if !c.Pass {
+				r.Verdict = VerdictFail
+			}
+		}
+	}
+	if in.StopReason != "" && in.StopReason != "completed" {
+		r.Notes = append(r.Notes, "Run ended early: "+in.StopReason+".")
+	}
+	if total.Dropped > 0 {
+		r.Notes = append(r.Notes, "Some iterations were dropped because no virtual user was free. Raise maxVUs or reduce the rate; dropped iterations show the generator could not keep the schedule.")
+	}
+	return r
+}
+
+func statsOf(st *metrics.StepStats, dur float64) Stats {
+	s := Stats{
+		Requests: st.Requests, Failed: st.Failed,
+		Latency: st.Latency.Summary(), Service: st.Service.Summary(),
+		BytesIn: st.BytesIn, BytesOut: st.BytesOut,
+		ChecksPassed: st.ChecksPassed, ChecksFailed: st.ChecksFailed,
+		Status: st.Status,
+	}
+	if st.Requests > 0 {
+		s.ErrorRate = float64(st.Failed) / float64(st.Requests)
+	}
+	if dur > 0 {
+		s.RPS = float64(st.Requests) / dur
+	}
+	return s
+}

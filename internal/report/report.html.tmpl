@@ -1,0 +1,148 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Stampede report · {{.Scenario}}</title>
+<style>
+:root {
+  --bg: #0F1215; --surface: #161B20; --line: #262E36; --fg: #E8ECEF; --muted: #8A96A3;
+  --accent: #FF7A2F; --pass: #3CCB7F; --fail: #FF5C5C; --warn: #F5B841;
+  --s1: #FF7A2F; --s2: #6CA6FF; --s3: #3CCB7F; --s4: #8A96A3; --s5: #FF5C5C;
+  --mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  --sans: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  color-scheme: dark;
+}
+@media (prefers-color-scheme: light) {
+  :root {
+    --bg: #F6F7F8; --surface: #FFFFFF; --line: #DDE2E6; --fg: #12161A; --muted: #5B6670;
+    --accent: #E8590C; --pass: #17864F; --fail: #D12D2D; --warn: #A86A00;
+    --s1: #E8590C; --s2: #2F6FD6; --s3: #17864F; --s4: #5B6670; --s5: #D12D2D;
+    color-scheme: light;
+  }
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--fg); font: 15px/1.55 var(--sans); padding: 0 16px 64px; }
+main { max-width: 1080px; margin: 0 auto; }
+header { display: flex; align-items: center; gap: 14px; padding: 28px 0 20px; border-bottom: 1px solid var(--line); flex-wrap: wrap; }
+header svg.mark { width: 34px; height: 32px; flex: none; }
+header h1 { font-size: 22px; margin: 0; font-weight: 650; letter-spacing: -0.01em; }
+header .meta { color: var(--muted); font: 12.5px var(--mono); width: 100%; display: flex; flex-wrap: wrap; gap: 4px 18px; }
+.verdict { margin-left: auto; font: 600 13px var(--mono); letter-spacing: .08em; padding: 6px 12px; border-radius: 999px; border: 1px solid currentColor; }
+.verdict.pass { color: var(--pass); } .verdict.fail { color: var(--fail); } .verdict.generator-limited { color: var(--warn); } .verdict.no-targets { color: var(--muted); }
+h2 { font-size: 13px; font-family: var(--mono); text-transform: uppercase; letter-spacing: .1em; color: var(--muted); margin: 36px 0 12px; font-weight: 600; }
+.tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; }
+.tile { background: var(--surface); border: 1px solid var(--line); border-radius: 8px; padding: 12px 14px; }
+.tile b { display: block; font: 600 22px var(--mono); letter-spacing: -0.02em; }
+.tile span { color: var(--muted); font-size: 12.5px; }
+.card { background: var(--surface); border: 1px solid var(--line); border-radius: 8px; padding: 14px 14px 10px; margin-bottom: 12px; }
+.card h3 { margin: 0 0 8px; font-size: 14px; font-weight: 600; }
+svg { width: 100%; height: auto; display: block; }
+.grid { stroke: var(--line); stroke-width: 1; }
+.axis { fill: var(--muted); font: 11px var(--mono); }
+.line { fill: none; stroke-width: 1.8; vector-effect: non-scaling-stroke; stroke-linejoin: round; }
+.line.s1, .swatch.s1 { stroke: var(--s1); background: var(--s1); } .line.s2, .swatch.s2 { stroke: var(--s2); background: var(--s2); }
+.line.s3, .swatch.s3 { stroke: var(--s3); background: var(--s3); } .line.s4, .swatch.s4 { stroke: var(--s4); background: var(--s4); stroke-dasharray: 4 3; }
+.line.s5, .swatch.s5 { stroke: var(--s5); background: var(--s5); }
+.legend { display: flex; flex-wrap: wrap; gap: 4px 16px; font-size: 12.5px; color: var(--muted); margin-top: 6px; }
+.swatch { display: inline-block; width: 10px; height: 3px; border-radius: 2px; margin-right: 6px; vertical-align: middle; }
+.table-wrap { overflow-x: auto; background: var(--surface); border: 1px solid var(--line); border-radius: 8px; }
+table { width: 100%; border-collapse: collapse; font-size: 13.5px; font-variant-numeric: tabular-nums; }
+th, td { padding: 8px 12px; border-bottom: 1px solid var(--line); text-align: right; white-space: nowrap; }
+th { font: 600 11px var(--mono); text-transform: uppercase; letter-spacing: .08em; color: var(--muted); }
+th:first-child, td:first-child, td.l, th.l { text-align: left; }
+tr:last-child td { border-bottom: 0; }
+td code { font: 12.5px var(--mono); }
+.ok { color: var(--pass); } .bad { color: var(--fail); }
+.journey td { font-weight: 600; background: color-mix(in srgb, var(--surface) 92%, var(--fg)); }
+.note { border-left: 3px solid var(--warn); background: var(--surface); padding: 10px 14px; border-radius: 4px; margin: 10px 0; }
+.empty { color: var(--muted); }
+footer { color: var(--muted); font-size: 12.5px; margin-top: 48px; border-top: 1px solid var(--line); padding-top: 16px; }
+footer a { color: var(--accent); }
+</style>
+</head>
+<body>
+<main>
+<header>
+  <svg class="mark" viewBox="0 0 68 64" aria-hidden="true"><g fill="currentColor"><polygon points="1,57 8.5,57 14.98,39 7.48,39"/><polygon points="11,57 18.5,57 27.86,31 20.36,31"/><polygon points="21,57 28.5,57 40.74,23 33.24,23"/><polygon points="31,57 38.5,57 53.62,15 46.12,15"/></g><polygon points="41,57 48.5,57 66.5,7 59,7" fill="var(--accent)"/></svg>
+  <h1>{{.Scenario}}</h1>
+  <span class="verdict {{.Verdict}}">{{verdict .Verdict}}</span>
+  <div class="meta">
+    <span>{{when .Started}}</span>
+    <span>{{secs .Duration}} load</span>
+    <span>{{.Load.Executor}}{{if .Load.Shape}} · {{.Load.Shape}}{{end}}</span>
+    <span>peak {{num .Load.Peak}}{{.Unit}}</span>
+    {{if .Target}}<span>{{.Target}}</span>{{end}}
+    {{if .RunID}}<span>run {{.RunID}}</span>{{end}}
+    <span>stop: {{.StopReason}}</span>
+  </div>
+</header>
+
+{{range .Notes}}<div class="note">{{.}}</div>{{end}}
+
+<h2>Summary</h2>
+<div class="tiles">
+  <div class="tile"><b>{{.Overall.Requests}}</b><span>requests · {{rate .Overall.RPS}}/s</span></div>
+  <div class="tile"><b class="{{if gt .Overall.ErrorRate 0.0}}bad{{end}}">{{pct .Overall.ErrorRate}}</b><span>failed requests ({{.Overall.Failed}})</span></div>
+  <div class="tile"><b>{{ms .Overall.Latency.P50}}</b><span>p50 latency</span></div>
+  <div class="tile"><b>{{ms .Overall.Latency.P95}}</b><span>p95 latency</span></div>
+  <div class="tile"><b>{{ms .Overall.Latency.P99}}</b><span>p99 latency</span></div>
+  <div class="tile"><b>{{.Overall.Iterations}}</b><span>iterations · {{.Overall.Dropped}} dropped</span></div>
+  <div class="tile"><b>{{.Load.PeakVUs}}</b><span>peak virtual users</span></div>
+  <div class="tile"><b>{{bytes .Overall.BytesIn}}</b><span>received</span></div>
+</div>
+
+{{if .Thresholds}}
+<h2>Targets</h2>
+<div class="table-wrap"><table>
+  <thead><tr><th>Target</th><th>Observed</th><th>Result</th></tr></thead>
+  <tbody>
+  {{range .Thresholds}}<tr><td><code>{{.Source}}</code></td><td>{{.ObservedText}}</td><td class="{{if .Pass}}ok{{else}}bad{{end}}">{{if .Pass}}pass{{else}}fail{{end}}</td></tr>{{end}}
+  </tbody>
+</table></div>
+{{end}}
+
+{{with .Breakpoint}}
+<h2>Breakpoint</h2>
+<div class="card">
+  {{if .Found}}<p>Targets held up to <b>{{num .LastPass}}{{.Unit}}</b> and failed at <b>{{num .FirstFail}}{{.Unit}}</b>{{if .FailedOn}} on {{range $i, $f := .FailedOn}}{{if $i}}, {{end}}<code>{{$f}}</code>{{end}}{{end}}.</p>
+  {{else}}<p>Not reached: every target held at each level up to <b>{{num .LastPass}}{{.Unit}}</b>.</p>{{end}}
+</div>
+{{end}}
+
+<h2>Over time</h2>
+<div class="card"><h3>Throughput and users</h3>{{.ThroughputChart}}</div>
+<div class="card"><h3>Latency (from scheduled send)</h3>{{.LatencyChart}}</div>
+<div class="card"><h3>Error rate</h3>{{.ErrorChart}}</div>
+
+<h2>Journeys and steps</h2>
+<div class="table-wrap"><table>
+  <thead><tr><th>Step</th><th>Requests</th><th>Errors</th><th>p50</th><th>p95</th><th>p99</th><th>Max</th><th>Wait (mean)</th><th>Connect (mean)</th></tr></thead>
+  <tbody>
+  {{range .Journeys}}
+    <tr class="journey"><td>{{.Name}}</td><td>{{.Stats.Requests}}</td><td>{{pct .Stats.ErrorRate}}</td><td>{{ms .Stats.Latency.P50}}</td><td>{{ms .Stats.Latency.P95}}</td><td>{{ms .Stats.Latency.P99}}</td><td>{{ms .Stats.Latency.Max}}</td><td colspan="2" class="l">{{.Stats.Iterations}} iterations · {{.Stats.IterationsFailed}} failed</td></tr>
+    {{range .Steps}}
+    <tr><td><code>{{.Name}}</code></td><td>{{.Stats.Requests}}</td><td class="{{if gt .Stats.ErrorRate 0.0}}bad{{end}}">{{pct .Stats.ErrorRate}}</td><td>{{ms .Stats.Latency.P50}}</td><td>{{ms .Stats.Latency.P95}}</td><td>{{ms .Stats.Latency.P99}}</td><td>{{ms .Stats.Latency.Max}}</td><td>{{ms (index .Phases "wait").Mean}}</td><td>{{ms (index .Phases "connect").Mean}}</td></tr>
+    {{end}}
+  {{end}}
+  </tbody>
+</table></div>
+
+{{if .Errors}}
+<h2>Errors</h2>
+<div class="table-wrap"><table>
+  <thead><tr><th>Error</th><th class="l">Journey</th><th class="l">Step</th><th>Count</th></tr></thead>
+  <tbody>
+  {{range .Errors}}<tr><td>{{.Error}}</td><td class="l">{{.Journey}}</td><td class="l"><code>{{.Step}}</code></td><td>{{.Count}}</td></tr>{{end}}
+  </tbody>
+</table></div>
+{{end}}
+
+<footer>
+  Generated by Stampede {{.Stampede}}. Latency is measured from each request's scheduled send time, so queueing
+  inside the load generator is never hidden. Percentiles are computed from merged histograms, never averaged.
+  <a href="https://github.com/Ivan825/Stampede">github.com/Ivan825/Stampede</a>
+</footer>
+</main>
+</body>
+</html>
