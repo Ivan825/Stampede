@@ -40,6 +40,9 @@ type Report struct {
 	Timeline   []Point     `json:"timeline"`
 	Breakpoint *Breakpoint `json:"breakpoint,omitempty"`
 	Notes      []string    `json:"notes,omitempty"`
+	// Workers describes each worker of a distributed run (empty for a
+	// single in-process engine).
+	Workers []WorkerRow `json:"workers,omitempty"`
 }
 
 // LoadInfo summarises the plan.
