@@ -8,7 +8,7 @@ LDFLAGS   := -s -w \
 	-X $(PKG)/internal/version.Commit=$(COMMIT) \
 	-X $(PKG)/internal/version.Date=$(DATE)
 
-.PHONY: build test race lint fmt tidy clean generate
+.PHONY: build test race lint fmt tidy clean generate web
 
 build:
 	$(GO) build -trimpath -ldflags "$(LDFLAGS)" -o bin/stampede ./cmd/stampede
@@ -38,3 +38,6 @@ SQLC_IMAGE := sqlc/sqlc:1.29.0
 generate:
 	$(GO) run $(OAPI_CODEGEN) -config api/oapi-codegen.yaml api/openapi.yaml
 	docker run --rm -v "$(CURDIR)":/src -w /src $(SQLC_IMAGE) generate
+
+web:
+	cd web && pnpm install --frozen-lockfile && pnpm build
