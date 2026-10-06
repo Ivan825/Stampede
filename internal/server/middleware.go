@@ -158,13 +158,13 @@ const SessionCookie = "stampede_session"
 
 // publicPaths need no authentication.
 var publicPaths = map[string]bool{
-	"/api/v1/version":      true,
-	"/api/v1/setup":        true,
-	"/api/v1/auth/login":   true,
-	"/api/v1/auth/config":  true,
+	"/api/v1/version":            true,
+	"/api/v1/setup":              true,
+	"/api/v1/auth/login":         true,
+	"/api/v1/auth/config":        true,
 	"/api/v1/auth/oidc/login":    true,
 	"/api/v1/auth/oidc/callback": true,
-	"/api/v1/openapi.yaml": true,
+	"/api/v1/openapi.yaml":       true,
 }
 
 // authenticate resolves the caller from a bearer token or session cookie.

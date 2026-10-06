@@ -18,8 +18,8 @@ import (
 
 	"google.golang.org/grpc"
 
-	"github.com/Ivan825/Stampede/internal/coordinator"
 	"github.com/Ivan825/Stampede/internal/auth"
+	"github.com/Ivan825/Stampede/internal/coordinator"
 	"github.com/Ivan825/Stampede/internal/keyring"
 	"github.com/Ivan825/Stampede/internal/pki"
 	"github.com/Ivan825/Stampede/internal/safety"
