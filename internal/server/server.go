@@ -52,6 +52,8 @@ type Config struct {
 	TrustedProxies []netip.Prefix
 	// Clock is replaceable in tests.
 	Now func() time.Time
+	// AI configures optional AI journey generation (see handlers_ai.go).
+	AI AIConfig
 }
 
 // Server is the control plane.
@@ -60,6 +62,7 @@ type Server struct {
 	st        *store.Store
 	log       *slog.Logger
 	runs      *runManager
+	ai        *aiManager
 	limiter   *auth.Limiter // per email
 	ipLimiter *auth.Limiter // per client address, looser for shared NATs
 	reg       *prometheus.Registry
@@ -94,6 +97,7 @@ func New(cfg Config) (*Server, error) {
 	}
 	s.reg.MustRegister(collectors.NewGoCollector(), collectors.NewProcessCollector(collectors.ProcessCollectorOpts{}))
 	s.runs = newRunManager(s)
+	s.ai = newAIManager(s)
 	s.reg.MustRegister(s.runs.metrics()...)
 	s.handler = s.routes()
 	return s, nil
@@ -103,10 +107,18 @@ func New(cfg Config) (*Server, error) {
 func (s *Server) Handler() http.Handler { return s.handler }
 
 // Recover marks runs that were in progress when the server last stopped.
-func (s *Server) Recover(ctx context.Context) error { return s.runs.recover(ctx) }
+func (s *Server) Recover(ctx context.Context) error {
+	if err := s.ai.recover(ctx); err != nil {
+		return err
+	}
+	return s.runs.recover(ctx)
+}
 
 // Shutdown stops every active run and waits for reports to be written.
-func (s *Server) Shutdown(ctx context.Context) { s.runs.shutdown(ctx) }
+func (s *Server) Shutdown(ctx context.Context) {
+	s.ai.shutdown(ctx)
+	s.runs.shutdown(ctx)
+}
 
 func (s *Server) routes() http.Handler {
 	r := chi.NewRouter()
