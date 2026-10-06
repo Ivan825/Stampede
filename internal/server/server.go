@@ -58,6 +58,8 @@ type Config struct {
 	Now func() time.Time
 	// AI configures optional AI journey generation (see handlers_ai.go).
 	AI AIConfig
+	// Notify configures run notifications (see notifications.go).
+	Notify NotifyConfig
 }
 
 // Server is the control plane.
@@ -67,6 +69,7 @@ type Server struct {
 	log       *slog.Logger
 	runs      *runManager
 	ai        *aiManager
+	notify    *notifier
 	limiter   *auth.Limiter // per email
 	ipLimiter *auth.Limiter // per client address, looser for shared NATs
 	reg       *prometheus.Registry
@@ -102,6 +105,7 @@ func New(cfg Config) (*Server, error) {
 	s.reg.MustRegister(collectors.NewGoCollector(), collectors.NewProcessCollector(collectors.ProcessCollectorOpts{}))
 	s.runs = newRunManager(s)
 	s.ai = newAIManager(s)
+	s.notify = newNotifier(s)
 	s.reg.MustRegister(s.runs.metrics()...)
 	s.handler = s.routes()
 	return s, nil
@@ -122,6 +126,7 @@ func (s *Server) Recover(ctx context.Context) error {
 func (s *Server) Shutdown(ctx context.Context) {
 	s.ai.shutdown(ctx)
 	s.runs.shutdown(ctx)
+	s.notify.shutdown(ctx)
 }
 
 func (s *Server) routes() http.Handler {

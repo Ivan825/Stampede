@@ -49,6 +49,7 @@ type serverFlags struct {
 	dataDir       string
 	tlsCert       string
 	tlsKey        string
+	publicURL     string
 }
 
 func newServerCmd() *cobra.Command {
@@ -85,6 +86,7 @@ Environment:
 	fl.StringVar(&f.tlsKey, "worker-tls-key", os.Getenv("STAMPEDE_WORKER_TLS_KEY"), "TLS key for the worker port")
 	fl.StringVar(&f.abortErrors, "abort-errors", envOr("STAMPEDE_ABORT_ERRORS", "90%"), "stop any run whose error rate stays at or above this (0 disables)")
 	fl.DurationVar(&f.abortFor, "abort-for", 30*time.Second, "how long --abort-errors must hold before a run is stopped")
+	fl.StringVar(&f.publicURL, "public-url", os.Getenv("STAMPEDE_PUBLIC_URL"), "external URL of the web UI, for links in notifications (e.g. https://stampede.example.com)")
 	fl.StringSliceVar(&f.trusted, "trusted-proxy", splitEnv("STAMPEDE_TRUSTED_PROXIES"), "CIDR of a reverse proxy whose X-Forwarded-For is trusted (repeatable)")
 	return cmd
 }
@@ -198,6 +200,7 @@ func runServer(cmd *cobra.Command, f *serverFlags) error {
 	cfg.Store, cfg.Keyring, cfg.Logger, cfg.UI, cfg.SecureCookies = st, kr, log, UI, f.secureCookies
 	cfg.HardCaps = safety.Caps{MaxRate: f.maxRate, MaxVUs: f.maxVUs, MaxDuration: f.maxDuration}
 	cfg.TrustedProxies = proxies
+	cfg.Notify.PublicURL = f.publicURL
 	if f.abortErrors != "" && f.abortErrors != "0" && f.abortErrors != "0%" {
 		p, err := scenario.ParsePercent(f.abortErrors)
 		if err != nil {

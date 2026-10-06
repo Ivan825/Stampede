@@ -12,6 +12,7 @@ import (
 
 	"github.com/Ivan825/Stampede/internal/api/gen"
 	"github.com/Ivan825/Stampede/internal/metrics"
+	"github.com/Ivan825/Stampede/internal/observe"
 	"github.com/Ivan825/Stampede/internal/report"
 	"github.com/Ivan825/Stampede/internal/runner"
 	"github.com/Ivan825/Stampede/internal/scenario"
@@ -40,8 +41,11 @@ type activeRun struct {
 	mu       sync.Mutex
 	exec     Execution
 	killed   bool
+	killedBy string
 	stopping bool
 	done     chan struct{}
+	// obs is the run's resolved observe block (target metrics, trace links).
+	obs *observe.Config
 }
 
 type runManager struct {
@@ -152,6 +156,7 @@ func (m *runManager) execute(r *activeRun, spec ExecSpec, prog *scenario.Program
 		_ = m.s.st.FinishRun(ctx, db.FinishRunParams{ID: r.id, Status: statusFailed, Error: &msg})
 		m.finished.WithLabelValues(statusFailed).Inc()
 		m.publishStatus(ctx, r)
+		m.s.notify.runFinished(r, statusFailed, msg, nil)
 	}
 
 	m.setStatus(ctx, r, statusStarting)
@@ -227,6 +232,11 @@ func (m *runManager) execute(r *activeRun, spec ExecSpec, prog *scenario.Program
 	if res.Annotate != nil {
 		res.Annotate(rep)
 	}
+	if !r.obs.Empty() {
+		octx, cancel := context.WithTimeout(ctx, 2*time.Minute)
+		r.obs.Apply(octx, rep, time.Second)
+		cancel()
+	}
 	repJSON, err := json.Marshal(rep)
 	if err != nil {
 		fail(err)
@@ -254,6 +264,7 @@ func (m *runManager) execute(r *activeRun, spec ExecSpec, prog *scenario.Program
 	m.finished.WithLabelValues(status).Inc()
 	m.publishStatus(ctx, r)
 	m.s.log.Info("run finished", "run", r.id, "status", status, "verdict", verdict, "requests", rep.Overall.Requests)
+	m.s.notify.runFinished(r, status, "", rep)
 }
 
 func ptr[T any](v T) *T { return &v }
@@ -319,13 +330,17 @@ func (m *runManager) stop(id uuid.UUID) bool {
 }
 
 // kill stops a run's load immediately. It is safe to call before the
-// executor has started: the kill is applied as soon as it does.
-func (m *runManager) kill(id uuid.UUID) bool {
+// executor has started: the kill is applied as soon as it does. by names
+// who pulled the kill switch, for notifications.
+func (m *runManager) kill(id uuid.UUID, by string) bool {
 	r := m.get(id)
 	if r == nil {
 		return false
 	}
 	r.mu.Lock()
+	if !r.killed {
+		r.killedBy = by
+	}
 	r.killed = true
 	exec := r.exec
 	r.mu.Unlock()
@@ -370,7 +385,7 @@ func (m *runManager) shutdown(ctx context.Context) {
 	case <-done:
 	case <-ctx.Done():
 		for _, id := range ids {
-			m.kill(id)
+			m.kill(id, "server shutdown")
 		}
 	}
 }

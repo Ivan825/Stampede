@@ -104,6 +104,66 @@ func (e AIProviderKind) Valid() bool {
 	}
 }
 
+// Defines values for IntegrationKind.
+const (
+	IntegrationPrometheus IntegrationKind = "prometheus"
+	IntegrationTraces     IntegrationKind = "traces"
+)
+
+// Valid indicates whether the value is a known member of the IntegrationKind enum.
+func (e IntegrationKind) Valid() bool {
+	switch e {
+	case IntegrationPrometheus:
+		return true
+	case IntegrationTraces:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for NotificationEvent.
+const (
+	EventRunFinished     NotificationEvent = "run.finished"
+	EventRunKilled       NotificationEvent = "run.killed"
+	EventRunTargetFailed NotificationEvent = "run.target_failed"
+)
+
+// Valid indicates whether the value is a known member of the NotificationEvent enum.
+func (e NotificationEvent) Valid() bool {
+	switch e {
+	case EventRunFinished:
+		return true
+	case EventRunKilled:
+		return true
+	case EventRunTargetFailed:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for NotificationKind.
+const (
+	NotificationDiscord NotificationKind = "discord"
+	NotificationSlack   NotificationKind = "slack"
+	NotificationWebhook NotificationKind = "webhook"
+)
+
+// Valid indicates whether the value is a known member of the NotificationKind enum.
+func (e NotificationKind) Valid() bool {
+	switch e {
+	case NotificationDiscord:
+		return true
+	case NotificationSlack:
+		return true
+	case NotificationWebhook:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for Role.
 const (
 	Admin  Role = "admin"
@@ -491,6 +551,36 @@ type Error struct {
 	} `json:"error"`
 }
 
+// Integration defines model for Integration.
+type Integration struct {
+	CreatedAt time.Time `json:"createdAt"`
+
+	// HasToken Whether a bearer token is stored. The token itself is never returned.
+	HasToken  bool               `json:"hasToken"`
+	Id        openapi_types.UUID `json:"id"`
+	Kind      IntegrationKind    `json:"kind"`
+	Name      string             `json:"name"`
+	UpdatedAt time.Time          `json:"updatedAt"`
+
+	// Url Prometheus base URL, or for traces a link template containing {traceId}.
+	Url string `json:"url"`
+}
+
+// IntegrationCreate defines model for IntegrationCreate.
+type IntegrationCreate struct {
+	// BearerToken Prometheus only. Stored encrypted.
+	BearerToken *string         `json:"bearerToken,omitempty"`
+	Kind        IntegrationKind `json:"kind"`
+	Name        string          `json:"name"`
+
+	// Url prometheus: the base URL, e.g. http://prometheus:9090. traces: a link
+	// template containing {traceId}, e.g. https://jaeger.example.com/trace/{traceId}.
+	Url string `json:"url"`
+}
+
+// IntegrationKind defines model for IntegrationKind.
+type IntegrationKind string
+
 // LoginRequest defines model for LoginRequest.
 type LoginRequest struct {
 	Email    openapi_types.Email `json:"email"`
@@ -506,6 +596,72 @@ type Me struct {
 	OrgName string             `json:"orgName"`
 	Role    Role               `json:"role"`
 }
+
+// NotificationChannel defines model for NotificationChannel.
+type NotificationChannel struct {
+	// AllowPrivate Deliveries may reach private, loopback and link-local addresses.
+	AllowPrivate bool                `json:"allowPrivate"`
+	CreatedAt    time.Time           `json:"createdAt"`
+	Events       []NotificationEvent `json:"events"`
+
+	// HasSecret Whether bodies are signed (generic webhooks).
+	HasSecret    bool                  `json:"hasSecret"`
+	Id           openapi_types.UUID    `json:"id"`
+	Kind         NotificationKind      `json:"kind"`
+	LastDelivery *NotificationDelivery `json:"lastDelivery,omitempty"`
+	Name         string                `json:"name"`
+
+	// UrlHint The destination's scheme and host only, e.g. https://hooks.slack.com
+	UrlHint string `json:"urlHint"`
+}
+
+// NotificationChannelCreate defines model for NotificationChannelCreate.
+type NotificationChannelCreate struct {
+	AllowPrivate *bool `json:"allowPrivate,omitempty"`
+
+	// Events Default all events.
+	Events *[]NotificationEvent `json:"events,omitempty"`
+	Kind   NotificationKind     `json:"kind"`
+	Name   string               `json:"name"`
+
+	// Secret Webhook signing secret. Generated when omitted; ignored for Slack and Discord.
+	Secret *string `json:"secret,omitempty"`
+
+	// Url Webhook URL. Stored encrypted and never returned.
+	Url string `json:"url"`
+}
+
+// NotificationChannelCreated defines model for NotificationChannelCreated.
+type NotificationChannelCreated struct {
+	Channel NotificationChannel `json:"channel"`
+
+	// Secret The webhook signing secret. Shown only once.
+	Secret *string `json:"secret,omitempty"`
+}
+
+// NotificationDelivery defines model for NotificationDelivery.
+type NotificationDelivery struct {
+	At      time.Time `json:"at"`
+	Attempt int       `json:"attempt"`
+
+	// DeliveryId Same for every attempt of one delivery (X-Stampede-Delivery).
+	DeliveryId openapi_types.UUID  `json:"deliveryId"`
+	DurationMs int                 `json:"durationMs"`
+	Error      string              `json:"error"`
+	Event      string              `json:"event"`
+	Id         int64               `json:"id"`
+	Ok         bool                `json:"ok"`
+	RunId      *openapi_types.UUID `json:"runId,omitempty"`
+
+	// StatusCode HTTP status; 0 when no response was received.
+	StatusCode int `json:"statusCode"`
+}
+
+// NotificationEvent defines model for NotificationEvent.
+type NotificationEvent string
+
+// NotificationKind defines model for NotificationKind.
+type NotificationKind string
 
 // PlanSummary defines model for PlanSummary.
 type PlanSummary struct {
@@ -797,6 +953,9 @@ type Worker struct {
 // WorkerStatus defines model for Worker.Status.
 type WorkerStatus string
 
+// ChannelId defines model for channelId.
+type ChannelId = openapi_types.UUID
+
 // ProjectId defines model for projectId.
 type ProjectId = openapi_types.UUID
 
@@ -851,6 +1010,11 @@ type ChangePasswordJSONBody struct {
 	New     string `json:"new"`
 }
 
+// ListNotificationDeliveriesParams defines parameters for ListNotificationDeliveries.
+type ListNotificationDeliveriesParams struct {
+	Limit *int `form:"limit,omitempty" json:"limit,omitempty"`
+}
+
 // ListAIJobsParams defines parameters for ListAIJobs.
 type ListAIJobsParams struct {
 	Limit *int `form:"limit,omitempty" json:"limit,omitempty"`
@@ -898,8 +1062,14 @@ type PutAIProviderJSONRequestBody = AIProviderPut
 // LoginJSONRequestBody defines body for Login for application/json ContentType.
 type LoginJSONRequestBody = LoginRequest
 
+// CreateIntegrationJSONRequestBody defines body for CreateIntegration for application/json ContentType.
+type CreateIntegrationJSONRequestBody = IntegrationCreate
+
 // ChangePasswordJSONRequestBody defines body for ChangePassword for application/json ContentType.
 type ChangePasswordJSONRequestBody ChangePasswordJSONBody
+
+// CreateNotificationChannelJSONRequestBody defines body for CreateNotificationChannel for application/json ContentType.
+type CreateNotificationChannelJSONRequestBody = NotificationChannelCreate
 
 // CreateProjectJSONRequestBody defines body for CreateProject for application/json ContentType.
 type CreateProjectJSONRequestBody = ProjectCreate
@@ -969,12 +1139,36 @@ type ServerInterface interface {
 
 	// (POST /auth/logout)
 	Logout(w http.ResponseWriter, r *http.Request)
+	// Integrations configured for the organisation (tokens are never returned)
+	// (GET /integrations)
+	ListIntegrations(w http.ResponseWriter, r *http.Request)
+	// Add a named Prometheus or traces integration
+	// (POST /integrations)
+	CreateIntegration(w http.ResponseWriter, r *http.Request)
+
+	// (DELETE /integrations/{integrationId})
+	DeleteIntegration(w http.ResponseWriter, r *http.Request, integrationId openapi_types.UUID)
 
 	// (GET /me)
 	GetMe(w http.ResponseWriter, r *http.Request)
 
 	// (PUT /me/password)
 	ChangePassword(w http.ResponseWriter, r *http.Request)
+	// Notification channels of the organisation (URLs and secrets are never returned)
+	// (GET /notifications/channels)
+	ListNotificationChannels(w http.ResponseWriter, r *http.Request)
+	// Add a webhook, Slack or Discord channel
+	// (POST /notifications/channels)
+	CreateNotificationChannel(w http.ResponseWriter, r *http.Request)
+
+	// (DELETE /notifications/channels/{channelId})
+	DeleteNotificationChannel(w http.ResponseWriter, r *http.Request, channelId ChannelId)
+	// The most recent delivery attempts of a channel, newest first
+	// (GET /notifications/channels/{channelId}/deliveries)
+	ListNotificationDeliveries(w http.ResponseWriter, r *http.Request, channelId ChannelId, params ListNotificationDeliveriesParams)
+	// Send a test notification now (one attempt, no retries)
+	// (POST /notifications/channels/{channelId}/test)
+	TestNotificationChannel(w http.ResponseWriter, r *http.Request, channelId ChannelId)
 
 	// (GET /projects)
 	ListProjects(w http.ResponseWriter, r *http.Request)
@@ -1154,6 +1348,23 @@ func (_ Unimplemented) Logout(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
+// Integrations configured for the organisation (tokens are never returned)
+// (GET /integrations)
+func (_ Unimplemented) ListIntegrations(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Add a named Prometheus or traces integration
+// (POST /integrations)
+func (_ Unimplemented) CreateIntegration(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// (DELETE /integrations/{integrationId})
+func (_ Unimplemented) DeleteIntegration(w http.ResponseWriter, r *http.Request, integrationId openapi_types.UUID) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
 // (GET /me)
 func (_ Unimplemented) GetMe(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNotImplemented)
@@ -1161,6 +1372,35 @@ func (_ Unimplemented) GetMe(w http.ResponseWriter, r *http.Request) {
 
 // (PUT /me/password)
 func (_ Unimplemented) ChangePassword(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Notification channels of the organisation (URLs and secrets are never returned)
+// (GET /notifications/channels)
+func (_ Unimplemented) ListNotificationChannels(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Add a webhook, Slack or Discord channel
+// (POST /notifications/channels)
+func (_ Unimplemented) CreateNotificationChannel(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// (DELETE /notifications/channels/{channelId})
+func (_ Unimplemented) DeleteNotificationChannel(w http.ResponseWriter, r *http.Request, channelId ChannelId) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// The most recent delivery attempts of a channel, newest first
+// (GET /notifications/channels/{channelId}/deliveries)
+func (_ Unimplemented) ListNotificationDeliveries(w http.ResponseWriter, r *http.Request, channelId ChannelId, params ListNotificationDeliveriesParams) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Send a test notification now (one attempt, no retries)
+// (POST /notifications/channels/{channelId}/test)
+func (_ Unimplemented) TestNotificationChannel(w http.ResponseWriter, r *http.Request, channelId ChannelId) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -1631,6 +1871,84 @@ func (siw *ServerInterfaceWrapper) Logout(w http.ResponseWriter, r *http.Request
 	handler.ServeHTTP(w, r)
 }
 
+// ListIntegrations operation middleware
+func (siw *ServerInterfaceWrapper) ListIntegrations(w http.ResponseWriter, r *http.Request) {
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerScopes, []string{})
+
+	ctx = context.WithValue(ctx, SessionScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListIntegrations(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// CreateIntegration operation middleware
+func (siw *ServerInterfaceWrapper) CreateIntegration(w http.ResponseWriter, r *http.Request) {
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerScopes, []string{})
+
+	ctx = context.WithValue(ctx, SessionScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.CreateIntegration(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// DeleteIntegration operation middleware
+func (siw *ServerInterfaceWrapper) DeleteIntegration(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "integrationId" -------------
+	var integrationId openapi_types.UUID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "integrationId", chi.URLParam(r, "integrationId"), &integrationId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid"})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "integrationId", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerScopes, []string{})
+
+	ctx = context.WithValue(ctx, SessionScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.DeleteIntegration(w, r, integrationId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // GetMe operation middleware
 func (siw *ServerInterfaceWrapper) GetMe(w http.ResponseWriter, r *http.Request) {
 
@@ -1666,6 +1984,168 @@ func (siw *ServerInterfaceWrapper) ChangePassword(w http.ResponseWriter, r *http
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.ChangePassword(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ListNotificationChannels operation middleware
+func (siw *ServerInterfaceWrapper) ListNotificationChannels(w http.ResponseWriter, r *http.Request) {
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerScopes, []string{})
+
+	ctx = context.WithValue(ctx, SessionScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListNotificationChannels(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// CreateNotificationChannel operation middleware
+func (siw *ServerInterfaceWrapper) CreateNotificationChannel(w http.ResponseWriter, r *http.Request) {
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerScopes, []string{})
+
+	ctx = context.WithValue(ctx, SessionScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.CreateNotificationChannel(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// DeleteNotificationChannel operation middleware
+func (siw *ServerInterfaceWrapper) DeleteNotificationChannel(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "channelId" -------------
+	var channelId ChannelId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "channelId", chi.URLParam(r, "channelId"), &channelId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid"})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "channelId", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerScopes, []string{})
+
+	ctx = context.WithValue(ctx, SessionScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.DeleteNotificationChannel(w, r, channelId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ListNotificationDeliveries operation middleware
+func (siw *ServerInterfaceWrapper) ListNotificationDeliveries(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "channelId" -------------
+	var channelId ChannelId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "channelId", chi.URLParam(r, "channelId"), &channelId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid"})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "channelId", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerScopes, []string{})
+
+	ctx = context.WithValue(ctx, SessionScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ListNotificationDeliveriesParams
+
+	// ------------- Optional query parameter "limit" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "limit", r.URL.Query(), &params.Limit, runtime.BindQueryParameterOptions{Type: "integer", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "limit"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "limit", Err: err})
+		}
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListNotificationDeliveries(w, r, channelId, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// TestNotificationChannel operation middleware
+func (siw *ServerInterfaceWrapper) TestNotificationChannel(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "channelId" -------------
+	var channelId ChannelId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "channelId", chi.URLParam(r, "channelId"), &channelId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid"})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "channelId", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerScopes, []string{})
+
+	ctx = context.WithValue(ctx, SessionScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.TestNotificationChannel(w, r, channelId)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -3235,10 +3715,34 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 		r.Post(options.BaseURL+"/auth/logout", wrapper.Logout)
 	})
 	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/integrations", wrapper.ListIntegrations)
+	})
+	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/integrations", wrapper.CreateIntegration)
+	})
+	r.Group(func(r chi.Router) {
+		r.Delete(options.BaseURL+"/integrations/{integrationId}", wrapper.DeleteIntegration)
+	})
+	r.Group(func(r chi.Router) {
 		r.Get(options.BaseURL+"/me", wrapper.GetMe)
 	})
 	r.Group(func(r chi.Router) {
 		r.Put(options.BaseURL+"/me/password", wrapper.ChangePassword)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/notifications/channels", wrapper.ListNotificationChannels)
+	})
+	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/notifications/channels", wrapper.CreateNotificationChannel)
+	})
+	r.Group(func(r chi.Router) {
+		r.Delete(options.BaseURL+"/notifications/channels/{channelId}", wrapper.DeleteNotificationChannel)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/notifications/channels/{channelId}/deliveries", wrapper.ListNotificationDeliveries)
+	})
+	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/notifications/channels/{channelId}/test", wrapper.TestNotificationChannel)
 	})
 	r.Group(func(r chi.Router) {
 		r.Get(options.BaseURL+"/projects", wrapper.ListProjects)
@@ -3744,6 +4248,135 @@ func (response Logout204Response) VisitLogoutResponse(w http.ResponseWriter) err
 	return nil
 }
 
+type ListIntegrationsRequestObject struct {
+}
+
+type ListIntegrationsResponseObject interface {
+	VisitListIntegrationsResponse(w http.ResponseWriter) error
+}
+
+type ListIntegrations200JSONResponse []Integration
+
+func (response ListIntegrations200JSONResponse) VisitListIntegrationsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateIntegrationRequestObject struct {
+	Body *CreateIntegrationJSONRequestBody
+}
+
+type CreateIntegrationResponseObject interface {
+	VisitCreateIntegrationResponse(w http.ResponseWriter) error
+}
+
+type CreateIntegration201JSONResponse Integration
+
+func (response CreateIntegration201JSONResponse) VisitCreateIntegrationResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(201)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateIntegration403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response CreateIntegration403JSONResponse) VisitCreateIntegrationResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateIntegration409JSONResponse struct{ ConflictJSONResponse }
+
+func (response CreateIntegration409JSONResponse) VisitCreateIntegrationResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(409)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateIntegration422JSONResponse struct{ InvalidJSONResponse }
+
+func (response CreateIntegration422JSONResponse) VisitCreateIntegrationResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(422)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type DeleteIntegrationRequestObject struct {
+	IntegrationId openapi_types.UUID `json:"integrationId"`
+}
+
+type DeleteIntegrationResponseObject interface {
+	VisitDeleteIntegrationResponse(w http.ResponseWriter) error
+}
+
+type DeleteIntegration204Response struct {
+}
+
+func (response DeleteIntegration204Response) VisitDeleteIntegrationResponse(w http.ResponseWriter) error {
+	w.WriteHeader(204)
+	return nil
+}
+
+type DeleteIntegration403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response DeleteIntegration403JSONResponse) VisitDeleteIntegrationResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type DeleteIntegration404JSONResponse struct{ NotFoundJSONResponse }
+
+func (response DeleteIntegration404JSONResponse) VisitDeleteIntegrationResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 type GetMeRequestObject struct {
 }
 
@@ -3819,6 +4452,264 @@ func (response ChangePassword422JSONResponse) VisitChangePasswordResponse(w http
 	}
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(422)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListNotificationChannelsRequestObject struct {
+}
+
+type ListNotificationChannelsResponseObject interface {
+	VisitListNotificationChannelsResponse(w http.ResponseWriter) error
+}
+
+type ListNotificationChannels200JSONResponse []NotificationChannel
+
+func (response ListNotificationChannels200JSONResponse) VisitListNotificationChannelsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListNotificationChannels403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response ListNotificationChannels403JSONResponse) VisitListNotificationChannelsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateNotificationChannelRequestObject struct {
+	Body *CreateNotificationChannelJSONRequestBody
+}
+
+type CreateNotificationChannelResponseObject interface {
+	VisitCreateNotificationChannelResponse(w http.ResponseWriter) error
+}
+
+type CreateNotificationChannel201JSONResponse NotificationChannelCreated
+
+func (response CreateNotificationChannel201JSONResponse) VisitCreateNotificationChannelResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(201)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateNotificationChannel403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response CreateNotificationChannel403JSONResponse) VisitCreateNotificationChannelResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateNotificationChannel409JSONResponse struct{ ConflictJSONResponse }
+
+func (response CreateNotificationChannel409JSONResponse) VisitCreateNotificationChannelResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(409)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateNotificationChannel422JSONResponse struct{ InvalidJSONResponse }
+
+func (response CreateNotificationChannel422JSONResponse) VisitCreateNotificationChannelResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(422)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type DeleteNotificationChannelRequestObject struct {
+	ChannelId ChannelId `json:"channelId"`
+}
+
+type DeleteNotificationChannelResponseObject interface {
+	VisitDeleteNotificationChannelResponse(w http.ResponseWriter) error
+}
+
+type DeleteNotificationChannel204Response struct {
+}
+
+func (response DeleteNotificationChannel204Response) VisitDeleteNotificationChannelResponse(w http.ResponseWriter) error {
+	w.WriteHeader(204)
+	return nil
+}
+
+type DeleteNotificationChannel403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response DeleteNotificationChannel403JSONResponse) VisitDeleteNotificationChannelResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type DeleteNotificationChannel404JSONResponse struct{ NotFoundJSONResponse }
+
+func (response DeleteNotificationChannel404JSONResponse) VisitDeleteNotificationChannelResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListNotificationDeliveriesRequestObject struct {
+	ChannelId ChannelId `json:"channelId"`
+	Params    ListNotificationDeliveriesParams
+}
+
+type ListNotificationDeliveriesResponseObject interface {
+	VisitListNotificationDeliveriesResponse(w http.ResponseWriter) error
+}
+
+type ListNotificationDeliveries200JSONResponse []NotificationDelivery
+
+func (response ListNotificationDeliveries200JSONResponse) VisitListNotificationDeliveriesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListNotificationDeliveries403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response ListNotificationDeliveries403JSONResponse) VisitListNotificationDeliveriesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListNotificationDeliveries404JSONResponse struct{ NotFoundJSONResponse }
+
+func (response ListNotificationDeliveries404JSONResponse) VisitListNotificationDeliveriesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type TestNotificationChannelRequestObject struct {
+	ChannelId ChannelId `json:"channelId"`
+}
+
+type TestNotificationChannelResponseObject interface {
+	VisitTestNotificationChannelResponse(w http.ResponseWriter) error
+}
+
+type TestNotificationChannel200JSONResponse NotificationDelivery
+
+func (response TestNotificationChannel200JSONResponse) VisitTestNotificationChannelResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type TestNotificationChannel403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response TestNotificationChannel403JSONResponse) VisitTestNotificationChannelResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type TestNotificationChannel404JSONResponse struct{ NotFoundJSONResponse }
+
+func (response TestNotificationChannel404JSONResponse) VisitTestNotificationChannelResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type TestNotificationChannel409JSONResponse struct{ ConflictJSONResponse }
+
+func (response TestNotificationChannel409JSONResponse) VisitTestNotificationChannelResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(409)
 	_, err := buf.WriteTo(w)
 	return err
 }
@@ -5463,12 +6354,36 @@ type StrictServerInterface interface {
 
 	// (POST /auth/logout)
 	Logout(ctx context.Context, request LogoutRequestObject) (LogoutResponseObject, error)
+	// Integrations configured for the organisation (tokens are never returned)
+	// (GET /integrations)
+	ListIntegrations(ctx context.Context, request ListIntegrationsRequestObject) (ListIntegrationsResponseObject, error)
+	// Add a named Prometheus or traces integration
+	// (POST /integrations)
+	CreateIntegration(ctx context.Context, request CreateIntegrationRequestObject) (CreateIntegrationResponseObject, error)
+
+	// (DELETE /integrations/{integrationId})
+	DeleteIntegration(ctx context.Context, request DeleteIntegrationRequestObject) (DeleteIntegrationResponseObject, error)
 
 	// (GET /me)
 	GetMe(ctx context.Context, request GetMeRequestObject) (GetMeResponseObject, error)
 
 	// (PUT /me/password)
 	ChangePassword(ctx context.Context, request ChangePasswordRequestObject) (ChangePasswordResponseObject, error)
+	// Notification channels of the organisation (URLs and secrets are never returned)
+	// (GET /notifications/channels)
+	ListNotificationChannels(ctx context.Context, request ListNotificationChannelsRequestObject) (ListNotificationChannelsResponseObject, error)
+	// Add a webhook, Slack or Discord channel
+	// (POST /notifications/channels)
+	CreateNotificationChannel(ctx context.Context, request CreateNotificationChannelRequestObject) (CreateNotificationChannelResponseObject, error)
+
+	// (DELETE /notifications/channels/{channelId})
+	DeleteNotificationChannel(ctx context.Context, request DeleteNotificationChannelRequestObject) (DeleteNotificationChannelResponseObject, error)
+	// The most recent delivery attempts of a channel, newest first
+	// (GET /notifications/channels/{channelId}/deliveries)
+	ListNotificationDeliveries(ctx context.Context, request ListNotificationDeliveriesRequestObject) (ListNotificationDeliveriesResponseObject, error)
+	// Send a test notification now (one attempt, no retries)
+	// (POST /notifications/channels/{channelId}/test)
+	TestNotificationChannel(ctx context.Context, request TestNotificationChannelRequestObject) (TestNotificationChannelResponseObject, error)
 
 	// (GET /projects)
 	ListProjects(ctx context.Context, request ListProjectsRequestObject) (ListProjectsResponseObject, error)
@@ -5850,6 +6765,87 @@ func (sh *strictHandler) Logout(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+// ListIntegrations operation middleware
+func (sh *strictHandler) ListIntegrations(w http.ResponseWriter, r *http.Request) {
+	var request ListIntegrationsRequestObject
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ListIntegrations(ctx, request.(ListIntegrationsRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ListIntegrations")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ListIntegrationsResponseObject); ok {
+		if err := validResponse.VisitListIntegrationsResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// CreateIntegration operation middleware
+func (sh *strictHandler) CreateIntegration(w http.ResponseWriter, r *http.Request) {
+	var request CreateIntegrationRequestObject
+
+	var body CreateIntegrationJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.CreateIntegration(ctx, request.(CreateIntegrationRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "CreateIntegration")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(CreateIntegrationResponseObject); ok {
+		if err := validResponse.VisitCreateIntegrationResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// DeleteIntegration operation middleware
+func (sh *strictHandler) DeleteIntegration(w http.ResponseWriter, r *http.Request, integrationId openapi_types.UUID) {
+	var request DeleteIntegrationRequestObject
+
+	request.IntegrationId = integrationId
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.DeleteIntegration(ctx, request.(DeleteIntegrationRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "DeleteIntegration")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(DeleteIntegrationResponseObject); ok {
+		if err := validResponse.VisitDeleteIntegrationResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
 // GetMe operation middleware
 func (sh *strictHandler) GetMe(w http.ResponseWriter, r *http.Request) {
 	var request GetMeRequestObject
@@ -5898,6 +6894,140 @@ func (sh *strictHandler) ChangePassword(w http.ResponseWriter, r *http.Request) 
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(ChangePasswordResponseObject); ok {
 		if err := validResponse.VisitChangePasswordResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ListNotificationChannels operation middleware
+func (sh *strictHandler) ListNotificationChannels(w http.ResponseWriter, r *http.Request) {
+	var request ListNotificationChannelsRequestObject
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ListNotificationChannels(ctx, request.(ListNotificationChannelsRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ListNotificationChannels")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ListNotificationChannelsResponseObject); ok {
+		if err := validResponse.VisitListNotificationChannelsResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// CreateNotificationChannel operation middleware
+func (sh *strictHandler) CreateNotificationChannel(w http.ResponseWriter, r *http.Request) {
+	var request CreateNotificationChannelRequestObject
+
+	var body CreateNotificationChannelJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.CreateNotificationChannel(ctx, request.(CreateNotificationChannelRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "CreateNotificationChannel")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(CreateNotificationChannelResponseObject); ok {
+		if err := validResponse.VisitCreateNotificationChannelResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// DeleteNotificationChannel operation middleware
+func (sh *strictHandler) DeleteNotificationChannel(w http.ResponseWriter, r *http.Request, channelId ChannelId) {
+	var request DeleteNotificationChannelRequestObject
+
+	request.ChannelId = channelId
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.DeleteNotificationChannel(ctx, request.(DeleteNotificationChannelRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "DeleteNotificationChannel")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(DeleteNotificationChannelResponseObject); ok {
+		if err := validResponse.VisitDeleteNotificationChannelResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ListNotificationDeliveries operation middleware
+func (sh *strictHandler) ListNotificationDeliveries(w http.ResponseWriter, r *http.Request, channelId ChannelId, params ListNotificationDeliveriesParams) {
+	var request ListNotificationDeliveriesRequestObject
+
+	request.ChannelId = channelId
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ListNotificationDeliveries(ctx, request.(ListNotificationDeliveriesRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ListNotificationDeliveries")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ListNotificationDeliveriesResponseObject); ok {
+		if err := validResponse.VisitListNotificationDeliveriesResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// TestNotificationChannel operation middleware
+func (sh *strictHandler) TestNotificationChannel(w http.ResponseWriter, r *http.Request, channelId ChannelId) {
+	var request TestNotificationChannelRequestObject
+
+	request.ChannelId = channelId
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.TestNotificationChannel(ctx, request.(TestNotificationChannelRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "TestNotificationChannel")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(TestNotificationChannelResponseObject); ok {
+		if err := validResponse.VisitTestNotificationChannelResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {
@@ -7110,122 +8240,145 @@ func (sh *strictHandler) ListWorkers(w http.ResponseWriter, r *http.Request) {
 // const string: with thousands of chunks the chained `+` fold is several
 // times slower for the Go compiler than parsing a slice literal.
 var swaggerSpec = []string{
-	"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",
+	"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",
+	"bFHtaKjm1Rgd6ZpJykYdB+vlCWV9/f8BAA==",
 }
 
 // decodeSpec returns the embedded OpenAPI spec as raw JSON bytes,
