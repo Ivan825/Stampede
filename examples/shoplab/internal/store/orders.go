@@ -135,8 +135,8 @@ func reserveAtomic(ctx context.Context, tx pgx.Tx, lines []shop.CartLine) ([]pri
 	for _, l := range lines {
 		pl := pricedLine{CartLine: l}
 		err := tx.QueryRow(ctx, `
-			UPDATE products SET stock = stock - $2, units_sold = units_sold + $2
-			WHERE id = $1 AND stock >= $2
+			UPDATE products SET stock = stock - $2::int, units_sold = units_sold + $2::int
+			WHERE id = $1 AND stock >= $2::int
 			RETURNING name, price_cents, units_sold - units_received`, l.ProductID, l.Qty,
 		).Scan(&pl.name, &pl.priceCents, &pl.oversoldAfter)
 		if errors.Is(err, pgx.ErrNoRows) {
@@ -279,7 +279,7 @@ func (s *Store) Oversold(ctx context.Context) ([]shop.OversoldProduct, error) {
 // with a consistent ledger.
 func (s *Store) ResetLowStock(ctx context.Context) (int64, error) {
 	tag, err := s.pool.Exec(ctx, `
-		UPDATE products SET stock = $2, units_received = units_sold + $2
+		UPDATE products SET stock = $2::int, units_received = units_sold + $2::int
 		WHERE id <= $1`, shop.LowStockProducts, shop.LowStockQty)
 	if err != nil {
 		return 0, fmt.Errorf("reset stock: %w", err)

@@ -231,8 +231,8 @@ func Run(ctx context.Context, pool *pgxpool.Pool, opts Options, log *slog.Logger
 	if err != nil {
 		return st, fmt.Errorf("seed: %w", err)
 	}
-	if _, err := pool.Exec(ctx, "ANALYZE"); err != nil {
-		return st, fmt.Errorf("seed: analyze: %w", err)
+	if _, err := pool.Exec(ctx, "VACUUM (ANALYZE)"); err != nil {
+		return st, fmt.Errorf("seed: vacuum analyze: %w", err)
 	}
 	st.Duration = time.Since(start)
 	return st, nil
