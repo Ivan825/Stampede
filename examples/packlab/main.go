@@ -24,6 +24,7 @@ import (
 	"github.com/Ivan825/Stampede/examples/packlab/apilab"
 	"github.com/Ivan825/Stampede/examples/packlab/authlab"
 	"github.com/Ivan825/Stampede/examples/packlab/chatlab"
+	"github.com/Ivan825/Stampede/examples/packlab/iotlab"
 	"github.com/Ivan825/Stampede/examples/packlab/labkit"
 	"github.com/Ivan825/Stampede/examples/packlab/llmlab"
 	"github.com/Ivan825/Stampede/examples/packlab/saaslab"
@@ -62,6 +63,7 @@ var products = map[string]product{
 	"ticketing":   {pack: "ticketing", addr: ":8094", new: ticketlab.New},
 	"identity":    {pack: "identity", addr: ":8095", new: authlab.New},
 	"public-apis": {pack: "public-apis", addr: ":8096", new: apilab.New},
+	"iot":         {pack: "iot", addr: ":8110", open: iotlab.Open, listen: ":8111", plugins: []string{"mqtt"}},
 }
 
 func names() []string {
