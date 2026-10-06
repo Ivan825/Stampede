@@ -24,8 +24,8 @@ import (
 )
 
 var (
-	accent  = lipgloss.AdaptiveColor{Light: "#E8590C", Dark: "#FF7A2F"}
-	muted   = lipgloss.AdaptiveColor{Light: "#5B6670", Dark: "#8A96A3"}
+	accent  = lipgloss.AdaptiveColor{Light: "#0D9488", Dark: "#14B8A6"}
+	muted   = lipgloss.AdaptiveColor{Light: "#52525B", Dark: "#A1A1AA"}
 	good    = lipgloss.AdaptiveColor{Light: "#17864F", Dark: "#3CCB7F"}
 	bad     = lipgloss.AdaptiveColor{Light: "#D12D2D", Dark: "#FF5C5C"}
 	sTitle  = lipgloss.NewStyle().Bold(true).Foreground(accent)
@@ -35,6 +35,28 @@ var (
 	sBox    = lipgloss.NewStyle().Border(lipgloss.RoundedBorder()).BorderForeground(muted).Padding(0, 1)
 	sBigNum = lipgloss.NewStyle().Bold(true)
 )
+
+// bull is the block-art mark (the same grid as brand/build.py).
+var bull = []string{
+	"█           █",
+	"██         ██",
+	" ███████████",
+	"  █████████",
+	"  ██ ███ ██",
+	"  █████████",
+	"   ███████",
+	"   █ ███ █",
+	"   ███████",
+	"   ██   ██",
+}
+
+// banner draws the bull with the name and version beside it.
+func banner() string {
+	art := lipgloss.NewStyle().Foreground(accent).Render(strings.Join(bull, "\n"))
+	text := sTitle.Render("STAMPEDE") + "\n" + sMuted.Render(version.Version) + "\n\n" +
+		sMuted.Render("Describe your users. Stampede becomes a thousand of them.")
+	return lipgloss.JoinHorizontal(lipgloss.Center, art, "   ", text) + "\n"
+}
 
 // Model is the Bubble Tea model.
 type Model struct {
@@ -88,7 +110,7 @@ func New(c *client.Client) *Model {
 	in.Focus()
 	in.CharLimit = 500
 	m := &Model{c: c, input: in, view: viewport.New(80, 20)}
-	m.say(sTitle.Render("Stampede") + " " + sMuted.Render(version.Version))
+	m.say(banner())
 	if c == nil {
 		m.say("Not signed in to a server, so runs use local files with the built-in engine:")
 		m.say("  /run smoke --file checkout.yaml      or sign in with: stampede login")

@@ -6,18 +6,18 @@
 <title>Stampede report · {{.Scenario}}</title>
 <style>
 :root {
-  --bg: #0F1215; --surface: #161B20; --line: #262E36; --fg: #E8ECEF; --muted: #8A96A3;
-  --accent: #FF7A2F; --pass: #3CCB7F; --fail: #FF5C5C; --warn: #F5B841;
-  --s1: #FF7A2F; --s2: #6CA6FF; --s3: #3CCB7F; --s4: #8A96A3; --s5: #FF5C5C;
+  --bg: #18181B; --surface: #1F1F23; --line: #2E2E33; --fg: #F4F4F5; --muted: #A1A1AA;
+  --accent: #14B8A6; --pass: #4ADE80; --fail: #FF5C5C; --warn: #F5B841;
+  --s1: #14B8A6; --s2: #6CA6FF; --s3: #C084FC; --s4: #A1A1AA; --s5: #FF5C5C;
   --mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
   --sans: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
   color-scheme: dark;
 }
 @media (prefers-color-scheme: light) {
   :root {
-    --bg: #F6F7F8; --surface: #FFFFFF; --line: #DDE2E6; --fg: #12161A; --muted: #5B6670;
-    --accent: #E8590C; --pass: #17864F; --fail: #D12D2D; --warn: #A86A00;
-    --s1: #E8590C; --s2: #2F6FD6; --s3: #17864F; --s4: #5B6670; --s5: #D12D2D;
+    --bg: #FAFAFA; --surface: #FFFFFF; --line: #E4E4E7; --fg: #18181B; --muted: #52525B;
+    --accent: #0D9488; --pass: #15803D; --fail: #D12D2D; --warn: #A86A00;
+    --s1: #0D9488; --s2: #2F6FD6; --s3: #9333EA; --s4: #71717A; --s5: #D12D2D;
     color-scheme: light;
   }
 }
@@ -25,7 +25,7 @@
 body { margin: 0; background: var(--bg); color: var(--fg); font: 15px/1.55 var(--sans); padding: 0 16px 64px; }
 main { max-width: 1080px; margin: 0 auto; }
 header { display: flex; align-items: center; gap: 14px; padding: 28px 0 20px; border-bottom: 1px solid var(--line); flex-wrap: wrap; }
-header svg.mark { width: 34px; height: 32px; flex: none; }
+header svg.mark { width: 39px; height: 30px; flex: none; }
 header h1 { font-size: 22px; margin: 0; font-weight: 650; letter-spacing: -0.01em; }
 header .meta { color: var(--muted); font: 12.5px var(--mono); width: 100%; display: flex; flex-wrap: wrap; gap: 4px 18px; }
 .verdict { margin-left: auto; font: 600 13px var(--mono); letter-spacing: .08em; padding: 6px 12px; border-radius: 999px; border: 1px solid currentColor; }
@@ -64,7 +64,7 @@ footer a { color: var(--accent); }
 <body>
 <main>
 <header>
-  <svg class="mark" viewBox="0 0 68 64" aria-hidden="true"><g fill="currentColor"><polygon points="1,57 8.5,57 14.98,39 7.48,39"/><polygon points="11,57 18.5,57 27.86,31 20.36,31"/><polygon points="21,57 28.5,57 40.74,23 33.24,23"/><polygon points="31,57 38.5,57 53.62,15 46.12,15"/></g><polygon points="41,57 48.5,57 66.5,7 59,7" fill="var(--accent)"/></svg>
+  <svg class="mark" viewBox="0 0 13 10" shape-rendering="crispEdges" aria-hidden="true"><path fill="var(--accent)" d="M0 0h1v1h-1zM12 0h1v1h-1zM0 1h2v1h-2zM11 1h2v1h-2zM1 2h11v1h-11zM2 3h9v1h-9zM2 4h2v1h-2zM5 4h3v1h-3zM9 4h2v1h-2zM2 5h9v1h-9zM3 6h7v1h-7zM3 7h1v1h-1zM5 7h3v1h-3zM9 7h1v1h-1zM3 8h7v1h-7zM3 9h2v1h-2zM8 9h2v1h-2z"/></svg>
   <h1>{{.Scenario}}</h1>
   <span class="verdict {{.Verdict}}">{{verdict .Verdict}}</span>
   <div class="meta">
