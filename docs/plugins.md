@@ -18,6 +18,9 @@ own under [plugins/](../plugins) so the main binary stays lean:
 
 None of them has been run against a production broker, cluster or database
 in this repository's CI; the fakes above are what they are tested against.
+The [iot, event-pipelines, databases and gaming packs](guides/packs.md)
+use them, and run against PackLab apps built on the same fakes (the
+databases pack against PostgreSQL in a service container).
 
 ## Using plugins
 

@@ -104,6 +104,10 @@ packs](packs.md) and ShopLab's scenarios include:
 | Noisy neighbour or tenant | one client or tenant slowing everyone else | `packs/public-apis/stresses/noisy-neighbour.yaml`, `packs/saas/stresses/noisy-tenant.yaml` |
 | Fan-out and reconnect storm | message delivery to a crowded room; every client reconnecting at once | `packs/chat/stresses/fan-out.yaml`, `packs/chat/stresses/reconnect-storm.yaml` |
 | Long context, long streams | first-token time behind long prompts; streams held open for minutes | `packs/llm-apps/stresses/long-context.yaml`, `packs/llm-apps/stresses/long-streams.yaml` |
+| Telemetry burst, device reconnect storm | ingest falling behind a fleet; sign-in and presence under a reconnect wave | `packs/iot/stresses/telemetry-burst.yaml`, `packs/iot/stresses/reconnect-storm.yaml` |
+| Backlog recovery | how large consumer lag grows in a burst and how long it takes to drain | `packs/event-pipelines/stresses/backlog-recovery.yaml` |
+| Connection-pool squeeze, write contention | waiting for a database connection; writes queueing on hot rows | `packs/databases/stresses/connection-pool.yaml`, `packs/databases/stresses/write-contention.yaml` |
+| Matchmaking rush | time to a match as the queue grows | `packs/gaming/stresses/matchmaking-rush.yaml` |
 
 ## Slower networks
 
