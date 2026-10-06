@@ -30,6 +30,7 @@ import (
 	"github.com/Ivan825/Stampede/examples/packlab/labkit"
 	"github.com/Ivan825/Stampede/examples/packlab/llmlab"
 	"github.com/Ivan825/Stampede/examples/packlab/newslab"
+	"github.com/Ivan825/Stampede/examples/packlab/ridelab"
 	"github.com/Ivan825/Stampede/examples/packlab/saaslab"
 	"github.com/Ivan825/Stampede/examples/packlab/sociallab"
 	"github.com/Ivan825/Stampede/examples/packlab/streamlab"
@@ -58,6 +59,7 @@ var products = map[string]product{
 	"streaming":   {pack: "streaming", addr: ":8100", new: streamlab.New},
 	"edtech":      {pack: "edtech", addr: ":8101", new: examlab.New},
 	"government":  {pack: "government", addr: ":8102", new: govlab.New},
+	"delivery":    {pack: "delivery", addr: ":8103", new: ridelab.New},
 }
 
 func names() []string {

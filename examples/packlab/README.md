@@ -20,6 +20,7 @@ and as a single binary in CI. (The e-commerce pack's reference app is
 | `streaming` | [StreamLab](#streamlab) | 8100 | [streaming](../../packs/streaming) |
 | `edtech` | [ExamLab](#examlab) | 8101 | [edtech](../../packs/edtech) |
 | `government` | [GovLab](#govlab) | 8102 | [government](../../packs/government) |
+| `delivery` | [RideLab](#ridelab) | 8103 | [delivery](../../packs/delivery) |
 
 ```sh
 go run ./examples/packlab -product ticketing                # on :8094
@@ -253,3 +254,21 @@ database connections.
 | `index` | Results are found by scanning all 100,000 rows (20ms) on a database connection, so on results day the ten connections run out and notices queue too | `results-day.yaml`: `lookup`, `marksheet` and `notices` p95 |
 | `pdf` | Every marksheet and receipt compresses the 400 KB letterhead image again | `results-day.yaml`: `marksheet` p95 and CPU |
 | `lock` | Every application save takes one portal-wide lock and writes the application and an audit entry (2ms) before letting go, so saves run one at a time | `deadline-day.yaml`: `save section` and `submit` p95 as arrivals climb |
+
+## RideLab
+
+Rides and food delivery in a 15 km square city. 10,000 simulated
+drivers (`d00001` ... `d10000`) circle their neighbourhoods; riders are
+`r0001` ... `r5000`; everyone's password is `ridelab-pass`; 300
+restaurants. A trip is matched half a second after it is requested, to
+the free driver with the shortest ETA among the five closest; trips run
+thirty times faster than real time. ETAs come from a routing service
+that takes 5ms a call plus a shortest-path search over 22,500 road
+blocks. Drivers who stream locations on `/api/drivers/stream` appear on
+the map where their app says.
+
+| Fix | Bottleneck | Where it shows |
+|---|---|---|
+| `dispatch` | Matching calls the routing service for each candidate while holding the fleet lock, so trips are matched one at a time (at most about 30 a second) and the map and location updates wait | `dinner-rush.yaml`: `matched` and `nearby cars` p95 (seconds, against the half-second dispatch delay with the fix) |
+| `geo` | Finding nearby drivers, for the map and for matching, checks the distance to all 10,000 under the fleet lock | `location-flood.yaml`: `nearby cars`, `cancel` and `location ack` p95 |
+| `eta` | Every ETA is a routing call: each price check, each match, and each tracking update to each rider, every second; nothing is cached | `rider-mix.yaml`: CPU, and a routing call a second for every rider following a trip |

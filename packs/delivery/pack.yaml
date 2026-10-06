@@ -1,0 +1,24 @@
+apiVersion: stampede.dev/v1
+kind: Pack
+name: delivery
+title: Food delivery, ride hailing
+description: >
+  On-demand rides and food delivery: riders checking nearby cars and
+  prices, requesting a ride or ordering food, waiting to be matched and
+  following the driver live over a WebSocket until the trip is done, and
+  drivers' apps streaming their locations. Includes a dinner rush and a
+  location flood from a thousand drivers. Built for services shaped like
+  RideLab; adjust paths and message shapes to match yours.
+status: shipped
+protocols: [http, websocket]
+referenceApp: examples/packlab/ridelab
+detect:
+  paths: ["/api/trips", "/api/rides", "/api/drivers", "/api/couriers", "/api/restaurants", "/api/eta", "/api/dispatch", "/api/fares"]
+  openapiTags: [trips, rides, drivers, couriers, restaurants, tracking, dispatch, eta]
+  htmlMeta: []
+  headers: {}
+variables:
+  TARGET_URL: { description: Base URL of the service's API (HTTP; WebSocket paths are joined to it) }
+targets:
+  - errors < 1%
+  - "ride/matched.p95 < 2s"

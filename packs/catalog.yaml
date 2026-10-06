@@ -13,7 +13,7 @@ packs:
   - { name: llm-apps, title: "AI and LLM apps", status: shipped, signature: "Time to first token; tokens per second; long streaming requests", drivers: [sse, http] }
   - { name: edtech, title: "EdTech, exam platforms", status: shipped, signature: "Everyone starts at 10:00; deadline submission rush", drivers: [http, websocket] }
   - { name: government, title: "Government, results portals", status: shipped, signature: "Results-day and deadline-day surges", drivers: [http] }
-  - { name: delivery, title: "Food delivery, ride hailing", status: planned, signature: "Location updates; matching; live tracking", drivers: [http, websocket] }
+  - { name: delivery, title: "Food delivery, ride hailing", status: shipped, signature: "Location updates; matching; live tracking", drivers: [http, websocket] }
   - { name: gaming, title: "Gaming backends", status: planned, signature: "Matchmaking, leaderboards, session servers", drivers: [websocket, udp] }
   - { name: iot, title: "IoT platforms", status: planned, signature: "Huge numbers of connected devices; telemetry ingest", drivers: [mqtt] }
   - { name: public-apis, title: "Public APIs, developer platforms", status: shipped, signature: "Rate limits, API keys, webhook delivery", drivers: [http] }

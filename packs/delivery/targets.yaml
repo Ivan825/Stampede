@@ -1,0 +1,10 @@
+# Default targets for rides and delivery. Being matched quickly is what
+# riders notice most; the map of nearby cars is polled constantly and
+# must stay cheap; a driver's location update must be taken at once.
+# There is no overall p95: waiting on a tracking socket for the trip to
+# finish is a step whose time is the length of the trip.
+targets:
+  - errors < 1%
+  - "ride/matched.p95 < 2s"
+  - "browse/nearby cars.p95 < 200ms"
+  - "shift/location ack.p95 < 100ms"

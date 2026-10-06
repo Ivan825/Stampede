@@ -1,0 +1,102 @@
+# The dinner rush: requests climb from 2/s to 60/s in minutes, rides and
+# food orders together, each followed live until the driver is on the way,
+# while everyone else keeps refreshing the map. Matching must stay quick
+# however many trips are waiting, and the map must not slow down.
+apiVersion: stampede.dev/v1
+kind: Scenario
+metadata:
+  name: delivery-dinner-rush
+  tags: [pack:delivery, spike]
+target:
+  baseURL: ${env.TARGET_URL}
+data:
+  riders: { csv: ../data/riders.csv, mode: random }
+journeys:
+  - name: ride
+    weight: 4
+    steps:
+      - name: sign in
+        post: /api/login
+        json: { id: "${data.riders.riderId}", password: "${data.riders.password}" }
+        check: { status: 200 }
+        extract: { token: "$.token" }
+      - name: price
+        get: /api/eta?from=${data.riders.pickupLat},${data.riders.pickupLng}&to=${data.riders.dropoffLat},${data.riders.dropoffLng}
+        headers: { Authorization: "Bearer ${token}" }
+        check: { status: 200 }
+      - name: request ride
+        post: /api/trips
+        headers: { Authorization: "Bearer ${token}" }
+        json:
+          type: ride
+          pickup: { lat: "${double(data.riders.pickupLat)}", lng: "${double(data.riders.pickupLng)}" }
+          dropoff: { lat: "${double(data.riders.dropoffLat)}", lng: "${double(data.riders.dropoffLng)}" }
+        check: { status: 201 }
+        extract: { trip: "$.tripId" }
+      - name: tracking
+        ws: /api/trips/${trip}/track
+        headers: { Authorization: "Bearer ${token}" }
+        timeout: 5s
+        steps:
+          - name: matched
+            expect: { json: { "$.type": status, "$.status": driver_assigned }, timeout: 30s }
+          - name: driver location
+            expect: { json: { "$.type": driver_location }, timeout: 10s }
+  - name: food
+    weight: 3
+    steps:
+      - name: sign in
+        post: /api/login
+        json: { id: "${data.riders.riderId}", password: "${data.riders.password}" }
+        check: { status: 200 }
+        extract: { token: "$.token" }
+      - name: restaurants
+        get: /api/restaurants?lat=${data.riders.pickupLat}&lng=${data.riders.pickupLng}
+        headers: { Authorization: "Bearer ${token}" }
+        check: { status: 200 }
+        extract: { restaurant: "$.restaurants[0].id" }
+      - name: order
+        post: /api/trips
+        headers: { Authorization: "Bearer ${token}" }
+        json:
+          type: food
+          restaurantId: "${restaurant}"
+          items: [{ id: "${restaurant}-item-1", qty: 1 }]
+          dropoff: { lat: "${double(data.riders.pickupLat)}", lng: "${double(data.riders.pickupLng)}" }
+        check: { status: 201 }
+        extract: { trip: "$.tripId" }
+      - name: tracking
+        ws: /api/trips/${trip}/track
+        headers: { Authorization: "Bearer ${token}" }
+        timeout: 5s
+        steps:
+          - name: matched
+            expect: { json: { "$.type": status, "$.status": driver_assigned }, timeout: 30s }
+          - name: courier location
+            expect: { json: { "$.type": driver_location }, timeout: 10s }
+  - name: map
+    weight: 3
+    steps:
+      - name: sign in
+        post: /api/login
+        json: { id: "${data.riders.riderId}", password: "${data.riders.password}" }
+        check: { status: 200 }
+        extract: { token: "$.token" }
+      - loop: 3
+        steps:
+          - name: nearby cars
+            get: /api/drivers/nearby?lat=${data.riders.pickupLat}&lng=${data.riders.pickupLng}
+            headers: { Authorization: "Bearer ${token}" }
+            check: { status: 200 }
+          - think: 2s
+load:
+  mode: rate
+  stages:
+    - { duration: 1m, target: 2/s }
+    - { duration: 2m, target: 60/s }
+    - { duration: 2m, target: 60/s }
+targets:
+  - "ride/matched.p95 < 2s"
+  - "food/matched.p95 < 2s"
+  - "map/nearby cars.p95 < 200ms"
+  - errors < 1%

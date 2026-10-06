@@ -1,0 +1,43 @@
+# A driver's app on shift: signed in, it keeps a WebSocket open and sends
+# the phone's location every four seconds; each update must be taken at
+# once. The driver shows up on riders' maps where the app says.
+apiVersion: stampede.dev/v1
+kind: Scenario
+metadata:
+  name: delivery-driver-shift
+  description: A driver app streams location updates over a WebSocket.
+  tags: [pack:delivery, websocket]
+target:
+  baseURL: ${env.TARGET_URL}
+data:
+  drivers: { csv: ../data/drivers.csv, mode: random }
+journeys:
+  - name: shift
+    steps:
+      - name: sign in
+        post: /api/login
+        json: { id: "${data.drivers.driverId}", password: "${data.drivers.password}" }
+        check: { status: 200, json: { "$.role": driver } }
+        extract: { token: "$.token" }
+      - name: location stream
+        ws: /api/drivers/stream
+        headers: { Authorization: "Bearer ${token}" }
+        timeout: 5s
+        steps:
+          - loop: 12
+            steps:
+              - send: { type: location, lat: "${double(data.drivers.lat) + randFloat() * 0.004}", lng: "${double(data.drivers.lng) + randFloat() * 0.004}" }
+              - name: location ack
+                expect: { json: { "$.type": ack }, timeout: 5s }
+              - think: 4s
+      - name: on the map
+        get: /api/drivers/nearby?lat=${data.drivers.lat}&lng=${data.drivers.lng}
+        headers: { Authorization: "Bearer ${token}" }
+        check: { status: 200 }
+load:
+  mode: vus
+  vus: 50
+  duration: 3m
+targets:
+  - "shift/location ack.p95 < 100ms"
+  - errors < 1%

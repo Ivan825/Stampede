@@ -1,0 +1,76 @@
+# Shift change: drivers come online until a thousand apps are streaming
+# their location every four seconds, while riders keep checking the map
+# and requesting rides. Every update must be acknowledged quickly, and
+# the map and matching, which read the same locations, must not stall.
+apiVersion: stampede.dev/v1
+kind: Scenario
+metadata:
+  name: delivery-location-flood
+  tags: [pack:delivery, websocket, concurrency]
+target:
+  baseURL: ${env.TARGET_URL}
+data:
+  drivers: { csv: ../data/drivers.csv, mode: random }
+  riders: { csv: ../data/riders.csv, mode: random }
+journeys:
+  - name: driver
+    weight: 8
+    steps:
+      - name: sign in
+        post: /api/login
+        json: { id: "${data.drivers.driverId}", password: "${data.drivers.password}" }
+        check: { status: 200 }
+        extract: { token: "$.token" }
+      - name: location stream
+        ws: /api/drivers/stream
+        headers: { Authorization: "Bearer ${token}" }
+        timeout: 5s
+        steps:
+          - loop: 15
+            steps:
+              - send: { type: location, lat: "${double(data.drivers.lat) + randFloat() * 0.004}", lng: "${double(data.drivers.lng) + randFloat() * 0.004}" }
+              - name: location ack
+                expect: { json: { "$.type": ack }, timeout: 5s }
+              - think: 4s
+  - name: rider
+    weight: 2
+    steps:
+      - name: sign in
+        post: /api/login
+        json: { id: "${data.riders.riderId}", password: "${data.riders.password}" }
+        check: { status: 200 }
+        extract: { token: "$.token" }
+      - name: nearby cars
+        get: /api/drivers/nearby?lat=${data.riders.pickupLat}&lng=${data.riders.pickupLng}
+        headers: { Authorization: "Bearer ${token}" }
+        check: { status: 200 }
+      - name: request ride
+        post: /api/trips
+        headers: { Authorization: "Bearer ${token}" }
+        json:
+          type: ride
+          pickup: { lat: "${double(data.riders.pickupLat)}", lng: "${double(data.riders.pickupLng)}" }
+          dropoff: { lat: "${double(data.riders.dropoffLat)}", lng: "${double(data.riders.dropoffLng)}" }
+        check: { status: 201 }
+        extract: { trip: "$.tripId" }
+      - name: tracking
+        ws: /api/trips/${trip}/track
+        headers: { Authorization: "Bearer ${token}" }
+        timeout: 5s
+        steps:
+          - name: matched
+            expect: { json: { "$.type": status, "$.status": driver_assigned }, timeout: 30s }
+      - name: cancel
+        post: /api/trips/${trip}/cancel
+        headers: { Authorization: "Bearer ${token}" }
+        check: { status: [200, 409] }
+load:
+  mode: vus
+  stages:
+    - { duration: 2m, target: 1000 }
+    - { duration: 3m, target: 1000 }
+targets:
+  - "driver/location ack.p95 < 100ms"
+  - "rider/nearby cars.p95 < 200ms"
+  - "rider/matched.p95 < 2s"
+  - errors < 1%
