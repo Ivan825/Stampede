@@ -25,6 +25,7 @@ import (
 	"github.com/Ivan825/Stampede/examples/packlab/authlab"
 	"github.com/Ivan825/Stampede/examples/packlab/banklab"
 	"github.com/Ivan825/Stampede/examples/packlab/chatlab"
+	"github.com/Ivan825/Stampede/examples/packlab/examlab"
 	"github.com/Ivan825/Stampede/examples/packlab/labkit"
 	"github.com/Ivan825/Stampede/examples/packlab/llmlab"
 	"github.com/Ivan825/Stampede/examples/packlab/newslab"
@@ -54,6 +55,7 @@ var products = map[string]product{
 	"social":      {pack: "social", addr: ":8098", new: sociallab.New},
 	"content":     {pack: "content", addr: ":8099", new: newslab.New},
 	"streaming":   {pack: "streaming", addr: ":8100", new: streamlab.New},
+	"edtech":      {pack: "edtech", addr: ":8101", new: examlab.New},
 }
 
 func names() []string {

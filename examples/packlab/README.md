@@ -18,6 +18,7 @@ and as a single binary in CI. (The e-commerce pack's reference app is
 | `social` | [SocialLab](#sociallab) | 8098 | [social](../../packs/social) |
 | `content` | [NewsLab](#newslab) | 8099 | [content](../../packs/content) |
 | `streaming` | [StreamLab](#streamlab) | 8100 | [streaming](../../packs/streaming) |
+| `edtech` | [ExamLab](#examlab) | 8101 | [edtech](../../packs/edtech) |
 
 ```sh
 go run ./examples/packlab -product ticketing                # on :8094
@@ -216,3 +217,21 @@ three backends (entitlement, DRM license, CDN choice) of 40ms each.
 | `package` | Every segment request packages the segment again, so a thousand live viewers wanting the newest segment do the same work a thousand times | `live-event.yaml`: `newest segment` p95 and CPU |
 | `playlist` | Every live playlist request lists every segment since the event began (thousands, growing by one every two seconds) to find the newest six | `live-event.yaml`: `live playlist` p95, worse the longer the event runs |
 | `startup` | Starting playback calls its three backends one after another (120ms) instead of together (40ms) | `premiere-spike.yaml` and `vod-mix.yaml`: `play` p95 |
+
+## ExamLab
+
+A learning platform. Students `s00001` ... `s05000` (password
+`examlab-pass`), ten courses (`C101` ...), each with a 40-question,
+60-minute exam (`EX-101` ...) drawn from a 2,000-question bank and an
+essay assignment (`A-101` ...) due an hour after start-up. Answers are
+saved one at a time; the live channel `/api/exams/{id}/live?attempt=`
+sends the timer every 30 seconds, acknowledges heartbeats and relays
+announcements staff post with the bearer token `examlab-staff`.
+Submissions are fingerprinted (winnowed 8-grams) and scored for
+similarity. Writing an attempt costs 5ms.
+
+| Fix | Bottleneck | Where it shows |
+|---|---|---|
+| `start` | Starting an attempt shuffles the question bank and writes the attempt while holding the exam's one lock, so at 10:00 students start one at a time (at most 200 a second) | `exam-start.yaml`: `start attempt` p95 (seconds, against a few milliseconds with the fix) |
+| `autosave` | Every saved answer goes into one log for all attempts, and each save and status read scans the whole log (200ns a row) to find the attempt's answers | `exam-start.yaml` and `take-exam.yaml`: `save answer` p95, rising as answers pile up |
+| `similarity` | Each submission is compared with every earlier one under the assignment's lock, so the rush slows down submission by submission and blocks reading the assignment | `deadline-rush.yaml`: `submit work` and `assignment` p95 |

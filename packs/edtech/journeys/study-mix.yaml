@@ -1,0 +1,100 @@
+# An ordinary day on a learning platform: students browse their courses,
+# take a short practice quiz (each answer saved as it is given, then
+# submitted for a score), hand in an assignment, or check a deadline.
+apiVersion: stampede.dev/v1
+kind: Scenario
+metadata:
+  name: edtech-study-mix
+  description: Weighted course browsing, practice quiz, assignment submission and deadline journeys.
+  tags: [pack:edtech]
+target:
+  baseURL: ${env.TARGET_URL}
+data:
+  students: { csv: ../data/students.csv, mode: random }
+journeys:
+  - name: browse
+    weight: 40
+    steps:
+      - name: sign in
+        post: /api/login
+        json: { studentId: "${data.students.studentId}", password: "${data.students.password}" }
+        check: { status: 200, json: { "$.token": exists } }
+        extract: { token: "$.token" }
+      - name: courses
+        get: /api/courses
+        headers: { Authorization: "Bearer ${token}" }
+        check: { status: 200, json: { "$.courses[0].id": exists } }
+      - think: 2s..6s
+      - name: course
+        get: /api/courses/C${rand(101, 110)}
+        headers: { Authorization: "Bearer ${token}" }
+        check: { status: 200, json: { "$.materials[0]": exists } }
+  - name: quiz
+    weight: 35
+    steps:
+      - name: sign in
+        post: /api/login
+        json: { studentId: "${data.students.studentId}", password: "${data.students.password}" }
+        check: { status: 200 }
+        extract: { token: "$.token" }
+      - name: start attempt
+        post: /api/exams/EX-${rand(101, 110)}/attempts
+        headers: { Authorization: "Bearer ${token}" }
+        check: { status: 201, json: { "$.attemptId": exists } }
+        extract: { attempt: "$.attemptId" }
+      - loop: 5
+        steps:
+          - name: question
+            get: /api/attempts/${attempt}/questions/${rand(1, 40)}
+            headers: { Authorization: "Bearer ${token}" }
+            check: { status: 200, json: { "$.choices[3]": exists } }
+            extract: { n: "$.n" }
+          - think: 3s..8s
+          - name: save answer
+            put: /api/attempts/${attempt}/answers/${n}
+            headers: { Authorization: "Bearer ${token}" }
+            json: { choice: "${rand(0, 3)}" }
+            check: { status: 200, json: { "$.saved": true } }
+      - name: submit
+        post: /api/attempts/${attempt}/submit
+        headers: { Authorization: "Bearer ${token}" }
+        check: { status: 200, json: { "$.score": exists } }
+  - name: assignment
+    weight: 15
+    steps:
+      - name: sign in
+        post: /api/login
+        json: { studentId: "${data.students.studentId}", password: "${data.students.password}" }
+        check: { status: 200 }
+        extract: { token: "$.token" }
+      - name: assignment
+        get: /api/assignments/A-${rand(101, 110)}
+        headers: { Authorization: "Bearer ${token}" }
+        check: { status: 200, json: { "$.assignment.dueAt": exists } }
+        extract: { assignment: "$.assignment.id" }
+      - think: 5s..15s
+      - name: submit work
+        post: /api/assignments/${assignment}/submissions
+        headers: { Authorization: "Bearer ${token}" }
+        json: { text: "My essay for ${assignment}. ${randString(2000)}" }
+        check: { status: 201, json: { "$.similarity": exists } }
+  - name: deadlines
+    weight: 10
+    steps:
+      - name: sign in
+        post: /api/login
+        json: { studentId: "${data.students.studentId}", password: "${data.students.password}" }
+        check: { status: 200 }
+        extract: { token: "$.token" }
+      - name: assignment
+        get: /api/assignments/A-${rand(101, 110)}
+        headers: { Authorization: "Bearer ${token}" }
+        check: { status: 200 }
+load:
+  mode: rate
+  rate: 10/s
+  duration: 5m
+targets:
+  - http.p95 < 500ms
+  - errors < 1%
+  - "quiz/save answer.p95 < 300ms"

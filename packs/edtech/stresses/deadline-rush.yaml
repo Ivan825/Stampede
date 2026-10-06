@@ -1,0 +1,45 @@
+# The hour before a deadline: submissions climb from a trickle to 80 a
+# second as everyone hands in at the last minute, each essay checked for
+# similarity against the others. Every submission must be accepted
+# quickly and confirmed; the last ones must not be slower than the first.
+apiVersion: stampede.dev/v1
+kind: Scenario
+metadata:
+  name: edtech-deadline-rush
+  tags: [pack:edtech, ramp]
+target:
+  baseURL: ${env.TARGET_URL}
+data:
+  students: { csv: ../data/students.csv, mode: random }
+vars:
+  assignment: A-101
+journeys:
+  - name: hand-in
+    steps:
+      - name: sign in
+        post: /api/login
+        json: { studentId: "${data.students.studentId}", password: "${data.students.password}" }
+        check: { status: 200 }
+        extract: { token: "$.token" }
+      - name: assignment
+        get: /api/assignments/${vars.assignment}
+        headers: { Authorization: "Bearer ${token}" }
+        check: { status: 200 }
+      - name: submit work
+        post: /api/assignments/${vars.assignment}/submissions
+        headers: { Authorization: "Bearer ${token}" }
+        json: { text: "Essay for ${vars.assignment}, final version. ${randString(3000)}" }
+        check: { status: 201, json: { "$.submissionId": exists } }
+      - name: confirmation
+        get: /api/assignments/${vars.assignment}
+        headers: { Authorization: "Bearer ${token}" }
+        check: { status: 200, expr: "json.yourSubmissions >= 1" }
+load:
+  mode: rate
+  stages:
+    - { duration: 1m, target: 5/s }
+    - { duration: 3m, target: 80/s }
+    - { duration: 1m, target: 80/s }
+targets:
+  - "hand-in/submit work.p95 < 1s"
+  - errors < 1%

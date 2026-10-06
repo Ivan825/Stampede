@@ -1,0 +1,60 @@
+# Everyone starts at 10:00. A quiet minute, then thousands of students
+# sign in, start the same exam, open its live channel and read the first
+# questions within the same few seconds. Starting must not queue, and
+# the first answers must save quickly.
+apiVersion: stampede.dev/v1
+kind: Scenario
+metadata:
+  name: edtech-exam-start
+  tags: [pack:edtech, spike]
+target:
+  baseURL: ${env.TARGET_URL}
+data:
+  students: { csv: ../data/students.csv, mode: random }
+vars:
+  exam: EX-101
+journeys:
+  - name: exam-start
+    steps:
+      - name: sign in
+        post: /api/login
+        json: { studentId: "${data.students.studentId}", password: "${data.students.password}" }
+        check: { status: 200 }
+        extract: { token: "$.token" }
+      - name: start attempt
+        post: /api/exams/${vars.exam}/attempts
+        headers: { Authorization: "Bearer ${token}" }
+        check: { status: 201 }
+        extract: { attempt: "$.attemptId" }
+      - name: live channel
+        ws: /api/exams/${vars.exam}/live?attempt=${attempt}
+        headers: { Authorization: "Bearer ${token}" }
+        timeout: 10s
+        steps:
+          - name: timer
+            expect: { json: { "$.type": timer }, timeout: 10s }
+          - loop: 3
+            steps:
+              - name: question
+                get: /api/attempts/${attempt}/questions/${rand(1, 40)}
+                headers: { Authorization: "Bearer ${token}" }
+                check: { status: 200 }
+                extract: { n: "$.n" }
+              - think: 5s..15s
+              - name: save answer
+                put: /api/attempts/${attempt}/answers/${n}
+                headers: { Authorization: "Bearer ${token}" }
+                json: { choice: "${rand(0, 3)}" }
+                check: { status: 200 }
+load:
+  mode: rate
+  stages:
+    - { duration: 1m, target: 2/s }
+    - { duration: 10s, target: 300/s }
+    - { duration: 1m, target: 300/s }
+    - { duration: 30s, target: 5/s }
+targets:
+  - "exam-start/start attempt.p95 < 1s"
+  - "exam-start/question.p95 < 300ms"
+  - "exam-start/save answer.p95 < 300ms"
+  - errors < 1%
