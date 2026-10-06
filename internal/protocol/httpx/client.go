@@ -15,6 +15,7 @@ import (
 	"net/http/httptrace"
 	"os"
 	"strings"
+	"sync"
 	"syscall"
 	"time"
 
@@ -121,7 +122,9 @@ type Result struct {
 	Reused   bool
 	Err      error
 
-	// wrote and firstByte are trace timestamps used by Finish.
+	// trace receives httptrace callbacks; wrote and firstByte are its
+	// timestamps, used by Finish.
+	trace            *traceState
 	wrote, firstByte time.Time
 }
 
@@ -161,34 +164,11 @@ func Do(c *http.Client, req *http.Request, bodyLen int64, keepBody bool, maxBody
 // transport error the response is nil and the Result is complete.
 func Open(c *http.Client, req *http.Request, bodyLen int64) (*Result, *http.Response) {
 	r := &Result{}
-	var dnsStart, connStart, tlsStart time.Time
-	trace := &httptrace.ClientTrace{
-		DNSStart: func(httptrace.DNSStartInfo) { dnsStart = time.Now() },
-		DNSDone: func(httptrace.DNSDoneInfo) {
-			if !dnsStart.IsZero() {
-				r.Phases[metrics.PhaseDNS] += time.Since(dnsStart)
-			}
-		},
-		ConnectStart: func(string, string) { connStart = time.Now() },
-		ConnectDone: func(string, string, error) {
-			if !connStart.IsZero() {
-				r.Phases[metrics.PhaseConnect] += time.Since(connStart)
-			}
-		},
-		TLSHandshakeStart: func() { tlsStart = time.Now() },
-		TLSHandshakeDone: func(tls.ConnectionState, error) {
-			if !tlsStart.IsZero() {
-				r.Phases[metrics.PhaseTLS] += time.Since(tlsStart)
-			}
-		},
-		GotConn:              func(info httptrace.GotConnInfo) { r.Reused = info.Reused },
-		WroteRequest:         func(httptrace.WroteRequestInfo) { r.wrote = time.Now() },
-		GotFirstResponseByte: func() { r.firstByte = time.Now() },
-	}
-	req = req.WithContext(httptrace.WithClientTrace(req.Context(), trace))
+	req = req.WithContext(Trace(req.Context(), r))
 
 	r.Start = time.Now()
 	resp, err := c.Do(req)
+	r.collect()
 	if err != nil {
 		r.End = time.Now()
 		r.Err = err
@@ -203,10 +183,83 @@ func Open(c *http.Client, req *http.Request, bodyLen int64) (*Result, *http.Resp
 	return r, resp
 }
 
+// Trace returns a context that records the phases of the HTTP exchange
+// made with it into r. Drivers whose library sends the request itself,
+// such as a WebSocket handshake, use it to get the same phase timings,
+// then call Finish.
+func Trace(ctx context.Context, r *Result) context.Context {
+	t := &traceState{}
+	r.trace = t
+	var dnsStart, connStart, tlsStart time.Time
+	return httptrace.WithClientTrace(ctx, &httptrace.ClientTrace{
+		DNSStart:          func(httptrace.DNSStartInfo) { t.mark(&dnsStart) },
+		DNSDone:           func(httptrace.DNSDoneInfo) { t.since(metrics.PhaseDNS, &dnsStart) },
+		ConnectStart:      func(string, string) { t.mark(&connStart) },
+		ConnectDone:       func(string, string, error) { t.since(metrics.PhaseConnect, &connStart) },
+		TLSHandshakeStart: func() { t.mark(&tlsStart) },
+		TLSHandshakeDone:  func(tls.ConnectionState, error) { t.since(metrics.PhaseTLS, &tlsStart) },
+		GotConn: func(info httptrace.GotConnInfo) {
+			t.mu.Lock()
+			t.reused = info.Reused
+			t.mu.Unlock()
+		},
+		WroteRequest:         func(httptrace.WroteRequestInfo) { t.mark(&t.wrote) },
+		GotFirstResponseByte: func() { t.mark(&t.firstByte) },
+	})
+}
+
+// traceState collects httptrace callbacks. net/http may run dial
+// callbacks on its own goroutine, and may finish a dial after the request
+// was served by another connection, so the state is locked and stops
+// accepting callbacks once the exchange has its response.
+type traceState struct {
+	mu               sync.Mutex
+	closed           bool
+	phases           [metrics.NumPhases]time.Duration
+	wrote, firstByte time.Time
+	reused           bool
+}
+
+func (t *traceState) mark(at *time.Time) {
+	t.mu.Lock()
+	if !t.closed {
+		*at = time.Now()
+	}
+	t.mu.Unlock()
+}
+
+func (t *traceState) since(p metrics.Phase, start *time.Time) {
+	t.mu.Lock()
+	if !t.closed && !start.IsZero() {
+		t.phases[p] += time.Since(*start)
+	}
+	t.mu.Unlock()
+}
+
+// collect copies the traced timings into r once; later callbacks belong
+// to a connection this exchange did not use and are ignored.
+func (r *Result) collect() {
+	t := r.trace
+	if t == nil {
+		return
+	}
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	if t.closed {
+		return
+	}
+	t.closed = true
+	for i, d := range t.phases {
+		r.Phases[i] += d
+	}
+	r.wrote, r.firstByte, r.Reused = t.wrote, t.firstByte, t.reused
+}
+
 // Finish ends an exchange started by Open: bodyBytes were read from the
 // response body and err is the error that stopped reading, if any.
 func (r *Result) Finish(bodyBytes int64, err error) {
 	r.End = time.Now()
+	r.collect()
 	r.BytesIn += bodyBytes
 	if err != nil {
 		r.Err = err
