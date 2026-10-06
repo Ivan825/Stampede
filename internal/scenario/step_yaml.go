@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"reflect"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -17,12 +18,24 @@ var httpMethods = map[string]string{
 	"delete": "DELETE", "head": "HEAD", "options": "OPTIONS",
 }
 
-var kindKeys = []string{"think", "branch", "loop", "while", "group", "script"}
+// kindKeys are the step keys that name a step kind, besides HTTP methods,
+// in the order they are listed in error messages.
+var kindKeys = []string{"think", "branch", "loop", "while", "group", "script", "graphql"}
 
-// requestOnlyKeys may only appear on request steps.
-var requestOnlyKeys = map[string]bool{
-	"headers": true, "query": true, "json": true, "body": true, "form": true,
-	"check": true, "extract": true, "timeout": true,
+// requestKeys are the HTTP request parts shared by request-like steps.
+var requestKeys = []string{"headers", "query", "json", "body", "form", "check", "extract", "timeout"}
+
+// stepKeys lists the keys each kind of step accepts besides its own key,
+// name and if. HTTP methods share the "request" entry.
+var stepKeys = map[string][]string{
+	"request": requestKeys,
+	"think":   nil,
+	"branch":  nil,
+	"script":  nil,
+	"loop":    {"steps"},
+	"while":   {"steps", "max"},
+	"group":   {"steps"},
+	"graphql": {"query", "variables", "operationName", "persisted", "headers", "check", "extract", "timeout"},
 }
 
 // UnmarshalYAML reads the compact step syntax, for example
@@ -57,12 +70,15 @@ func (s *Step) UnmarshalYAML(n *yaml.Node) error {
 	sort.Strings(kinds)
 	switch len(kinds) {
 	case 0:
-		return fmt.Errorf("line %d: step needs one of get, post, put, patch, delete, head, options, think, branch, loop, while, group or script", n.Line)
+		return fmt.Errorf("line %d: step needs one of get, post, put, patch, delete, head, options, %s", n.Line, strings.Join(kindKeys, ", "))
 	case 1:
 	default:
 		return fmt.Errorf("line %d: step has more than one action (%s); split it into separate steps", n.Line, strings.Join(kinds, ", "))
 	}
 	kind := kinds[0]
+	if err := checkStepKeys(n, kind); err != nil {
+		return err
+	}
 
 	out := Step{}
 	if v, ok := fields["name"]; ok {
@@ -79,15 +95,10 @@ func (s *Step) UnmarshalYAML(n *yaml.Node) error {
 			return err
 		}
 		out.Request = r
-	} else {
-		for k, v := range fields {
-			if requestOnlyKeys[k] {
-				return fmt.Errorf("line %d: %q only applies to request steps, not %s", v.Line, k, kind)
-			}
-		}
+		*s = out
+		return nil
 	}
 
-	allowed := map[string]bool{"name": true, "if": true, kind: true}
 	switch kind {
 	case "think":
 		out.Kind = StepThink
@@ -103,7 +114,6 @@ func (s *Step) UnmarshalYAML(n *yaml.Node) error {
 		}
 	case "loop":
 		out.Kind = StepLoop
-		allowed["steps"] = true
 		c, err := strconv.Atoi(fields["loop"].Value)
 		if err != nil || c < 1 {
 			return fmt.Errorf("line %d: loop takes a positive count, for example loop: 3", fields["loop"].Line)
@@ -115,7 +125,6 @@ func (s *Step) UnmarshalYAML(n *yaml.Node) error {
 		out.Loop = l
 	case "while":
 		out.Kind = StepWhile
-		allowed["steps"], allowed["max"] = true, true
 		l := &Loop{Cond: fields["while"].Value, Max: 1000}
 		if v, ok := fields["max"]; ok {
 			m, err := strconv.Atoi(v.Value)
@@ -130,7 +139,6 @@ func (s *Step) UnmarshalYAML(n *yaml.Node) error {
 		out.Loop = l
 	case "group":
 		out.Kind = StepGroup
-		allowed["steps"] = true
 		g := &Group{Name: fields["group"].Value}
 		if err := decodeSteps(fields, &g.Steps); err != nil {
 			return err
@@ -139,18 +147,41 @@ func (s *Step) UnmarshalYAML(n *yaml.Node) error {
 	case "script":
 		out.Kind = StepScript
 		out.Script = fields["script"].Value
-	default:
-		for k := range requestOnlyKeys {
-			allowed[k] = true
+	case "graphql":
+		out.Kind = StepGraphQL
+		g, err := decodeGraphQL(fields)
+		if err != nil {
+			return err
 		}
-	}
-
-	for k, v := range fields {
-		if !allowed[k] {
-			return fmt.Errorf("line %d: unknown key %q in %s step", v.Line, k, kind)
-		}
+		out.GraphQL = g
 	}
 	*s = out
+	return nil
+}
+
+// checkStepKeys rejects keys the step's kind does not accept, naming the
+// line. A key that belongs to another kind gets a more helpful message.
+func checkStepKeys(n *yaml.Node, kind string) error {
+	entry := kind
+	if _, ok := httpMethods[kind]; ok {
+		entry = "request"
+	}
+	allowed := map[string]bool{"name": true, "if": true, kind: true}
+	for _, k := range stepKeys[entry] {
+		allowed[k] = true
+	}
+	for i := 0; i+1 < len(n.Content); i += 2 {
+		k := n.Content[i]
+		if allowed[k.Value] {
+			continue
+		}
+		for other, keys := range stepKeys {
+			if other != entry && slices.Contains(keys, k.Value) {
+				return fmt.Errorf("line %d: %q does not apply to %s steps", k.Line, k.Value, kind)
+			}
+		}
+		return fmt.Errorf("line %d: unknown key %q in %s step", k.Line, k.Value, kind)
+	}
 	return nil
 }
 
@@ -163,11 +194,6 @@ func decodeSteps(fields map[string]*yaml.Node, dst *[]Step) error {
 }
 
 func decodeRequest(r *Request, f map[string]*yaml.Node) error {
-	if v, ok := f["headers"]; ok {
-		if err := v.Decode(&r.Headers); err != nil {
-			return err
-		}
-	}
 	if v, ok := f["query"]; ok {
 		if err := v.Decode(&r.Query); err != nil {
 			return err
@@ -195,6 +221,17 @@ func decodeRequest(r *Request, f map[string]*yaml.Node) error {
 	if bodies > 1 {
 		return fmt.Errorf("request to %s sets more than one of json, body and form", r.URL)
 	}
+	return decodeExchange(r, f)
+}
+
+// decodeExchange reads the parts every request-like step shares:
+// headers, check, extract and timeout.
+func decodeExchange(r *Request, f map[string]*yaml.Node) error {
+	if v, ok := f["headers"]; ok {
+		if err := v.Decode(&r.Headers); err != nil {
+			return err
+		}
+	}
 	if v, ok := f["check"]; ok {
 		r.Check = &Check{}
 		if err := decodeStrict(v, "check", r.Check); err != nil {
@@ -212,6 +249,46 @@ func decodeRequest(r *Request, f map[string]*yaml.Node) error {
 		}
 	}
 	return nil
+}
+
+func decodeGraphQL(f map[string]*yaml.Node) (*GraphQL, error) {
+	g := &GraphQL{Request: Request{Method: "POST", URL: f["graphql"].Value}}
+	if err := decodeExchange(&g.Request, f); err != nil {
+		return nil, err
+	}
+	if v, ok := f["query"]; ok {
+		g.Query = v.Value
+	}
+	if v, ok := f["operationName"]; ok {
+		g.OperationName = v.Value
+	}
+	if v, ok := f["variables"]; ok {
+		var vars any
+		if err := v.Decode(&vars); err != nil {
+			return nil, err
+		}
+		g.Variables = normalizeYAML(vars)
+	}
+	if v, ok := f["persisted"]; ok {
+		switch {
+		case v.Kind == yaml.ScalarNode && v.Tag == "!!bool":
+			var on bool
+			if err := v.Decode(&on); err != nil {
+				return nil, err
+			}
+			if on {
+				g.Persisted = &Persisted{}
+			}
+		case v.Kind == yaml.MappingNode:
+			g.Persisted = &Persisted{}
+			if err := decodeStrict(v, "persisted", g.Persisted); err != nil {
+				return nil, err
+			}
+		default:
+			return nil, fmt.Errorf("line %d: persisted takes true or {sha256: <hex>}", v.Line)
+		}
+	}
+	return g, nil
 }
 
 // decodeStrict decodes a mapping into the struct v, rejecting keys that
@@ -292,9 +369,7 @@ func (s Step) toMap() map[string]any {
 	case StepRequest:
 		r := s.Request
 		m[strings.ToLower(r.Method)] = r.URL
-		if len(r.Headers) > 0 {
-			m["headers"] = r.Headers
-		}
+		exchangeToMap(m, r)
 		if len(r.Query) > 0 {
 			m["query"] = r.Query
 		}
@@ -306,15 +381,6 @@ func (s Step) toMap() map[string]any {
 		}
 		if len(r.Form) > 0 {
 			m["form"] = r.Form
-		}
-		if r.Check != nil {
-			m["check"] = r.Check
-		}
-		if len(r.Extract) > 0 {
-			m["extract"] = r.Extract
-		}
-		if r.Timeout > 0 {
-			m["timeout"] = r.Timeout
 		}
 	case StepThink:
 		m["think"] = *s.Think
@@ -332,8 +398,44 @@ func (s Step) toMap() map[string]any {
 		m["steps"] = s.Group.Steps
 	case StepScript:
 		m["script"] = s.Script
+	case StepGraphQL:
+		g := s.GraphQL
+		m["graphql"] = g.URL
+		if g.Query != "" {
+			m["query"] = g.Query
+		}
+		if g.Variables != nil {
+			m["variables"] = g.Variables
+		}
+		if g.OperationName != "" {
+			m["operationName"] = g.OperationName
+		}
+		if g.Persisted != nil {
+			if g.Persisted.SHA256 != "" {
+				m["persisted"] = g.Persisted
+			} else {
+				m["persisted"] = true
+			}
+		}
+		exchangeToMap(m, &g.Request)
 	}
 	return m
+}
+
+// exchangeToMap renders the parts every request-like step shares.
+func exchangeToMap(m map[string]any, r *Request) {
+	if len(r.Headers) > 0 {
+		m["headers"] = r.Headers
+	}
+	if r.Check != nil {
+		m["check"] = r.Check
+	}
+	if len(r.Extract) > 0 {
+		m["extract"] = r.Extract
+	}
+	if r.Timeout > 0 {
+		m["timeout"] = r.Timeout
+	}
 }
 
 func (s Step) MarshalYAML() (any, error) { return s.toMap(), nil }

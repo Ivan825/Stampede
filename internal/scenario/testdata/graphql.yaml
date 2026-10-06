@@ -1,0 +1,31 @@
+apiVersion: stampede.dev/v1
+kind: Scenario
+metadata:
+  name: graphql-storefront
+target:
+  baseURL: ${env.TARGET_URL}
+  http: { h2c: true }
+journeys:
+  - name: product-page
+    steps:
+      - name: product
+        graphql: /graphql
+        query: |
+          query Product($id: ID!) {
+            product(id: $id) { id name price }
+          }
+        variables: { id: "p-${rand(1, 500)}" }
+        operationName: Product
+        persisted: true
+        check:
+          json: { "$.data.product.id": exists }
+        extract: { name: "$.data.product.name" }
+      - graphql: /graphql
+        query: "query Search($q: String!) { search(q: $q) { id } }"
+        variables: { q: "${name}" }
+        check: { allowErrors: true, maxLatency: 2s }
+      - graphql: /graphql
+        persisted: { sha256: 0f5e4a7c9d3b2a1f0e8d7c6b5a49382716f5e4d3c2b1a0f9e8d7c6b5a4938271 }
+load: { vus: 5, duration: 30s }
+targets:
+  - product-page/product.p95 < 300ms

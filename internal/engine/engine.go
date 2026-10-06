@@ -246,6 +246,14 @@ func walkCompiled(steps []*scenario.CStep, fn func(string)) {
 				fn(r.JSON.Source())
 			}
 		}
+		if g := st.GraphQL; g != nil {
+			if g.Query != nil {
+				fn(g.Query.String())
+			}
+			if g.Variables != nil {
+				fn(g.Variables.Source())
+			}
+		}
 		if st.Loop != nil && st.Loop.Cond != nil {
 			fn(st.Loop.Cond.String())
 		}
