@@ -202,7 +202,7 @@ journeys:
     steps:
       - ws: /hold
         steps:
-          - think: 1500ms
+          - think: 3s
           - send: bye
 load: {iterations: %d, vus: %d, gracefulStop: 30s}`, srv.URL, n, n), nil)
 	tot := out.total.Totals()
