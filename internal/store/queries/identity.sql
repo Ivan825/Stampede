@@ -7,6 +7,9 @@ INSERT INTO orgs (id, name) VALUES ($1, $2);
 -- name: GetOrg :one
 SELECT * FROM orgs WHERE id = $1;
 
+-- name: FirstOrg :one
+SELECT * FROM orgs ORDER BY created_at, id LIMIT 1;
+
 -- name: CreateUser :exec
 INSERT INTO users (id, email, name, password_hash) VALUES ($1, $2, $3, $4);
 

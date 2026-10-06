@@ -56,6 +56,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/auth/config": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** How people can sign in (public) */
+        get: operations["getAuthConfig"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/auth/logout": {
         parameters: {
             query?: never;
@@ -1420,6 +1437,17 @@ export interface components {
             /** Format: int64 */
             outputTokens: number;
         };
+        AuthConfig: {
+            /** @description Email and password sign-in is available. */
+            password: boolean;
+            /** @description Set when single sign-on is configured. */
+            sso?: {
+                /** @description Label for the sign-in button. */
+                name: string;
+                /** @description Start sign-in here (a browser navigation, not a fetch); add ?next=/path to return there. */
+                loginURL: string;
+            };
+        };
         NarrativeCreate: {
             /**
              * Format: uuid
@@ -1793,6 +1821,26 @@ export interface operations {
             };
             401: components["responses"]["Unauthorized"];
             429: components["responses"]["TooMany"];
+        };
+    };
+    getAuthConfig: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The sign-in methods this server offers */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AuthConfig"];
+                };
+            };
         };
     };
     logout: {

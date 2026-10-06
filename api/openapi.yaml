@@ -90,6 +90,19 @@ paths:
         "401": { $ref: "#/components/responses/Unauthorized" }
         "429": { $ref: "#/components/responses/TooMany" }
 
+  /auth/config:
+    get:
+      tags: [auth]
+      operationId: getAuthConfig
+      summary: How people can sign in (public)
+      security: []
+      responses:
+        "200":
+          description: The sign-in methods this server offers
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AuthConfig" }
+
   /auth/logout:
     post:
       tags: [auth]
@@ -1771,6 +1784,19 @@ components:
       properties:
         inputTokens: { type: integer, format: int64 }
         outputTokens: { type: integer, format: int64 }
+
+    AuthConfig:
+      type: object
+      required: [password]
+      properties:
+        password: { type: boolean, description: Email and password sign-in is available. }
+        sso:
+          type: object
+          required: [name, loginURL]
+          description: Set when single sign-on is configured.
+          properties:
+            name: { type: string, description: Label for the sign-in button. }
+            loginURL: { type: string, description: "Start sign-in here (a browser navigation, not a fetch); add ?next=/path to return there." }
 
     NarrativeCreate:
       type: object

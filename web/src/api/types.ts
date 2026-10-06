@@ -9,6 +9,7 @@ export type SetupRequest = S['SetupRequest'];
 export type LoginRequest = S['LoginRequest'];
 export type Session = S['Session'];
 export type Me = S['Me'];
+export type AuthConfig = S['AuthConfig'];
 export type User = S['User'];
 export type UserCreate = S['UserCreate'];
 export type Token = S['Token'];

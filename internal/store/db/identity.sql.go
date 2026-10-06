@@ -194,6 +194,17 @@ func (q *Queries) DeleteUserSessions(ctx context.Context, userID uuid.UUID) erro
 	return err
 }
 
+const firstOrg = `-- name: FirstOrg :one
+SELECT id, name, created_at FROM orgs ORDER BY created_at, id LIMIT 1
+`
+
+func (q *Queries) FirstOrg(ctx context.Context) (Org, error) {
+	row := q.db.QueryRow(ctx, firstOrg)
+	var i Org
+	err := row.Scan(&i.ID, &i.Name, &i.CreatedAt)
+	return i, err
+}
+
 const getMember = `-- name: GetMember :one
 SELECT u.id, u.email, u.name, u.created_at, u.last_login_at, m.role
 FROM memberships m JOIN users u ON u.id = m.user_id

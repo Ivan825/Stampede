@@ -93,6 +93,15 @@ export function useMe(): Me {
   return data;
 }
 
+/** How people can sign in; public, so the sign-in page can ask. */
+export function useAuthConfig() {
+  return useQuery({
+    queryKey: ['auth', 'config'],
+    queryFn: () => unwrap(api.GET('/auth/config')),
+    staleTime: 5 * 60_000,
+  });
+}
+
 export function useLogin() {
   const qc = useQueryClient();
   return useMutation({

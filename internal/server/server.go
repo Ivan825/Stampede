@@ -60,6 +60,8 @@ type Config struct {
 	AI AIConfig
 	// Notify configures run notifications (see notifications.go).
 	Notify NotifyConfig
+	// OIDC turns on single sign-on (see oidc.go).
+	OIDC *OIDCConfig
 	// SchedulerInterval is how often StartScheduler looks for due
 	// schedules (default 15s).
 	SchedulerInterval time.Duration
@@ -68,6 +70,7 @@ type Config struct {
 // Server is the control plane.
 type Server struct {
 	cfg       Config
+	oidc      *oidcSSO
 	st        *store.Store
 	log       *slog.Logger
 	runs      *runManager
@@ -114,6 +117,30 @@ func New(cfg Config) (*Server, error) {
 	s.runs = newRunManager(s)
 	s.ai = newAIManager(s)
 	s.notify = newNotifier(s)
+	if o := cfg.OIDC; o != nil {
+		if o.Issuer == "" || o.ClientID == "" {
+			return nil, errors.New("OIDC needs an issuer and a client ID")
+		}
+		if o.Name == "" {
+			o.Name = "SSO"
+		}
+		if o.RedirectURL == "" {
+			if cfg.Notify.PublicURL == "" {
+				return nil, errors.New("OIDC needs the server's public URL (--public-url) or an explicit redirect URL")
+			}
+			o.RedirectURL = strings.TrimRight(cfg.Notify.PublicURL, "/") + "/api/v1/auth/oidc/callback"
+		}
+		if o.DefaultRole != "" && !o.DefaultRole.Valid() {
+			return nil, fmt.Errorf("OIDC default role %q is not a role", o.DefaultRole)
+		}
+		if o.DefaultRole == auth.RoleOwner {
+			return nil, errors.New("OIDC sign-ins cannot be made owners automatically")
+		}
+		for i, d := range o.AllowedDomains {
+			o.AllowedDomains[i] = strings.ToLower(strings.TrimSpace(d))
+		}
+		s.oidc = &oidcSSO{cfg: *o, flows: map[string]oidcFlow{}}
+	}
 	s.reg.MustRegister(s.runs.metrics()...)
 	s.httpm = newHTTPMetrics()
 	s.reg.MustRegister(s.httpm.collectors()...)
@@ -172,6 +199,9 @@ func (s *Server) routes() http.Handler {
 		// server buffers responses, which does not suit server-sent events.
 		// Registered last so it replaces the generated route.
 		api.Get("/runs/{runId}/live", s.streamRun)
+		// Single sign-on redirects, also outside the strict server.
+		api.Get("/auth/oidc/login", s.oidcLogin)
+		api.Get("/auth/oidc/callback", s.oidcCallback)
 	})
 
 	if s.cfg.UI != nil {

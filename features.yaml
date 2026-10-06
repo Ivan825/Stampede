@@ -64,3 +64,4 @@ groups:
       - { name: Requests confined to the target and allowed hosts, status: shipped, doc: safety }
       - { name: Kill switch in the UI, CLI and API, status: shipped, doc: safety }
       - { name: Roles, API tokens, encrypted secrets, audit log, status: shipped }
+      - { name: Single sign-on with OpenID Connect, status: shipped, doc: docs/reference/configuration }

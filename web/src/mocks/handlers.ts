@@ -163,6 +163,13 @@ export function createHandlers(initial: MockOptions, opts: MockHandlerOptions = 
       db = fresh;
       return ok(sessionFor(db), 201);
     }),
+    http.get(`${B}/auth/config`, () =>
+      ok(
+        new URL(location.href).searchParams.get('mock') === 'sso'
+          ? { password: true, sso: { name: 'Acme SSO', loginURL: '/api/v1/auth/oidc/login' } }
+          : { password: true },
+      ),
+    ),
     http.post(`${B}/auth/login`, async ({ request }) => {
       if (latency) await delay(latency);
       const body = (await request.json()) as LoginRequest;

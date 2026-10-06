@@ -105,7 +105,7 @@ a CA built into the server, and the join token never crosses the network.
 **Control plane and UI.** `stampede server` with PostgreSQL/TimescaleDB:
 REST API ([OpenAPI](api/openapi.yaml)), web UI with a scenario editor and
 journey graph, live runs and reports, projects, targets, encrypted secrets,
-users and roles, API tokens, audit log, integrations and notification settings,
+users and roles, single sign-on (OIDC), API tokens, audit log, integrations and notification settings,
 reports with target metrics and trace links, and a kill switch that is always on
 screen.
 

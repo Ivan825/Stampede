@@ -30,6 +30,41 @@ Integrations (Prometheus, trace links) and notification channels are
 configured per organisation through the API or Settings in the web UI, not
 here; see [integrations](../guides/integrations.md).
 
+### Single sign-on (OpenID Connect)
+
+People can sign in through your identity provider (Okta, Microsoft Entra
+ID, Google, Keycloak, Auth0, Dex or any OpenID Connect provider) as well as
+with a password.
+
+| Flag | Environment | Meaning |
+|---|---|---|
+| `--oidc-issuer` | `STAMPEDE_OIDC_ISSUER` | the provider's issuer URL; turns SSO on |
+| `--oidc-client-id` | `STAMPEDE_OIDC_CLIENT_ID` | the client registered for Stampede |
+| | `STAMPEDE_OIDC_CLIENT_SECRET` | its secret (environment only, so it stays out of the process list) |
+| `--oidc-redirect-url` | `STAMPEDE_OIDC_REDIRECT_URL` | default `--public-url` + `/api/v1/auth/oidc/callback`; register it with the provider |
+| `--oidc-name` | `STAMPEDE_OIDC_NAME` | label of the sign-in button (default `SSO`) |
+| `--oidc-allowed-domain` | `STAMPEDE_OIDC_ALLOWED_DOMAINS` | email domains that may sign in (repeatable or comma-separated; default any) |
+| `--oidc-default-role` | `STAMPEDE_OIDC_DEFAULT_ROLE` | role for someone signing in for the first time: `viewer`, `runner`, `editor` or `admin`. Empty (the default) lets only people who already have an account sign in. |
+
+How it works:
+
+- The sign-in page shows *Sign in with <name>*. Stampede uses the
+  authorization code flow with PKCE, a `state` bound to a cookie and a
+  `nonce`, and verifies the ID token's signature, issuer, audience and
+  expiry against the provider's published keys.
+- The account is matched by email. The provider must report the email as
+  verified (`email_verified`), and its domain must be allowed.
+- With a default role, a first sign-in creates the account in the
+  organisation with that role; an admin can change it later, and the
+  change is kept on later sign-ins. Accounts created this way have no
+  password. Without a default role, an admin invites people first (Settings
+  → Users); they can then sign in with SSO or a password.
+- Sign-ins and account creation are written to the audit log.
+- API tokens are unaffected: CLI and CI use tokens, not SSO.
+
+`GET /api/v1/auth/config` (public) reports whether SSO is on and where it
+starts.
+
 ### Tracing (OpenTelemetry)
 
 The server traces its own HTTP API and every run with OpenTelemetry. Tracing

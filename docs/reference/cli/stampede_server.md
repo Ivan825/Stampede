@@ -39,7 +39,13 @@ stampede server [flags]
       --max-vus int                   hard cap on virtual users for every run (0 = none)
       --migrate-dry-run               report pending migrations and exit
       --migrate-only                  apply migrations and exit
-      --public-url string             external URL of the web UI, for links in notifications (e.g. https://stampede.example.com)
+      --oidc-allowed-domain strings   email domain allowed to sign in with SSO (repeatable; default any)
+      --oidc-client-id string         OIDC client ID
+      --oidc-default-role string      role for people signing in for the first time (viewer, runner, editor, admin); empty allows only existing accounts
+      --oidc-issuer string            OpenID Connect issuer URL for single sign-on (the client secret is read from STAMPEDE_OIDC_CLIENT_SECRET)
+      --oidc-name string              label of the sign-in button (default "SSO")
+      --oidc-redirect-url string      OIDC redirect URL (default --public-url + /api/v1/auth/oidc/callback)
+      --public-url string             external URL of the web UI, for links in notifications and the SSO redirect (e.g. https://stampede.example.com)
       --scheduler-interval duration   how often to look for due schedules (0 disables scheduled runs) (default 15s)
       --secure-cookies                mark session cookies Secure (use behind HTTPS)
       --trusted-proxy strings         CIDR of a reverse proxy whose X-Forwarded-For is trusted (repeatable)

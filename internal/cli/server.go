@@ -19,6 +19,7 @@ import (
 	"google.golang.org/grpc"
 
 	"github.com/Ivan825/Stampede/internal/coordinator"
+	"github.com/Ivan825/Stampede/internal/auth"
 	"github.com/Ivan825/Stampede/internal/keyring"
 	"github.com/Ivan825/Stampede/internal/pki"
 	"github.com/Ivan825/Stampede/internal/safety"
@@ -54,6 +55,12 @@ type serverFlags struct {
 	tlsKey        string
 	workerMTLS    bool
 	publicURL     string
+	oidcIssuer    string
+	oidcClientID  string
+	oidcRedirect  string
+	oidcName      string
+	oidcDomains   []string
+	oidcRole      string
 	schedInterval time.Duration
 }
 
@@ -96,7 +103,13 @@ Environment:
 	fl.BoolVar(&f.workerMTLS, "worker-mtls", os.Getenv("STAMPEDE_WORKER_MTLS") == "true", "mutual TLS with a CA built from the master key: workers enroll with stampede worker --mtls and the join token is never sent")
 	fl.StringVar(&f.abortErrors, "abort-errors", envOr("STAMPEDE_ABORT_ERRORS", "90%"), "stop any run whose error rate stays at or above this (0 disables)")
 	fl.DurationVar(&f.abortFor, "abort-for", 30*time.Second, "how long --abort-errors must hold before a run is stopped")
-	fl.StringVar(&f.publicURL, "public-url", os.Getenv("STAMPEDE_PUBLIC_URL"), "external URL of the web UI, for links in notifications (e.g. https://stampede.example.com)")
+	fl.StringVar(&f.publicURL, "public-url", os.Getenv("STAMPEDE_PUBLIC_URL"), "external URL of the web UI, for links in notifications and the SSO redirect (e.g. https://stampede.example.com)")
+	fl.StringVar(&f.oidcIssuer, "oidc-issuer", os.Getenv("STAMPEDE_OIDC_ISSUER"), "OpenID Connect issuer URL for single sign-on (the client secret is read from STAMPEDE_OIDC_CLIENT_SECRET)")
+	fl.StringVar(&f.oidcClientID, "oidc-client-id", os.Getenv("STAMPEDE_OIDC_CLIENT_ID"), "OIDC client ID")
+	fl.StringVar(&f.oidcRedirect, "oidc-redirect-url", os.Getenv("STAMPEDE_OIDC_REDIRECT_URL"), "OIDC redirect URL (default --public-url + /api/v1/auth/oidc/callback)")
+	fl.StringVar(&f.oidcName, "oidc-name", envOr("STAMPEDE_OIDC_NAME", "SSO"), "label of the sign-in button")
+	fl.StringSliceVar(&f.oidcDomains, "oidc-allowed-domain", splitEnv("STAMPEDE_OIDC_ALLOWED_DOMAINS"), "email domain allowed to sign in with SSO (repeatable; default any)")
+	fl.StringVar(&f.oidcRole, "oidc-default-role", os.Getenv("STAMPEDE_OIDC_DEFAULT_ROLE"), "role for people signing in for the first time (viewer, runner, editor, admin); empty allows only existing accounts")
 	fl.DurationVar(&f.schedInterval, "scheduler-interval", durationEnv("STAMPEDE_SCHEDULER_INTERVAL", server.DefaultSchedulerInterval), "how often to look for due schedules (0 disables scheduled runs)")
 	fl.StringSliceVar(&f.trusted, "trusted-proxy", splitEnv("STAMPEDE_TRUSTED_PROXIES"), "CIDR of a reverse proxy whose X-Forwarded-For is trusted (repeatable)")
 	return cmd
@@ -258,6 +271,13 @@ func runServer(cmd *cobra.Command, f *serverFlags) error {
 	cfg.HardCaps = safety.Caps{MaxRate: f.maxRate, MaxVUs: f.maxVUs, MaxDuration: f.maxDuration}
 	cfg.TrustedProxies = proxies
 	cfg.Notify.PublicURL = f.publicURL
+	if f.oidcIssuer != "" {
+		cfg.OIDC = &server.OIDCConfig{
+			Issuer: f.oidcIssuer, ClientID: f.oidcClientID, ClientSecret: os.Getenv("STAMPEDE_OIDC_CLIENT_SECRET"),
+			RedirectURL: f.oidcRedirect, Name: f.oidcName, AllowedDomains: f.oidcDomains, DefaultRole: auth.Role(f.oidcRole),
+		}
+		log.Info("single sign-on on", "issuer", f.oidcIssuer, "default-role", f.oidcRole)
+	}
 	cfg.SchedulerInterval = f.schedInterval
 	if f.abortErrors != "" && f.abortErrors != "0" && f.abortErrors != "0%" {
 		p, err := scenario.ParsePercent(f.abortErrors)
