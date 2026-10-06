@@ -136,6 +136,12 @@ const scenarioRoute = createRoute({
   component: lazyRouteComponent(() => import('@/pages/ScenarioEditor'), 'ScenarioEditorPage'),
 });
 
+const schedulesRoute = createRoute({
+  getParentRoute: () => projectRoute,
+  path: '/schedules',
+  component: lazyRouteComponent(() => import('@/pages/Schedules'), 'SchedulesPage'),
+});
+
 const targetsRoute = createRoute({
   getParentRoute: () => projectRoute,
   path: '/targets',
@@ -192,6 +198,7 @@ const routeTree = rootRoute.addChildren([
       scenariosRoute,
       scenarioNewRoute,
       scenarioRoute,
+      schedulesRoute,
       targetsRoute,
       secretsRoute,
     ]),

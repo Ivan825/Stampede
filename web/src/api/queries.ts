@@ -18,6 +18,8 @@ import type {
   Run,
   RunCreate,
   ScenarioVersionCreate,
+  ScheduleCreate,
+  ScheduleUpdate,
   SecretPut,
   SetupRequest,
   TargetCreate,
@@ -43,6 +45,9 @@ export const keys = {
     ['projects', projectId, 'runs', filters] as const,
   allRuns: (projectId: string) => ['projects', projectId, 'runs'] as const,
   run: (id: string) => ['runs', id] as const,
+  schedules: (projectId: string) => ['projects', projectId, 'schedules'] as const,
+  schedulePreview: (cron: string, timezone: string) =>
+    ['schedule-preview', cron, timezone] as const,
   timeline: (id: string) => ['runs', id, 'timeline'] as const,
   report: (id: string) => ['runs', id, 'report'] as const,
   activeRuns: ['active-runs'] as const,
@@ -632,6 +637,78 @@ export function useActiveRuns() {
     },
     enabled: projects.isSuccess,
     refetchInterval: 5_000,
+  });
+}
+
+// ---------------------------------------------------------------- schedules
+
+export function useSchedules(projectId: string) {
+  return useQuery({
+    queryKey: keys.schedules(projectId),
+    queryFn: () =>
+      unwrap(api.GET('/projects/{projectId}/schedules', { params: { path: { projectId } } })),
+    refetchInterval: 15_000,
+  });
+}
+
+export function useCreateSchedule(projectId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (body: ScheduleCreate) =>
+      unwrap(
+        api.POST('/projects/{projectId}/schedules', { params: { path: { projectId } }, body }),
+      ),
+    onSuccess: () => qc.invalidateQueries({ queryKey: keys.schedules(projectId) }),
+  });
+}
+
+export function useUpdateSchedule(projectId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, ...body }: ScheduleUpdate & { id: string }) =>
+      unwrap(api.PATCH('/schedules/{scheduleId}', { params: { path: { scheduleId: id } }, body })),
+    onSuccess: () => qc.invalidateQueries({ queryKey: keys.schedules(projectId) }),
+  });
+}
+
+export function useDeleteSchedule(projectId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) =>
+      unwrap(api.DELETE('/schedules/{scheduleId}', { params: { path: { scheduleId: id } } })),
+    onSuccess: () => qc.invalidateQueries({ queryKey: keys.schedules(projectId) }),
+  });
+}
+
+/** Starts a schedule's run now, as the signed-in user. */
+export function useRunSchedule(projectId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) =>
+      unwrap(api.POST('/schedules/{scheduleId}/run', { params: { path: { scheduleId: id } } })),
+    onSuccess: (run) => {
+      qc.setQueryData(keys.run(run.id), run);
+      void qc.invalidateQueries({ queryKey: keys.schedules(projectId) });
+      void qc.invalidateQueries({ queryKey: keys.allRuns(projectId) });
+      void qc.invalidateQueries({ queryKey: keys.activeRuns });
+    },
+  });
+}
+
+/** The next times a cron expression fires, checked by the server. */
+export function useSchedulePreview(cron: string, timezone: string) {
+  return useQuery({
+    queryKey: keys.schedulePreview(cron, timezone),
+    queryFn: ({ signal }) =>
+      unwrap(
+        api.GET('/schedules/preview', {
+          params: { query: { cron, ...(timezone ? { timezone } : {}), count: 3 } },
+          signal,
+        }),
+      ),
+    enabled: cron.trim() !== '',
+    retry: false,
+    staleTime: 30_000,
   });
 }
 

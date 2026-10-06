@@ -16,6 +16,7 @@ import type {
   RunStatus,
   Scenario,
   ScenarioVersion,
+  Schedule,
   Secret,
   Target,
   Token,
@@ -32,6 +33,7 @@ import {
   summaryOf,
   type SimParams,
 } from './sim';
+import { nextTimes, parseCron } from './cron';
 import {
   catalogBreakpoint,
   checkoutStress,
@@ -82,6 +84,7 @@ export interface Db {
   integrations: Integration[];
   channels: (NotificationChannel & { url: string })[];
   deliveries: Record<string, NotificationDelivery[]>;
+  schedules: Schedule[];
 }
 
 function scenarioFrom(
@@ -366,6 +369,7 @@ export function createDb(options: MockOptions): Db {
     ],
     channels: [],
     deliveries: {},
+    schedules: [],
   };
   {
     const id = uuid();
@@ -485,6 +489,55 @@ export function createDb(options: MockOptions): Db {
       run.summary = summaryOf(rep);
     }
   });
+
+  // Schedules: a nightly smoke run and a paused weekday stress run.
+  const lastOf = (sc: Scenario, t: Target) =>
+    db.runs.find((r) => r.scenarioId === sc.id && r.targetId === t.id && r.status === 'completed');
+  const ana = users.find((u) => u.email === 'ana@acme.dev')!;
+  const schedule = (
+    name: string,
+    sc: Scenario,
+    t: Target,
+    cron: string,
+    timezone: string,
+    enabled: boolean,
+    extra: Partial<Schedule> = {},
+  ): Schedule => {
+    const last = lastOf(sc, t);
+    return {
+      id: uuid(),
+      projectId: sc.projectId,
+      name,
+      scenarioId: sc.id,
+      scenarioName: sc.name,
+      targetId: t.id,
+      targetName: t.name,
+      cron,
+      timezone,
+      overrides: {},
+      env: {},
+      workers: 0,
+      enabled,
+      note: '',
+      ownerId: ana.id,
+      ownerEmail: ana.email,
+      createdAt: ago(20 * DAY),
+      updatedAt: ago(2 * DAY),
+      nextRunAt: enabled ? (nextTimes(parseCron(cron), timezone, new Date(), 1)[0] ?? null) : null,
+      lastFiredAt: last?.createdAt ?? null,
+      lastRunId: last?.id ?? null,
+      lastSkipReason: '',
+      ...extra,
+    };
+  };
+  db.schedules = [
+    schedule('nightly-smoke', sSmoke, staging, '0 2 * * *', 'UTC', true, {
+      note: 'Catch regressions from the day’s merges.',
+    }),
+    schedule('weekday-stress', sStress, staging, '30 6 * * MON-FRI', 'Europe/London', false, {
+      overrides: { duration: '10m' },
+    }),
+  ];
 
   // One run in progress, 40s in.
   const live = startRun(db, sStress, staging, { note: 'cache warm-up check', workers: 2 }, 40);

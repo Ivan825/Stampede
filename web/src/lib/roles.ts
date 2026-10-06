@@ -27,6 +27,7 @@ export function permissions(role: Role | undefined) {
     editTargets: atLeast(role, 'editor'),
     editSecrets: atLeast(role, 'editor'),
     editProjects: atLeast(role, 'editor'),
+    editSchedules: atLeast(role, 'editor'),
     deleteProjects: atLeast(role, 'admin'),
     manageUsers: atLeast(role, 'admin'),
     viewAudit: atLeast(role, 'admin'),

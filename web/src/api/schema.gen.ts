@@ -539,6 +539,93 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/projects/{projectId}/schedules": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+            };
+            cookie?: never;
+        };
+        get: operations["listSchedules"];
+        put?: never;
+        /**
+         * Create a schedule
+         * @description The scenario, target and overrides are checked the same way as
+         *     `POST /projects/{projectId}/runs`, so a schedule that is accepted
+         *     would start a run if fired now. Runs start as the caller.
+         */
+        post: operations["createSchedule"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/schedules/preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The next times a cron expression fires */
+        get: operations["previewSchedule"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/schedules/{scheduleId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                scheduleId: components["parameters"]["scheduleId"];
+            };
+            cookie?: never;
+        };
+        get: operations["getSchedule"];
+        put?: never;
+        post?: never;
+        delete: operations["deleteSchedule"];
+        options?: never;
+        head?: never;
+        /**
+         * Change a schedule, or enable or disable it
+         * @description Only the fields sent change. The caller becomes the schedule's
+         *     owner, so later runs start as them.
+         */
+        patch: operations["updateSchedule"];
+        trace?: never;
+    };
+    "/schedules/{scheduleId}/run": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                scheduleId: components["parameters"]["scheduleId"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Start the schedule's run now
+         * @description Starts a run as the caller without changing when the schedule next
+         *     fires. Refused while the schedule's previous run is still active.
+         */
+        post: operations["runSchedule"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/workers": {
         parameters: {
             query?: never;
@@ -1088,6 +1175,100 @@ export interface components {
             endedAt?: string | null;
             summary?: components["schemas"]["RunSummary"];
         };
+        Schedule: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            projectId: string;
+            name: string;
+            /** Format: uuid */
+            scenarioId: string;
+            scenarioName?: string;
+            /** Format: uuid */
+            targetId: string;
+            targetName?: string;
+            /** @example 0 2 * * * */
+            cron: string;
+            /** @example UTC */
+            timezone: string;
+            overrides?: components["schemas"]["RunOverrides"];
+            /** @description Stored as given and shown to anyone who can read the schedule; use project secrets for sensitive values. */
+            env?: {
+                [key: string]: string;
+            };
+            workers: number;
+            enabled: boolean;
+            note?: string;
+            /**
+             * Format: uuid
+             * @description Runs start as this user
+             */
+            ownerId?: string | null;
+            ownerEmail?: string | null;
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: date-time */
+            updatedAt: string;
+            /**
+             * Format: date-time
+             * @description Null while disabled
+             */
+            nextRunAt?: string | null;
+            /**
+             * Format: date-time
+             * @description When the schedule last came due or was run by hand
+             */
+            lastFiredAt?: string | null;
+            /** Format: uuid */
+            lastRunId?: string | null;
+            /** Format: date-time */
+            lastRunAt?: string | null;
+            lastRunStatus?: components["schemas"]["RunStatus"];
+            /** @description pass, fail, generator-limited or no-targets, once the last run has finished */
+            lastRunVerdict?: string | null;
+            /** @description Why the last firing started no run; empty when it did */
+            lastSkipReason: string;
+        };
+        ScheduleCreate: {
+            name: string;
+            /** Format: uuid */
+            scenarioId: string;
+            /** Format: uuid */
+            targetId: string;
+            /** @description Five fields (minute hour day-of-month month day-of-week) or a macro such as @daily */
+            cron: string;
+            /** @description IANA time zone; defaults to UTC */
+            timezone?: string;
+            overrides?: components["schemas"]["RunOverrides"];
+            env?: {
+                [key: string]: string;
+            };
+            /** @description 0 uses every connected worker */
+            workers?: number;
+            /** @default true */
+            enabled: boolean;
+            note?: string;
+        };
+        ScheduleUpdate: {
+            name?: string;
+            /** Format: uuid */
+            scenarioId?: string;
+            /** Format: uuid */
+            targetId?: string;
+            cron?: string;
+            timezone?: string;
+            overrides?: components["schemas"]["RunOverrides"];
+            env?: {
+                [key: string]: string;
+            };
+            workers?: number;
+            enabled?: boolean;
+            note?: string;
+        };
+        SchedulePreview: {
+            timezone: string;
+            next: string[];
+        };
         RunSummary: {
             requests?: number;
             /** Format: double */
@@ -1533,6 +1714,7 @@ export interface components {
         targetId: string;
         scenarioId: string;
         runId: string;
+        scheduleId: string;
         channelId: string;
     };
     requestBodies: never;
@@ -2588,6 +2770,184 @@ export interface operations {
             };
             404: components["responses"]["NotFound"];
             409: components["responses"]["Conflict"];
+        };
+    };
+    listSchedules: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Schedules, by name */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Schedule"][];
+                };
+            };
+        };
+    };
+    createSchedule: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ScheduleCreate"];
+            };
+        };
+        responses: {
+            /** @description Created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Schedule"];
+                };
+            };
+            403: components["responses"]["Forbidden"];
+            409: components["responses"]["Conflict"];
+            422: components["responses"]["Invalid"];
+        };
+    };
+    previewSchedule: {
+        parameters: {
+            query: {
+                cron: string;
+                /** @description IANA time zone; defaults to UTC */
+                timezone?: string;
+                count?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Upcoming firings */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SchedulePreview"];
+                };
+            };
+            422: components["responses"]["Invalid"];
+        };
+    };
+    getSchedule: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                scheduleId: components["parameters"]["scheduleId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Schedule */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Schedule"];
+                };
+            };
+            404: components["responses"]["NotFound"];
+        };
+    };
+    deleteSchedule: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                scheduleId: components["parameters"]["scheduleId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Deleted; runs it started are kept */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    updateSchedule: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                scheduleId: components["parameters"]["scheduleId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ScheduleUpdate"];
+            };
+        };
+        responses: {
+            /** @description Updated */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Schedule"];
+                };
+            };
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            422: components["responses"]["Invalid"];
+        };
+    };
+    runSchedule: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                scheduleId: components["parameters"]["scheduleId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Run accepted and scheduled */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Run"];
+                };
+            };
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            422: components["responses"]["Invalid"];
         };
     };
     listWorkers: {

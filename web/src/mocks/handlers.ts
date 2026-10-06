@@ -9,6 +9,9 @@ import type {
   LoginRequest,
   ProjectCreate,
   RunCreate,
+  Schedule,
+  ScheduleCreate,
+  ScheduleUpdate,
   ScenarioVersionCreate,
   SecretPut,
   Session,
@@ -33,6 +36,7 @@ import {
   type Db,
   type MockOptions,
 } from './db';
+import { checkZone, nextTimes, parseCron } from './cron';
 import { analyse, simulatePoint, simulateTimeline } from './sim';
 
 const B = '*/api/v1';
@@ -88,6 +92,51 @@ export function createHandlers(initial: MockOptions, opts: MockHandlerOptions = 
     rank[role()] >= rank[min]
       ? null
       : err(403, 'forbidden', `Your role (${role()}) cannot do this; it needs ${min} or above.`);
+
+  /** A schedule with its last run's state filled in from the runs. */
+  const scheduleView = (sc: Schedule): Schedule => {
+    const r = sc.lastRunId ? db.runs.find((x) => x.id === sc.lastRunId) : undefined;
+    return {
+      ...sc,
+      lastRunStatus: r?.status,
+      lastRunVerdict: r?.verdict ?? null,
+      lastRunAt: r?.createdAt ?? null,
+    };
+  };
+  /** Checks a schedule body; returns an error response or the next run time. */
+  const checkSchedule = (b: ScheduleCreate, projectId: string, selfId?: string) => {
+    const details: string[] = [];
+    if (!b.name?.trim()) return err(422, 'invalid', 'name is required');
+    if (
+      db.schedules.some(
+        (x) => x.projectId === projectId && x.name === b.name.trim() && x.id !== selfId,
+      )
+    )
+      return err(
+        409,
+        'conflict',
+        `a schedule named "${b.name.trim()}" already exists in this project`,
+      );
+    const sc = db.scenarios.find((x) => x.id === b.scenarioId && x.projectId === projectId);
+    const t = db.targets.find((x) => x.id === b.targetId && x.projectId === projectId);
+    if (!sc) details.push('scenario not found in this project');
+    if (!t) details.push('target not found in this project');
+    if (details.length) return err(422, 'invalid', details[0]!);
+    let next: string | undefined;
+    try {
+      checkZone(b.timezone || 'UTC');
+      next = nextTimes(parseCron(b.cron), b.timezone || 'UTC', new Date(), 1)[0];
+    } catch (e) {
+      return err(422, 'invalid', `cron: ${(e as Error).message}`);
+    }
+    if (!next)
+      return err(422, 'invalid', 'cron: the expression does not fire in the next nine years');
+    if (b.overrides?.rate && !/^[0-9.]+(\/(s|m|h))?$/.test(b.overrides.rate))
+      return err(422, 'invalid', 'overrides: rate is not valid', [
+        `overrides.rate: "${b.overrides.rate}" is not a rate`,
+      ]);
+    return { sc: sc!, t: t!, next };
+  };
 
   const handlers = [
     // ------------------------------------------------------------ system/auth
@@ -711,6 +760,145 @@ export function createHandlers(initial: MockOptions, opts: MockHandlerOptions = 
     }),
 
     // ------------------------------------------------------------ workers/audit
+    // ------------------------------------------------------------ schedules
+    http.get(`${B}/projects/:id/schedules`, async ({ params }) => {
+      const a = await auth();
+      if (a) return a;
+      return ok(
+        db.schedules
+          .filter((x) => x.projectId === params.id)
+          .sort((x, y) => x.name.localeCompare(y.name))
+          .map(scheduleView),
+      );
+    }),
+    http.post(`${B}/projects/:id/schedules`, async ({ request, params }) => {
+      const a = (await auth()) ?? need('editor');
+      if (a) return a;
+      const body = (await request.json()) as ScheduleCreate;
+      const pid = String(params.id);
+      const c = checkSchedule(body, pid);
+      if (c instanceof Response) return c;
+      const u = me(db)!;
+      const enabled = body.enabled ?? true;
+      const sc: Schedule = {
+        id: uuid(),
+        projectId: pid,
+        name: body.name.trim(),
+        scenarioId: c.sc.id,
+        scenarioName: c.sc.name,
+        targetId: c.t.id,
+        targetName: c.t.name,
+        cron: body.cron.trim(),
+        timezone: body.timezone || 'UTC',
+        overrides: body.overrides ?? {},
+        env: body.env ?? {},
+        workers: body.workers ?? 0,
+        enabled,
+        note: body.note ?? '',
+        ownerId: u.id,
+        ownerEmail: u.email,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+        nextRunAt: enabled ? c.next : null,
+        lastFiredAt: null,
+        lastRunId: null,
+        lastSkipReason: '',
+      };
+      db.schedules.push(sc);
+      return ok(scheduleView(sc), 201);
+    }),
+    http.get(`${B}/schedules/preview`, async ({ request }) => {
+      const a = await auth();
+      if (a) return a;
+      const q = new URL(request.url).searchParams;
+      const tz = q.get('timezone') || 'UTC';
+      try {
+        checkZone(tz);
+        const next = nextTimes(
+          parseCron(q.get('cron') ?? ''),
+          tz,
+          new Date(),
+          Number(q.get('count') ?? 3),
+        );
+        return ok({ timezone: tz, next });
+      } catch (e) {
+        return err(422, 'invalid', `cron: ${(e as Error).message}`);
+      }
+    }),
+    http.get(`${B}/schedules/:id`, async ({ params }) => {
+      const a = await auth();
+      if (a) return a;
+      const sc = db.schedules.find((x) => x.id === params.id);
+      return sc ? ok(scheduleView(sc)) : notFound('Schedule');
+    }),
+    http.patch(`${B}/schedules/:id`, async ({ request, params }) => {
+      const a = (await auth()) ?? need('editor');
+      if (a) return a;
+      const sc = db.schedules.find((x) => x.id === params.id);
+      if (!sc) return notFound('Schedule');
+      const body = (await request.json()) as ScheduleUpdate;
+      const merged: ScheduleCreate = {
+        name: body.name ?? sc.name,
+        scenarioId: body.scenarioId ?? sc.scenarioId,
+        targetId: body.targetId ?? sc.targetId,
+        cron: body.cron ?? sc.cron,
+        timezone: body.timezone ?? sc.timezone,
+        overrides: body.overrides ?? sc.overrides ?? {},
+        env: body.env ?? sc.env ?? {},
+        workers: body.workers ?? sc.workers,
+        enabled: body.enabled ?? sc.enabled,
+        note: body.note ?? sc.note ?? '',
+      };
+      const c = checkSchedule(merged, sc.projectId, sc.id);
+      if (c instanceof Response) return c;
+      const u = me(db)!;
+      const enabled = merged.enabled ?? true;
+      const timing = merged.cron !== sc.cron || merged.timezone !== sc.timezone || !sc.nextRunAt;
+      Object.assign(sc, {
+        ...merged,
+        name: merged.name.trim(),
+        cron: merged.cron.trim(),
+        timezone: merged.timezone || 'UTC',
+        scenarioName: c.sc.name,
+        targetName: c.t.name,
+        ownerId: u.id,
+        ownerEmail: u.email,
+        updatedAt: new Date().toISOString(),
+        nextRunAt: !enabled ? null : timing ? c.next : sc.nextRunAt,
+      });
+      return ok(scheduleView(sc));
+    }),
+    http.delete(`${B}/schedules/:id`, async ({ params }) => {
+      const a = (await auth()) ?? need('editor');
+      if (a) return a;
+      const i = db.schedules.findIndex((x) => x.id === params.id);
+      if (i < 0) return notFound('Schedule');
+      db.schedules.splice(i, 1);
+      return noContent();
+    }),
+    http.post(`${B}/schedules/:id/run`, async ({ params }) => {
+      const a = (await auth()) ?? need('runner');
+      if (a) return a;
+      const sc = db.schedules.find((x) => x.id === params.id);
+      if (!sc) return notFound('Schedule');
+      const v = scheduleView(sc);
+      if (v.lastRunStatus && activeStatuses.includes(v.lastRunStatus))
+        return err(409, 'conflict', "the schedule's previous run is still active");
+      const s = db.scenarios.find((x) => x.id === sc.scenarioId);
+      const t = db.targets.find((x) => x.id === sc.targetId);
+      if (!s || !t) return err(422, 'invalid', 'scenario or target not found in this project');
+      const run = startRun(db, s, t, {
+        note: `scheduled: ${sc.name}`,
+        ...(sc.workers ? { workers: sc.workers } : {}),
+        ...(sc.overrides && Object.keys(sc.overrides).length ? { overrides: sc.overrides } : {}),
+        createdBy: me(db)!.email,
+      });
+      sc.lastRunId = run.id;
+      sc.lastFiredAt = run.createdAt;
+      sc.lastSkipReason = '';
+      return ok(run, 201);
+    }),
+
     http.get(`${B}/workers`, async () => {
       const a = await auth();
       if (a) return a;

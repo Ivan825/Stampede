@@ -4,6 +4,7 @@ import { Link, Outlet, useNavigate, useParams, useRouterState } from '@tanstack/
 import { clsx } from 'clsx';
 import {
   Activity,
+  CalendarClock,
   Check,
   ChevronsUpDown,
   FolderKanban,
@@ -227,6 +228,14 @@ export function Shell() {
                   indent
                 >
                   Runs
+                </NavItem>
+                <NavItem
+                  to="/projects/$projectId/schedules"
+                  params={{ projectId: project.id }}
+                  icon={<CalendarClock />}
+                  indent
+                >
+                  Schedules
                 </NavItem>
                 <NavItem
                   to="/projects/$projectId/scenarios"
