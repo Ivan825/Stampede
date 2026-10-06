@@ -17,6 +17,7 @@ import (
 	"cel.dev/cel-go/interpreter"
 	"github.com/spf13/cobra"
 
+	"github.com/Ivan825/Stampede/internal/observe"
 	"github.com/Ivan825/Stampede/internal/report"
 	"github.com/Ivan825/Stampede/internal/runner"
 	"github.com/Ivan825/Stampede/internal/safety"
@@ -153,6 +154,10 @@ func runScenario(ctx context.Context, stdout, stderr io.Writer, path string, f *
 	if err != nil {
 		return err
 	}
+	obs, err := observeConfig(s, env, secrets)
+	if err != nil {
+		return err
+	}
 
 	pause, err := scenario.ParseDuration(f.pause)
 	if err != nil {
@@ -180,6 +185,10 @@ func runScenario(ctx context.Context, stdout, stderr io.Writer, path string, f *
 		if err != nil {
 			return err
 		}
+		if obs.Prometheus != nil && !f.quiet {
+			fmt.Fprintf(stderr, "stampede: querying %d Prometheus metrics for the run\n", len(obs.Queries))
+		}
+		obs.Apply(ctx, rep, time.Second)
 		if f.json != "-" && f.md != "-" {
 			rep.WriteText(stdout)
 		}
@@ -207,16 +216,7 @@ func applyOverrides(s *scenario.Scenario, f *runFlags) error {
 }
 
 func renderBaseURL(s *scenario.Scenario, env, secrets map[string]string) (string, error) {
-	sc, err := scenario.NewScope()
-	if err != nil {
-		return "", err
-	}
-	t, err := sc.CompileTemplate(s.Target.BaseURL)
-	if err != nil {
-		return "", err
-	}
-	act := baseActivation{"env": env, "secret": secrets, "vars": s.Vars, "data": map[string]any{}}
-	out, err := t.Render(act)
+	out, err := renderField(s, s.Target.BaseURL, env, secrets)
 	if err != nil {
 		return "", fmt.Errorf("target.baseURL: %w (set it with -e or --base-url)", err)
 	}
@@ -224,6 +224,57 @@ func renderBaseURL(s *scenario.Scenario, env, secrets map[string]string) (string
 		return "", errors.New("target.baseURL is empty (set it in the scenario, with -e, or with --base-url)")
 	}
 	return out, nil
+}
+
+// renderField renders a scenario-level template such as ${env.X}.
+func renderField(s *scenario.Scenario, tmpl string, env, secrets map[string]string) (string, error) {
+	sc, err := scenario.NewScope()
+	if err != nil {
+		return "", err
+	}
+	t, err := sc.CompileTemplate(tmpl)
+	if err != nil {
+		return "", err
+	}
+	act := baseActivation{"env": env, "secret": secrets, "vars": s.Vars, "data": map[string]any{}}
+	return t.Render(act)
+}
+
+// observeConfig resolves the scenario's observe block for a local run.
+// The Prometheus URL and token may be templated; a server integration
+// cannot be used outside a server.
+func observeConfig(s *scenario.Scenario, env, secrets map[string]string) (*observe.Config, error) {
+	c := &observe.Config{}
+	o := s.Observe
+	if o == nil {
+		return c, nil
+	}
+	if p := o.Prometheus; p != nil {
+		if p.Integration != "" {
+			return nil, fmt.Errorf("observe.prometheus.integration %q names a server integration; for stampede run set observe.prometheus.url instead", p.Integration)
+		}
+		u, err := renderField(s, p.URL, env, secrets)
+		if err != nil {
+			return nil, fmt.Errorf("observe.prometheus.url: %w (set it with -e)", err)
+		}
+		tok, err := renderField(s, p.BearerToken, env, secrets)
+		if err != nil {
+			return nil, fmt.Errorf("observe.prometheus.bearerToken: %w", err)
+		}
+		pu, err := url.Parse(u)
+		if err != nil || (pu.Scheme != "http" && pu.Scheme != "https") || pu.Host == "" {
+			return nil, fmt.Errorf("observe.prometheus.url must be an absolute http(s) URL, got %q", u)
+		}
+		c.Prometheus = &observe.Prometheus{URL: u, BearerToken: tok}
+		c.Queries = observe.QueriesOf(p)
+	}
+	if t := o.Traces; t != nil {
+		if t.Integration != "" {
+			return nil, fmt.Errorf("observe.traces.integration %q names a server integration; for stampede run set observe.traces.url instead", t.Integration)
+		}
+		c.TraceURL = t.URL
+	}
+	return c, nil
 }
 
 type baseActivation map[string]any
