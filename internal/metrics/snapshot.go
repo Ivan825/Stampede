@@ -8,18 +8,24 @@ import (
 // Phase indexes per-request timing phases.
 type Phase int
 
-// Request phases, as measured by net/http/httptrace.
+// Request phases, as measured by net/http/httptrace, plus the time to the
+// first event of a stream (server-sent events, gRPC server streaming).
+// New phases are only ever appended: workers and servers exchange phases
+// by index, and a peer that knows fewer phases leaves the rest empty.
 const (
 	PhaseDNS Phase = iota
 	PhaseConnect
 	PhaseTLS
 	PhaseWait // time to first byte after the request was written
 	PhaseDownload
+	// PhaseFirstEvent is the time from the start of a streaming step to
+	// its first event: time to first token for an LLM API.
+	PhaseFirstEvent
 	NumPhases
 )
 
 // PhaseNames are the report labels for each phase.
-var PhaseNames = [NumPhases]string{"dns", "connect", "tls", "wait", "download"}
+var PhaseNames = [NumPhases]string{"dns", "connect", "tls", "wait", "download", "firstEvent"}
 
 // Sample is one completed request.
 type Sample struct {
@@ -39,6 +45,12 @@ type Sample struct {
 	ChecksFailed int
 	BytesIn      int64
 	BytesOut     int64
+	// Proto is the negotiated protocol, such as "HTTP/1.1" or "HTTP/2.0".
+	Proto string
+	// Events counts the events or messages a streaming step received;
+	// StreamTime is the time from the first of them to the end of the step.
+	Events     int
+	StreamTime time.Duration
 }
 
 // Snapshot holds everything recorded during one interval (normally one
@@ -79,6 +91,15 @@ type StepStats struct {
 	Service *Histogram `json:"service"`
 	// PhaseSum holds per-phase totals in µs for computing means.
 	PhaseSum [NumPhases]uint64 `json:"phaseSum"`
+	// Streams counts samples that received at least one stream event,
+	// Events the events they received and StreamUs the µs from each
+	// stream's first event to its end. Events per second after the first
+	// event is (Events - Streams) / StreamUs.
+	Streams  uint64 `json:"streams,omitempty"`
+	Events   uint64 `json:"events,omitempty"`
+	StreamUs uint64 `json:"streamUs,omitempty"`
+	// Protocols counts requests by negotiated protocol (HTTP/1.1, HTTP/2.0).
+	Protocols map[string]uint64 `json:"protocols,omitempty"`
 }
 
 // JourneyStats aggregates whole iterations of a journey.
@@ -152,6 +173,17 @@ func (st *StepStats) Add(s *Sample) {
 			st.PhaseSum[i] += uint64(d / time.Microsecond)
 		}
 	}
+	if s.Events > 0 {
+		st.Streams++
+		st.Events += uint64(s.Events)
+		st.StreamUs += uint64(max(s.StreamTime, 0) / time.Microsecond)
+	}
+	if s.Proto != "" {
+		if st.Protocols == nil {
+			st.Protocols = map[string]uint64{}
+		}
+		st.Protocols[s.Proto]++
+	}
 }
 
 // Merge adds o into st.
@@ -178,6 +210,15 @@ func (st *StepStats) Merge(o *StepStats) {
 	st.Service.Merge(o.Service)
 	for i := range st.PhaseSum {
 		st.PhaseSum[i] += o.PhaseSum[i]
+	}
+	st.Streams += o.Streams
+	st.Events += o.Events
+	st.StreamUs += o.StreamUs
+	for k, v := range o.Protocols {
+		if st.Protocols == nil {
+			st.Protocols = map[string]uint64{}
+		}
+		st.Protocols[k] += v
 	}
 }
 

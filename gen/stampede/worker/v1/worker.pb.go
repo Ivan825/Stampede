@@ -1008,8 +1008,18 @@ type StepStats struct {
 	Latency      []byte                 `protobuf:"bytes,9,opt,name=latency,proto3" json:"latency,omitempty"`
 	Service      []byte                 `protobuf:"bytes,10,opt,name=service,proto3" json:"service,omitempty"`
 	// phase_sum holds per-phase totals in microseconds (dns, connect, tls,
-	// wait, download).
-	PhaseSum      []uint64 `protobuf:"varint,11,rep,packed,name=phase_sum,json=phaseSum,proto3" json:"phase_sum,omitempty"`
+	// wait, download, first_event). Phases are only ever appended.
+	PhaseSum []uint64 `protobuf:"varint,11,rep,packed,name=phase_sum,json=phaseSum,proto3" json:"phase_sum,omitempty"`
+	// Streaming steps (server-sent events, gRPC server streaming): streams
+	// that received at least one event, the events they received and the
+	// microseconds from each stream's first event to its end. Added in
+	// protocol v1.1.
+	Streams  uint64 `protobuf:"varint,12,opt,name=streams,proto3" json:"streams,omitempty"`
+	Events   uint64 `protobuf:"varint,13,opt,name=events,proto3" json:"events,omitempty"`
+	StreamUs uint64 `protobuf:"varint,14,opt,name=stream_us,json=streamUs,proto3" json:"stream_us,omitempty"`
+	// protocols counts requests by negotiated protocol, such as "HTTP/1.1"
+	// or "HTTP/2.0". Added in protocol v1.1.
+	Protocols     map[string]uint64 `protobuf:"bytes,15,rep,name=protocols,proto3" json:"protocols,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"varint,2,opt,name=value"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -1121,6 +1131,34 @@ func (x *StepStats) GetPhaseSum() []uint64 {
 	return nil
 }
 
+func (x *StepStats) GetStreams() uint64 {
+	if x != nil {
+		return x.Streams
+	}
+	return 0
+}
+
+func (x *StepStats) GetEvents() uint64 {
+	if x != nil {
+		return x.Events
+	}
+	return 0
+}
+
+func (x *StepStats) GetStreamUs() uint64 {
+	if x != nil {
+		return x.StreamUs
+	}
+	return 0
+}
+
+func (x *StepStats) GetProtocols() map[string]uint64 {
+	if x != nil {
+		return x.Protocols
+	}
+	return nil
+}
+
 // JourneyStats aggregates whole iterations of a journey.
 type JourneyStats struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
@@ -1191,7 +1229,7 @@ func (x *JourneyStats) GetDuration() []byte {
 }
 
 // PhaseHistograms holds one histogram per request phase (dns, connect,
-// tls, wait, download) for a step over the whole run.
+// tls, wait, download, first_event) for a step over the whole run.
 type PhaseHistograms struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Phases        [][]byte               `protobuf:"bytes,1,rep,name=phases,proto3" json:"phases,omitempty"`
@@ -1885,7 +1923,7 @@ const file_stampede_worker_v1_worker_proto_rawDesc = "" +
 	"\x05value\x18\x02 \x01(\v2\x1d.stampede.worker.v1.StepStatsR\x05value:\x028\x01\x1a]\n" +
 	"\rJourneysEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\x05R\x03key\x126\n" +
-	"\x05value\x18\x02 \x01(\v2 .stampede.worker.v1.JourneyStatsR\x05value:\x028\x01\"\x8e\x04\n" +
+	"\x05value\x18\x02 \x01(\v2 .stampede.worker.v1.JourneyStatsR\x05value:\x028\x01\"\xe7\x05\n" +
 	"\tStepStats\x12\x1a\n" +
 	"\brequests\x18\x01 \x01(\x04R\brequests\x12\x16\n" +
 	"\x06failed\x18\x02 \x01(\x04R\x06failed\x12A\n" +
@@ -1898,12 +1936,19 @@ const file_stampede_worker_v1_worker_proto_rawDesc = "" +
 	"\alatency\x18\t \x01(\fR\alatency\x12\x18\n" +
 	"\aservice\x18\n" +
 	" \x01(\fR\aservice\x12\x1b\n" +
-	"\tphase_sum\x18\v \x03(\x04R\bphaseSum\x1a9\n" +
+	"\tphase_sum\x18\v \x03(\x04R\bphaseSum\x12\x18\n" +
+	"\astreams\x18\f \x01(\x04R\astreams\x12\x16\n" +
+	"\x06events\x18\r \x01(\x04R\x06events\x12\x1b\n" +
+	"\tstream_us\x18\x0e \x01(\x04R\bstreamUs\x12J\n" +
+	"\tprotocols\x18\x0f \x03(\v2,.stampede.worker.v1.StepStats.ProtocolsEntryR\tprotocols\x1a9\n" +
 	"\vErrorsEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
 	"\x05value\x18\x02 \x01(\x04R\x05value:\x028\x01\x1a9\n" +
 	"\vStatusEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\x05R\x03key\x12\x14\n" +
+	"\x05value\x18\x02 \x01(\x04R\x05value:\x028\x01\x1a<\n" +
+	"\x0eProtocolsEntry\x12\x10\n" +
+	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
 	"\x05value\x18\x02 \x01(\x04R\x05value:\x028\x01\"z\n" +
 	"\fJourneyStats\x12\x18\n" +
 	"\astarted\x18\x01 \x01(\x04R\astarted\x12\x1c\n" +
@@ -1982,7 +2027,7 @@ func file_stampede_worker_v1_worker_proto_rawDescGZIP() []byte {
 	return file_stampede_worker_v1_worker_proto_rawDescData
 }
 
-var file_stampede_worker_v1_worker_proto_msgTypes = make([]protoimpl.MessageInfo, 29)
+var file_stampede_worker_v1_worker_proto_msgTypes = make([]protoimpl.MessageInfo, 30)
 var file_stampede_worker_v1_worker_proto_goTypes = []any{
 	(*WorkerMessage)(nil),   // 0: stampede.worker.v1.WorkerMessage
 	(*ServerMessage)(nil),   // 1: stampede.worker.v1.ServerMessage
@@ -2010,9 +2055,10 @@ var file_stampede_worker_v1_worker_proto_goTypes = []any{
 	nil,                     // 23: stampede.worker.v1.Snapshot.JourneysEntry
 	nil,                     // 24: stampede.worker.v1.StepStats.ErrorsEntry
 	nil,                     // 25: stampede.worker.v1.StepStats.StatusEntry
-	nil,                     // 26: stampede.worker.v1.RunFinished.PhasesEntry
-	nil,                     // 27: stampede.worker.v1.StartRun.EnvEntry
-	nil,                     // 28: stampede.worker.v1.StartRun.SecretsEntry
+	nil,                     // 26: stampede.worker.v1.StepStats.ProtocolsEntry
+	nil,                     // 27: stampede.worker.v1.RunFinished.PhasesEntry
+	nil,                     // 28: stampede.worker.v1.StartRun.EnvEntry
+	nil,                     // 29: stampede.worker.v1.StartRun.SecretsEntry
 }
 var file_stampede_worker_v1_worker_proto_depIdxs = []int32{
 	3,  // 0: stampede.worker.v1.WorkerMessage.hello:type_name -> stampede.worker.v1.Hello
@@ -2037,20 +2083,21 @@ var file_stampede_worker_v1_worker_proto_depIdxs = []int32{
 	5,  // 19: stampede.worker.v1.Snapshot.health:type_name -> stampede.worker.v1.Health
 	24, // 20: stampede.worker.v1.StepStats.errors:type_name -> stampede.worker.v1.StepStats.ErrorsEntry
 	25, // 21: stampede.worker.v1.StepStats.status:type_name -> stampede.worker.v1.StepStats.StatusEntry
-	26, // 22: stampede.worker.v1.RunFinished.phases:type_name -> stampede.worker.v1.RunFinished.PhasesEntry
-	2,  // 23: stampede.worker.v1.Welcome.protocol:type_name -> stampede.worker.v1.ProtocolVersion
-	27, // 24: stampede.worker.v1.StartRun.env:type_name -> stampede.worker.v1.StartRun.EnvEntry
-	28, // 25: stampede.worker.v1.StartRun.secrets:type_name -> stampede.worker.v1.StartRun.SecretsEntry
-	10, // 26: stampede.worker.v1.Snapshot.StepsEntry.value:type_name -> stampede.worker.v1.StepStats
-	11, // 27: stampede.worker.v1.Snapshot.JourneysEntry.value:type_name -> stampede.worker.v1.JourneyStats
-	12, // 28: stampede.worker.v1.RunFinished.PhasesEntry.value:type_name -> stampede.worker.v1.PhaseHistograms
-	0,  // 29: stampede.worker.v1.WorkerService.Connect:input_type -> stampede.worker.v1.WorkerMessage
-	1,  // 30: stampede.worker.v1.WorkerService.Connect:output_type -> stampede.worker.v1.ServerMessage
-	30, // [30:31] is the sub-list for method output_type
-	29, // [29:30] is the sub-list for method input_type
-	29, // [29:29] is the sub-list for extension type_name
-	29, // [29:29] is the sub-list for extension extendee
-	0,  // [0:29] is the sub-list for field type_name
+	26, // 22: stampede.worker.v1.StepStats.protocols:type_name -> stampede.worker.v1.StepStats.ProtocolsEntry
+	27, // 23: stampede.worker.v1.RunFinished.phases:type_name -> stampede.worker.v1.RunFinished.PhasesEntry
+	2,  // 24: stampede.worker.v1.Welcome.protocol:type_name -> stampede.worker.v1.ProtocolVersion
+	28, // 25: stampede.worker.v1.StartRun.env:type_name -> stampede.worker.v1.StartRun.EnvEntry
+	29, // 26: stampede.worker.v1.StartRun.secrets:type_name -> stampede.worker.v1.StartRun.SecretsEntry
+	10, // 27: stampede.worker.v1.Snapshot.StepsEntry.value:type_name -> stampede.worker.v1.StepStats
+	11, // 28: stampede.worker.v1.Snapshot.JourneysEntry.value:type_name -> stampede.worker.v1.JourneyStats
+	12, // 29: stampede.worker.v1.RunFinished.PhasesEntry.value:type_name -> stampede.worker.v1.PhaseHistograms
+	0,  // 30: stampede.worker.v1.WorkerService.Connect:input_type -> stampede.worker.v1.WorkerMessage
+	1,  // 31: stampede.worker.v1.WorkerService.Connect:output_type -> stampede.worker.v1.ServerMessage
+	31, // [31:32] is the sub-list for method output_type
+	30, // [30:31] is the sub-list for method input_type
+	30, // [30:30] is the sub-list for extension type_name
+	30, // [30:30] is the sub-list for extension extendee
+	0,  // [0:30] is the sub-list for field type_name
 }
 
 func init() { file_stampede_worker_v1_worker_proto_init() }
@@ -2081,7 +2128,7 @@ func file_stampede_worker_v1_worker_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_stampede_worker_v1_worker_proto_rawDesc), len(file_stampede_worker_v1_worker_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   29,
+			NumMessages:   30,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

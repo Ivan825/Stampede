@@ -24,8 +24,9 @@ func sampleSnapshot() *metrics.Snapshot {
 		smp := &metrics.Sample{
 			Step: i % 3, Start: t0, End: t0.Add(time.Duration(i+1) * time.Millisecond),
 			Intended: t0.Add(-time.Millisecond), Status: 200 + (i%2)*300,
-			Phases:  [metrics.NumPhases]time.Duration{time.Millisecond, 2 * time.Millisecond, 0, 3 * time.Millisecond, time.Microsecond},
-			BytesIn: 100, BytesOut: 10, ChecksPassed: 1,
+			Phases:  [metrics.NumPhases]time.Duration{time.Millisecond, 2 * time.Millisecond, 0, 3 * time.Millisecond, time.Microsecond, 4 * time.Millisecond},
+			BytesIn: 100, BytesOut: 10, ChecksPassed: 1, Proto: "HTTP/2.0",
+			Events: i % 4, StreamTime: time.Duration(i) * time.Millisecond,
 		}
 		if i%5 == 0 {
 			smp.Failed, smp.Err, smp.ChecksFailed = true, "timeout", 1

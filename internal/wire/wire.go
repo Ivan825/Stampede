@@ -17,7 +17,7 @@ import (
 // so any minor of the same major interoperates.
 const (
 	ProtocolMajor = 1
-	ProtocolMinor = 0
+	ProtocolMinor = 1
 )
 
 // Version is the protocol version as a message.
@@ -114,6 +114,13 @@ func SnapshotToProto(runID string, s *metrics.Snapshot, h *Health) (*workerv1.Sn
 			ChecksPassed: st.ChecksPassed, ChecksFailed: st.ChecksFailed,
 			BytesIn: st.BytesIn, BytesOut: st.BytesOut,
 			PhaseSum: append([]uint64(nil), st.PhaseSum[:]...),
+			Streams:  st.Streams, Events: st.Events, StreamUs: st.StreamUs,
+		}
+		if len(st.Protocols) > 0 {
+			ps.Protocols = make(map[string]uint64, len(st.Protocols))
+			for k, v := range st.Protocols {
+				ps.Protocols[k] = v
+			}
 		}
 		if len(st.Errors) > 0 {
 			ps.Errors = make(map[string]uint64, len(st.Errors))
@@ -169,6 +176,13 @@ func SnapshotFromProto(worker string, p *workerv1.Snapshot) (*metrics.Snapshot, 
 			return nil, nil, fmt.Errorf("step %d: %d phase sums, want at most %d", id, len(ps.GetPhaseSum()), len(st.PhaseSum))
 		}
 		copy(st.PhaseSum[:], ps.GetPhaseSum())
+		st.Streams, st.Events, st.StreamUs = ps.GetStreams(), ps.GetEvents(), ps.GetStreamUs()
+		for k, v := range ps.GetProtocols() {
+			if st.Protocols == nil {
+				st.Protocols = map[string]uint64{}
+			}
+			st.Protocols[k] = v
+		}
 		for k, v := range ps.GetErrors() {
 			if st.Errors == nil {
 				st.Errors = map[string]uint64{}
