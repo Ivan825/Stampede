@@ -134,3 +134,31 @@ targets: ["p95 < 1s"]`))
 		t.Errorf("a target with no data must fail: %+v", r.Thresholds)
 	}
 }
+
+func TestBreakpointVerdict(t *testing.T) {
+	r := build(t, 150*time.Millisecond, 10) // fails its targets overall
+	if r.Verdict != VerdictFail {
+		t.Fatal("precondition: overall targets fail")
+	}
+	s, _ := scenario.Parse([]byte(`
+metadata: {name: rep}
+target: {baseURL: "http://localhost"}
+journeys: [{name: shop, steps: [{get: /a}]}]
+load: {vus: 2, duration: 3s}
+targets: ["http.p95 < 100ms"]`))
+	prog, _ := scenario.Compile(s)
+	plan, _ := s.Load.Plan()
+	for _, c := range []struct {
+		bp   *Breakpoint
+		want string
+	}{
+		{&Breakpoint{Found: true, LastPass: 200, FirstFail: 300}, VerdictPass},
+		{&Breakpoint{Found: true, LastPass: 0, FirstFail: 100}, VerdictFail},
+	} {
+		rep := Build(Input{Program: prog, Plan: plan, Breakpoint: c.bp, StopReason: "breakpoint reached",
+			Snapshots: []*metrics.Snapshot{metrics.NewSnapshot(0)}})
+		if rep.Verdict != c.want {
+			t.Errorf("breakpoint %+v: verdict %s, want %s", c.bp, rep.Verdict, c.want)
+		}
+	}
+}
