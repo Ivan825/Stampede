@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"go.opentelemetry.io/otel/trace"
 
 	"github.com/Ivan825/Stampede/internal/api/gen"
 	"github.com/Ivan825/Stampede/internal/auth"
@@ -184,7 +185,7 @@ func (h *handlers) CreateRun(ctx context.Context, req gen.CreateRunRequestObject
 		"run": id, "version": ver.Version, "peak": plan.Peak(), "mode": plan.Mode, "duration": plan.TotalDuration().String(),
 	})
 
-	h.runs.launch(&activeRun{id: id, org: p.OrgID, project: pr.ID, target: tg.ID, scenario: sc.ID, obs: obs},
+	h.runs.launch(&activeRun{id: id, org: p.OrgID, project: pr.ID, target: tg.ID, scenario: sc.ID, obs: obs, link: trace.LinkFromContext(ctx)},
 		ExecSpec{
 			RunID: id.String(), Scenario: s, YAML: yamlOut, Env: env, Secrets: secrets,
 			AllowHosts: tg.AllowHosts, TargetHost: tg.Host, Workers: workers,

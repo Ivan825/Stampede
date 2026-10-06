@@ -24,6 +24,8 @@ import (
 	"github.com/Ivan825/Stampede/internal/scenario"
 	"github.com/Ivan825/Stampede/internal/server"
 	"github.com/Ivan825/Stampede/internal/store"
+	"github.com/Ivan825/Stampede/internal/telemetry"
+	"github.com/Ivan825/Stampede/internal/version"
 )
 
 // UI is the embedded web app, set by the main package when it is built in.
@@ -64,7 +66,11 @@ Environment:
   STAMPEDE_DATABASE_URL     postgres://user:pass@host:5432/stampede
   STAMPEDE_MASTER_KEY       32 random bytes, base64, for encrypting secrets
                             (generate one with: stampede keygen)
-  STAMPEDE_MASTER_KEY_FILE  or read the key from a file`,
+  STAMPEDE_MASTER_KEY_FILE  or read the key from a file
+  STAMPEDE_PUBLIC_URL       external URL of the web UI, for links in notifications
+  OTEL_EXPORTER_OTLP_ENDPOINT
+                            export traces of the API and of each run over OTLP
+                            (OTEL_EXPORTER_OTLP_PROTOCOL=grpc for gRPC)`,
 		RunE: func(cmd *cobra.Command, _ []string) error { return runServer(cmd, f) },
 	}
 	fl := cmd.Flags()
@@ -133,6 +139,21 @@ func runServer(cmd *cobra.Command, f *serverFlags) error {
 	}
 	if f.migrateOnly || f.migrateDryRun {
 		return nil
+	}
+
+	shutdownTracing, err := telemetry.Setup(ctx, "stampede-server", version.Version)
+	if err != nil {
+		return err
+	}
+	defer func() {
+		sctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		if err := shutdownTracing(sctx); err != nil {
+			log.Warn("flush traces", "error", err)
+		}
+	}()
+	if telemetry.Enabled() {
+		log.Info("exporting traces over OTLP", "protocol", telemetry.Protocol())
 	}
 
 	kr, err := keyring.FromEnv()

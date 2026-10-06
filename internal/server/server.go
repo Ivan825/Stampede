@@ -73,6 +73,7 @@ type Server struct {
 	limiter   *auth.Limiter // per email
 	ipLimiter *auth.Limiter // per client address, looser for shared NATs
 	reg       *prometheus.Registry
+	httpm     *httpMetrics
 	handler   http.Handler
 }
 
@@ -107,6 +108,8 @@ func New(cfg Config) (*Server, error) {
 	s.ai = newAIManager(s)
 	s.notify = newNotifier(s)
 	s.reg.MustRegister(s.runs.metrics()...)
+	s.httpm = newHTTPMetrics()
+	s.reg.MustRegister(s.httpm.collectors()...)
 	s.handler = s.routes()
 	return s, nil
 }
@@ -146,7 +149,7 @@ func (s *Server) routes() http.Handler {
 	r.Handle("/metrics", promhttp.HandlerFor(s.reg, promhttp.HandlerOpts{Registry: s.reg}))
 
 	r.Route("/api/v1", func(api chi.Router) {
-		api.Use(s.logRequests, s.authenticate, s.csrf)
+		api.Use(s.instrument, s.logRequests, s.authenticate, s.csrf)
 		api.Get("/openapi.yaml", s.serveSpec)
 		strict := gen.NewStrictHandlerWithOptions(&handlers{s}, []gen.StrictMiddlewareFunc{withHTTP}, gen.StrictHTTPServerOptions{
 			RequestErrorHandlerFunc:  s.requestError,

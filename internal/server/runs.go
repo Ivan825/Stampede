@@ -9,6 +9,9 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/prometheus/client_golang/prometheus"
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/codes"
+	"go.opentelemetry.io/otel/trace"
 
 	"github.com/Ivan825/Stampede/internal/api/gen"
 	"github.com/Ivan825/Stampede/internal/metrics"
@@ -46,6 +49,8 @@ type activeRun struct {
 	done     chan struct{}
 	// obs is the run's resolved observe block (target metrics, trace links).
 	obs *observe.Config
+	// link ties the run's span to the request that started it.
+	link trace.Link
 }
 
 type runManager struct {
@@ -141,7 +146,20 @@ func (m *runManager) event(ctx context.Context, r *activeRun, ev ExecEvent) {
 // execute drives one run from start to report. It never panics out: any
 // failure ends the run as failed with the error recorded.
 func (m *runManager) execute(r *activeRun, spec ExecSpec, prog *scenario.Program, plan *scenario.Plan) {
-	ctx := context.Background()
+	// One span covers the run from scheduling to its report. It outlives
+	// the request that started it, so it is a new trace linked to it.
+	ctx, span := tracer.Start(context.Background(), "run",
+		trace.WithNewRoot(), trace.WithLinks(r.link), trace.WithSpanKind(trace.SpanKindInternal),
+		trace.WithAttributes(
+			attribute.String("stampede.run.id", r.id.String()),
+			attribute.String("stampede.project.id", r.project.String()),
+			attribute.String("stampede.scenario", spec.Scenario.Metadata.Name),
+			attribute.String("stampede.target", spec.Scenario.Target.BaseURL),
+			attribute.String("stampede.load.mode", plan.Mode),
+			attribute.Float64("stampede.load.peak", plan.Peak()),
+			attribute.Int("stampede.workers.requested", spec.Workers),
+		))
+	defer span.End()
 	defer func() {
 		m.mu.Lock()
 		delete(m.active, r.id)
@@ -157,6 +175,8 @@ func (m *runManager) execute(r *activeRun, spec ExecSpec, prog *scenario.Program
 		m.finished.WithLabelValues(statusFailed).Inc()
 		m.publishStatus(ctx, r)
 		m.s.notify.runFinished(r, statusFailed, msg, nil)
+		span.SetAttributes(attribute.String("stampede.run.status", statusFailed))
+		span.SetStatus(codes.Error, msg)
 	}
 
 	m.setStatus(ctx, r, statusStarting)
@@ -172,6 +192,7 @@ func (m *runManager) execute(r *activeRun, spec ExecSpec, prog *scenario.Program
 	if killed {
 		exec.Kill()
 	}
+	span.AddEvent("load started")
 	if err := m.s.st.MarkRunStarted(ctx, db.MarkRunStartedParams{ID: r.id, StartedAt: ptr(time.Now())}); err != nil {
 		m.s.log.Error("mark started", "run", r.id, "error", err)
 	}
@@ -215,6 +236,7 @@ func (m *runManager) execute(r *activeRun, spec ExecSpec, prog *scenario.Program
 		m.s.log.Error("set run workers", "run", r.id, "error", err)
 	}
 	m.setStatus(ctx, r, statusAnalyzing)
+	span.AddEvent("load ended", trace.WithAttributes(attribute.String("stampede.stop_reason", res.StopReason), attribute.Int("stampede.workers", res.Workers)))
 
 	if res.Snapshots != nil {
 		snaps = res.Snapshots
@@ -265,6 +287,13 @@ func (m *runManager) execute(r *activeRun, spec ExecSpec, prog *scenario.Program
 	m.publishStatus(ctx, r)
 	m.s.log.Info("run finished", "run", r.id, "status", status, "verdict", verdict, "requests", rep.Overall.Requests)
 	m.s.notify.runFinished(r, status, "", rep)
+	span.SetAttributes(
+		attribute.String("stampede.run.status", status),
+		attribute.String("stampede.run.verdict", verdict),
+		attribute.Int64("stampede.requests", int64(rep.Overall.Requests)), //nolint:gosec // counts fit
+		attribute.Float64("stampede.error_rate", rep.Overall.ErrorRate),
+		attribute.Float64("stampede.p95_seconds", rep.Overall.Latency.P95),
+	)
 }
 
 func ptr[T any](v T) *T { return &v }
