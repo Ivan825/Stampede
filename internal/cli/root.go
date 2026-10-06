@@ -18,7 +18,9 @@ reports where your product breaks.`,
 		SilenceUsage:  true,
 		SilenceErrors: true,
 	}
-	root.AddCommand(newVersionCmd(), newRunCmd(), newValidateCmd(), newTargetCmd(), newServerCmd(), newWorkerCmd(), newKeygenCmd(), newHealthcheckCmd(), newCompareCmd(), newReportCmd())
+	root.AddCommand(newVersionCmd(), newRunCmd(), newValidateCmd(), newTargetCmd(), newServerCmd(), newWorkerCmd(), newKeygenCmd(), newHealthcheckCmd(), newCompareCmd(), newReportCmd(),
+		newLoginCmd(), newStartCmd(), newPushCmd(), newRunsCmd(), newStopCmd(false), newStopCmd(true), newWorkersCmd(),
+		newUpCmd(), newDownCmd(), newDoctorCmd())
 	return root
 }
 
