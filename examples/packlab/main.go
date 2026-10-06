@@ -37,6 +37,22 @@ type product struct {
 	// addr is the default listen address.
 	addr string
 	new  func(labkit.Config) http.Handler
+	// open starts an app that also listens on another protocol (a broker,
+	// a cache, a UDP server), by default on listen. Such an app has no new.
+	open   func(labkit.Config) (*labkit.App, error)
+	listen string
+	// plugins are the protocol plugins the pack's scenarios use.
+	plugins []string
+	// postgres is set for an app that seeds a PostgreSQL database.
+	postgres bool
+}
+
+// start builds the app.
+func (p product) start(cfg labkit.Config) (*labkit.App, error) {
+	if p.open == nil {
+		return &labkit.App{Handler: p.new(cfg), Close: func() {}}, nil
+	}
+	return p.open(cfg)
 }
 
 var products = map[string]product{
@@ -60,6 +76,8 @@ func names() []string {
 func main() {
 	name := flag.String("product", "", "product to serve: "+strings.Join(names(), ", "))
 	addr := flag.String("addr", "", "listen address (default: the product's own port)")
+	listen := flag.String("listen", "", "address of the app's broker, cache or UDP server, for apps with one (default: the product's own port)")
+	pg := flag.String("postgres", os.Getenv("PACKLAB_POSTGRES_DSN"), "PostgreSQL connection string, for apps that seed a database")
 	fix := flag.String("fix", os.Getenv("PACKLAB_FIX"), `planted bottlenecks to switch off, comma-separated, or "all"`)
 	fast := flag.Bool("fast", false, "shorten deliberate waits (token pacing, admission ticks) for quick tests")
 	flag.Parse()
@@ -71,9 +89,21 @@ func main() {
 	if *addr == "" {
 		*addr = p.addr
 	}
+	if *listen == "" {
+		*listen = p.listen
+	}
+	if p.postgres && *pg == "" {
+		fmt.Fprintf(os.Stderr, "packlab: %s needs a PostgreSQL database: -postgres or PACKLAB_POSTGRES_DSN\n", *name)
+		os.Exit(2)
+	}
+	app, err := p.start(labkit.Config{Fixes: labkit.ParseFixes(*fix), Fast: *fast, Listen: *listen, Postgres: *pg})
+	if err != nil {
+		slog.Error("packlab could not start", "product", *name, "err", err)
+		os.Exit(1)
+	}
 	srv := &http.Server{
 		Addr:              *addr,
-		Handler:           p.new(labkit.Config{Fixes: labkit.ParseFixes(*fix), Fast: *fast}),
+		Handler:           app.Handler,
 		ReadHeaderTimeout: 10 * time.Second,
 	}
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
@@ -84,8 +114,10 @@ func main() {
 		defer cancel()
 		_ = srv.Shutdown(sctx)
 	}()
-	slog.Info("packlab serving", "product", *name, "addr", *addr, "fixes", *fix)
-	if err := srv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
+	slog.Info("packlab serving", "product", *name, "addr", *addr, "fixes", *fix, "env", app.Env)
+	err = srv.ListenAndServe()
+	app.Close()
+	if err != nil && !errors.Is(err, http.ErrServerClosed) {
 		slog.Error("packlab stopped", "err", err)
 		os.Exit(1)
 	}

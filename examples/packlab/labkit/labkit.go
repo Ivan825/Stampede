@@ -1,12 +1,14 @@
 // Package labkit holds the small pieces every PackLab reference app shares:
-// JSON helpers, fix flags, bearer tokens, a minimal OpenAPI document and a
-// work counter used to show where the planted bottlenecks spend their time.
+// JSON helpers, fix flags, bearer tokens, a minimal OpenAPI document, a
+// work counter used to show where the planted bottlenecks spend their
+// time, and the App shape of the apps that also listen on another protocol.
 package labkit
 
 import (
 	"crypto/rand"
 	"encoding/hex"
 	"encoding/json"
+	"net"
 	"net/http"
 	"sort"
 	"strings"
@@ -38,6 +40,38 @@ type Config struct {
 	// Fast shortens deliberate waits (token pacing, admission ticks) so
 	// tests run quickly. Bottlenecks stay in place.
 	Fast bool
+	// Listen is the address of an app's second listener (its MQTT broker,
+	// Kafka cluster, Redis server or UDP game server), for the apps that
+	// have one. Tests use "127.0.0.1:0".
+	Listen string
+	// Postgres is the PostgreSQL connection string DBLab seeds its tables
+	// into.
+	Postgres string
+}
+
+// App is a reference app that serves more than HTTP: a broker, a cache or
+// a UDP server next to its HTTP API.
+type App struct {
+	// Handler serves the HTTP side: the API, /healthz and /openapi.json.
+	Handler http.Handler
+	// Env holds what the pack's scenarios need besides TARGET_URL to
+	// reach the other listeners, such as MQTT_BROKER=tcp://127.0.0.1:8111.
+	Env map[string]string
+	// Close stops the other listeners.
+	Close func()
+}
+
+// Dialable returns a listener's address as a client on this machine can
+// dial it: an unspecified host (":8111", "[::]:8111") becomes localhost.
+func Dialable(addr net.Addr) string {
+	host, port, err := net.SplitHostPort(addr.String())
+	if err != nil {
+		return addr.String()
+	}
+	if ip := net.ParseIP(host); host == "" || ip != nil && ip.IsUnspecified() {
+		host = "localhost"
+	}
+	return net.JoinHostPort(host, port)
 }
 
 // JSON writes v with a status code.
