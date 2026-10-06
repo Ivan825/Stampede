@@ -58,7 +58,7 @@ load: {vus: 1, duration: 1s}`}, &sc)
 	}
 	attrs := map[string]string{}
 	for _, a := range runSpan.Attributes() {
-		attrs[string(a.Key)] = a.Value.Emit()
+		attrs[string(a.Key)] = a.Value.String()
 	}
 	if attrs["stampede.run.id"] != run["id"] || attrs["stampede.run.status"] != "completed" || attrs["stampede.scenario"] != "traced" {
 		t.Errorf("run span attributes %v", attrs)
