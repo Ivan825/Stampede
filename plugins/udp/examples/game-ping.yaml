@@ -1,0 +1,28 @@
+apiVersion: stampede.dev/v1
+kind: Scenario
+metadata:
+  name: udp-game-ping
+  description: Game clients ping a UDP echo server and send position updates.
+journeys:
+  - name: player
+    steps:
+      - name: ping
+        plugin: udp.send
+        with:
+          addr: ${env.UDP_ADDR}
+          payload: "ping ${vu} ${iter}"
+          reply: true
+          match: "ping ${vu} ${iter}"   # skip replies to earlier, timed-out pings
+        check: { maxLatency: 50ms }
+        extract: { pong: "$.reply" }
+        timeout: 1s
+      - name: position
+        plugin: udp.send
+        with:
+          addr: ${env.UDP_ADDR}
+          payload: "01 00 2a 00 10"    # a binary update: hex bytes
+          encoding: hex
+      - think: 50ms..150ms
+load: { vus: 20, duration: 30s }
+targets:
+  - player/ping.p95 < 20ms
