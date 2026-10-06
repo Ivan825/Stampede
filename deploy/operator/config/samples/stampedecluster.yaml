@@ -1,0 +1,26 @@
+# A Stampede server and two workers. The database is external: put its URL
+# in a Secret first, for example
+#   kubectl create secret generic lab-db \
+#     --from-literal=url='postgres://stampede:PASSWORD@db:5432/stampede?sslmode=disable'
+apiVersion: stampede.dev/v1alpha1
+kind: StampedeCluster
+metadata:
+  name: lab
+spec:
+  image: ghcr.io/ivan825/stampede:0.1.0
+  database:
+    urlSecretRef:
+      name: lab-db
+      key: url
+  server:
+    resources:
+      requests: { cpu: 50m, memory: 64Mi }
+      limits: { memory: 512Mi }
+  workers:
+    replicas: 2
+    region: kubernetes
+    labels:
+      pool: default
+    resources:
+      requests: { cpu: 50m, memory: 32Mi }
+      limits: { memory: 256Mi }

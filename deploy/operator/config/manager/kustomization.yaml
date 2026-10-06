@@ -1,0 +1,5 @@
+resources:
+  - manager.yaml
+images:
+  - name: ghcr.io/ivan825/stampede-operator
+    newTag: latest

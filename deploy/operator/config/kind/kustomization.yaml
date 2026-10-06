@@ -1,0 +1,15 @@
+# The operator with a locally built image loaded into kind
+# (deploy/kind/operator-smoke.sh).
+resources:
+  - ../default
+images:
+  - name: ghcr.io/ivan825/stampede-operator
+    newTag: kind
+patches:
+  - target:
+      kind: Deployment
+      name: stampede-operator-controller-manager
+    patch: |-
+      - op: add
+        path: /spec/template/spec/containers/0/imagePullPolicy
+        value: Never

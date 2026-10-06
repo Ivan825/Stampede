@@ -1,0 +1,41 @@
+# One load test against the StampedeCluster "lab". The API token comes from
+# Settings > API tokens in the web UI (role editor or above, because this run
+# creates its project, target and inline scenario):
+#   kubectl create secret generic stampede-api-token --from-literal=token=stp_...
+apiVersion: stampede.dev/v1alpha1
+kind: StampedeRun
+metadata:
+  name: health-smoke
+spec:
+  server:
+    clusterRef: lab
+  apiTokenSecretRef:
+    name: stampede-api-token
+    key: token
+  project: kubernetes
+  target:
+    url: http://lab:8080
+  scenario:
+    inline: |
+      apiVersion: stampede.dev/v1
+      kind: Scenario
+      metadata:
+        name: operator-smoke
+      journeys:
+        - name: health
+          steps:
+            - get: /healthz
+              check: { status: 200 }
+      load:
+        mode: rate
+        rate: 20/s
+        duration: 10s
+      targets:
+        - errors < 1%
+  overrides:
+    duration: 10s
+  workers: 3
+  scaleWorkers:
+    replicas: 3
+    waitTimeoutSeconds: 180
+  note: sample run from the operator
