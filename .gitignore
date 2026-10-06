@@ -27,3 +27,6 @@ site/.astro/
 .idea/
 .vscode/
 *.swp
+
+# Local agent worktrees
+/.claude/
