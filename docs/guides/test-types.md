@@ -65,7 +65,7 @@ target:
   baseURL: https://staging.example.com
   network: { profile: 3g }                 # or slow-3g, 4g, slow-wifi
   # or explicit values, which override the profile:
-  # network: { rtt: 250ms, down: 1.6mbps, up: 768kbps }
+  # network: { rtt: 250ms, jitter: 50ms, loss: 1%, down: 1.6mbps, up: 768kbps }
 ```
 
 | Profile | Round trip | Down | Up |
@@ -76,11 +76,13 @@ target:
 | `slow-wifi` | 30 ms | 2 Mbit/s | 1 Mbit/s |
 
 The round trip is added once per connection set-up and once per
-request/response exchange; bandwidth is limited per connection. Measured
+request/response exchange; `jitter` varies each round trip; bandwidth is
+limited per connection. `loss` reproduces what packet loss does to a TCP
+connection: a share of transfers stalls for a retransmission timeout
+(200 ms, or 1.5 × RTT if longer) before continuing. Measured
 latency includes the emulated network, which is the point: it shows what
 those users experience. It applies to HTTP, GraphQL, SSE and WebSocket
 steps; gRPC steps are not shaped.
 
-**Planned:** packet loss and jitter (Linux netem in the worker container),
-connection floods, slow clients, large payloads, and failing a dependency
+**Planned:** connection floods, slow clients, large payloads, and failing a dependency
 mid-run through an in-environment agent.

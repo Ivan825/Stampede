@@ -84,6 +84,10 @@ type Network struct {
 	RTT     Duration `yaml:"rtt,omitempty" json:"rtt,omitempty"`
 	Down    string   `yaml:"down,omitempty" json:"down,omitempty"`
 	Up      string   `yaml:"up,omitempty" json:"up,omitempty"`
+	// Jitter varies each round trip by up to this much either way.
+	Jitter Duration `yaml:"jitter,omitempty" json:"jitter,omitempty"`
+	// Loss is the share of transfers stalled by a retransmission ("1%").
+	Loss *Percent `yaml:"loss,omitempty" json:"loss,omitempty"`
 }
 
 // Feeder supplies test data rows to virtual users.
@@ -414,8 +418,17 @@ func (n *Network) Resolve() (netem.Profile, error) {
 		}
 		*f.dst = v
 	}
-	if p.RTT == 0 && p.Down == 0 && p.Up == 0 {
-		return p, fmt.Errorf("set a profile, rtt, down or up")
+	if n.Jitter > 0 {
+		p.Jitter = n.Jitter.D()
+	}
+	if n.Loss != nil {
+		if *n.Loss > 0.5 {
+			return p, fmt.Errorf("loss above 50%% is not a usable network")
+		}
+		p.Loss = float64(*n.Loss)
+	}
+	if p.RTT == 0 && p.Down == 0 && p.Up == 0 && p.Loss == 0 && p.Jitter == 0 {
+		return p, fmt.Errorf("set a profile, rtt, down, up, jitter or loss")
 	}
 	return p, nil
 }

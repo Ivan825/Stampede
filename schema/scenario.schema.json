@@ -48,7 +48,9 @@
             "profile": { "enum": ["slow-3g", "3g", "4g", "slow-wifi"] },
             "rtt": { "$ref": "#/$defs/duration" },
             "down": { "type": "string", "description": "Download bandwidth, e.g. 1.6mbps" },
-            "up": { "type": "string", "description": "Upload bandwidth, e.g. 768kbps" }
+            "up": { "type": "string", "description": "Upload bandwidth, e.g. 768kbps" },
+            "jitter": { "$ref": "#/$defs/duration", "description": "Vary each round trip by up to this much either way." },
+            "loss": { "$ref": "#/$defs/percent", "description": "Share of transfers stalled by a retransmission timeout, e.g. 1%." }
           }
         }
       }

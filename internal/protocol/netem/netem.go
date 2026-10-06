@@ -1,13 +1,19 @@
 // Package netem emulates slower networks inside the load generator: added
-// round-trip latency and per-connection bandwidth limits, applied to each
-// virtual user's connections. It needs no privileges, so it works on any
-// worker. (Packet loss and jitter at the kernel level need Linux netem and
-// are not provided here.)
+// round-trip latency with jitter, per-connection bandwidth limits and the
+// effect of packet loss, applied to each virtual user's connections. It
+// needs no privileges, so it works on any worker.
+//
+// Loss is emulated at the level the application sees it: TCP never loses
+// data, but a lost segment stalls the stream until it is retransmitted. So
+// with probability Loss a read or write waits one retransmission timeout
+// (200ms, or 1.5 x RTT when larger) before proceeding, which is what a
+// user on a lossy network experiences.
 package netem
 
 import (
 	"context"
 	"fmt"
+	"math/rand/v2"
 	"net"
 	"sort"
 	"strings"
@@ -23,6 +29,36 @@ type Profile struct {
 	RTT time.Duration
 	// Down and Up are bandwidth limits in bytes per second (0 = unlimited).
 	Down, Up int64
+	// Jitter varies each RTT uniformly by up to this much either way.
+	Jitter time.Duration
+	// Loss is the probability (0..1) that a transfer is delayed by a
+	// retransmission timeout.
+	Loss float64
+}
+
+// rto is the retransmission stall applied for an emulated lost segment.
+func (p Profile) rto() time.Duration {
+	return max(200*time.Millisecond, p.RTT*3/2)
+}
+
+// halfRTT returns half a round trip, with jitter applied.
+func (p Profile) halfRTT() time.Duration {
+	d := p.RTT
+	if p.Jitter > 0 {
+		d += time.Duration(rand.Int64N(int64(2*p.Jitter)+1)) - p.Jitter
+	}
+	if d < 0 {
+		d = 0
+	}
+	return d / 2
+}
+
+// lossStall returns the retransmission delay when a loss is drawn.
+func (p Profile) lossStall() time.Duration {
+	if p.Loss > 0 && rand.Float64() < p.Loss {
+		return p.rto()
+	}
+	return 0
 }
 
 // Profiles are the built-in networks. Bandwidths are in bits per second
@@ -112,11 +148,11 @@ func (c *conn) turn(toSending bool) time.Duration {
 		return 0
 	}
 	c.sending = toSending
-	return c.p.RTT / 2
+	return c.p.halfRTT()
 }
 
 func (c *conn) Write(b []byte) (int, error) {
-	time.Sleep(c.turn(true))
+	time.Sleep(c.turn(true) + c.p.lossStall())
 	c.up.wait(len(b))
 	return c.Conn.Write(b)
 }
@@ -124,7 +160,7 @@ func (c *conn) Write(b []byte) (int, error) {
 func (c *conn) Read(b []byte) (int, error) {
 	n, err := c.Conn.Read(b)
 	if n > 0 {
-		time.Sleep(c.turn(false))
+		time.Sleep(c.turn(false) + c.p.lossStall())
 		c.down.wait(n)
 	}
 	return n, err

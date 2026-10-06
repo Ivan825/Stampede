@@ -15,8 +15,7 @@ groups:
       - { name: Open (arrival rate) and closed (virtual users) models, status: shipped, doc: docs/concepts/load-models }
       - { name: "Shapes: smoke, baseline, stress, spike, soak, breakpoint, steps, recovery, wave", status: shipped, doc: test-types }
       - { name: Breakpoint search and the knee of the throughput curve, status: shipped, doc: test-types }
-      - { name: Network emulation per user (latency and bandwidth), status: shipped, doc: test-types }
-      - { name: Packet loss and jitter emulation, status: planned }
+      - { name: "Network emulation per user: latency, jitter, bandwidth, packet loss", status: shipped, doc: test-types }
       - { name: Auto-abort on sustained errors or latency, status: shipped, doc: safety }
       - { name: Replay of recorded traffic, status: planned }
       - { name: Fault injection agent (dependency failures mid-run), status: planned }

@@ -59,6 +59,34 @@ func TestBandwidthLimited(t *testing.T) {
 	}
 }
 
+func TestJitterAndLoss(t *testing.T) {
+	p := Profile{RTT: 100 * time.Millisecond, Jitter: 40 * time.Millisecond}
+	lo, hi := time.Hour, time.Duration(0)
+	for i := 0; i < 2000; i++ {
+		d := p.halfRTT()
+		lo, hi = min(lo, d), max(hi, d)
+	}
+	if lo < 30*time.Millisecond || hi > 70*time.Millisecond || hi-lo < 30*time.Millisecond {
+		t.Errorf("half RTT with jitter ranged %s..%s, want about 30ms..70ms", lo, hi)
+	}
+	l := Profile{RTT: 50 * time.Millisecond, Loss: 0.1}
+	stalls := 0
+	for i := 0; i < 10000; i++ {
+		if d := l.lossStall(); d > 0 {
+			stalls++
+			if d != 200*time.Millisecond {
+				t.Fatalf("stall %s, want the 200ms minimum RTO", d)
+			}
+		}
+	}
+	if stalls < 850 || stalls > 1150 {
+		t.Errorf("%d stalls in 10000 draws at 10%% loss", stalls)
+	}
+	if (Profile{RTT: time.Second}).rto() != 1500*time.Millisecond {
+		t.Error("RTO should be 1.5 x RTT when that is larger")
+	}
+}
+
 func TestParseBandwidth(t *testing.T) {
 	for in, want := range map[string]int64{"1.6mbps": 200_000, "768kbps": 96_000, "8000": 1000, "1gbps": 125_000_000} {
 		got, err := ParseBandwidth(in)

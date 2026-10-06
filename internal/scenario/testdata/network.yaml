@@ -4,7 +4,7 @@ metadata:
   name: mobile-3g
 target:
   baseURL: https://staging.example.com
-  network: { profile: 3g, rtt: 250ms }
+  network: { profile: 3g, rtt: 250ms, jitter: 50ms, loss: 1% }
 journeys:
   - name: home
     steps:
