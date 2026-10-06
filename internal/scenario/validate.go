@@ -98,10 +98,13 @@ func (s *Scenario) Validate() error {
 			if u, ok := stepURL(st); ok && !IsAbsoluteURL(u) && !strings.HasPrefix(u, "${") {
 				hasRelative = true
 			}
+			if st.Kind == StepGRPC && st.GRPC.Target == "" {
+				hasRelative = true
+			}
 		})
 	}
 	if hasRelative && s.Target.BaseURL == "" {
-		add("target.baseURL", "required because some requests use relative paths")
+		add("target.baseURL", "required because some requests use relative paths (or gRPC steps have no target)")
 	}
 
 	if _, err := s.Load.Plan(); err != nil {

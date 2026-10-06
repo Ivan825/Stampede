@@ -123,6 +123,7 @@ const (
 	StepWS      StepKind = "ws"
 	StepSend    StepKind = "send"
 	StepExpect  StepKind = "expect"
+	StepGRPC    StepKind = "grpc"
 )
 
 // Step is one action within a journey. Exactly one kind-specific field is
@@ -147,6 +148,7 @@ type Step struct {
 	WS      *WebSocket
 	Send    *Send
 	Expect  *Expect
+	GRPC    *GRPC
 }
 
 // Request is an HTTP call.
@@ -231,6 +233,42 @@ type Expect struct {
 	// Extract reads variables from the matching message.
 	Extract map[string]string `yaml:"-" json:"-"`
 }
+
+// GRPC calls a unary or server-streaming gRPC method.
+type GRPC struct {
+	// Method is "package.Service/Method".
+	Method string
+	// Target is grpc://host:port or grpcs://host:port; empty means the
+	// host of target.baseURL (TLS for https). It may use env, secret and
+	// vars, which are rendered once when the run starts.
+	Target string
+	// Message is the request as JSON (protojson field names); strings may
+	// contain ${} expressions.
+	Message  any
+	Metadata map[string]string
+	// Descriptors come from server reflection unless Protoset (a
+	// FileDescriptorSet) or Proto (source files, found under ImportPaths)
+	// is set.
+	Protoset    string
+	Proto       []string
+	ImportPaths []string
+	Check       *GRPCCheck
+	Extract     map[string]string
+	Timeout     Duration
+}
+
+// GRPCCheck asserts on a gRPC response. Status lists the accepted status
+// codes by name (default OK); the rest work as for HTTP, on the response
+// rendered as JSON.
+type GRPCCheck struct {
+	Status     GRPCCodes      `yaml:"status,omitempty" json:"status,omitempty"`
+	JSON       map[string]any `yaml:"json,omitempty" json:"json,omitempty"`
+	MaxLatency Duration       `yaml:"maxLatency,omitempty" json:"maxLatency,omitempty"`
+	Expr       string         `yaml:"expr,omitempty" json:"expr,omitempty"`
+}
+
+// GRPCCodes is one status code name or a list of them.
+type GRPCCodes []string
 
 // Branch is one weighted alternative inside a branch step.
 type Branch struct {

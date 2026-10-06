@@ -19,6 +19,7 @@ import (
 	"time"
 
 	"github.com/Ivan825/Stampede/internal/metrics"
+	"github.com/Ivan825/Stampede/internal/protocol/grpcx"
 	"github.com/Ivan825/Stampede/internal/protocol/httpx"
 	"github.com/Ivan825/Stampede/internal/scenario"
 	"github.com/Ivan825/Stampede/internal/version"
@@ -87,12 +88,16 @@ type Engine struct {
 	// wsTransport makes WebSocket handshakes. It never negotiates HTTP/2,
 	// which cannot carry a WebSocket upgrade.
 	wsTransport *http.Transport
-	httpOpts    httpx.Options
-	baseURL     string
-	headers     []headerKV
-	userAgent   string
-	maxBody     int64
-	allowHost   func(*url.URL) bool
+	// grpcPool, grpcDescs and grpcSteps serve grpc steps; nil without any.
+	grpcPool  *grpcx.Pool
+	grpcDescs *grpcx.Descriptors
+	grpcSteps map[int]*grpcStep
+	httpOpts  httpx.Options
+	baseURL   string
+	headers   []headerKV
+	userAgent string
+	maxBody   int64
+	allowHost func(*url.URL) bool
 
 	t0        time.Time
 	activeVUs atomic.Int64
@@ -222,6 +227,11 @@ func New(opts Options) (*Engine, error) {
 		}
 		e.baseURL = base
 	}
+	static := &vuVars{env: opts.Env, secret: opts.Secrets, static: s.Vars}
+	static.reset(0)
+	if err := e.prepareGRPC(static); err != nil {
+		return nil, err
+	}
 	return e, nil
 }
 
@@ -258,6 +268,14 @@ func walkCompiled(steps []*scenario.CStep, fn func(string)) {
 			}
 			if sd.JSON != nil {
 				fn(sd.JSON.Source())
+			}
+		}
+		if g := st.GRPC; g != nil {
+			if g.Message != nil {
+				fn(g.Message.Source())
+			}
+			for _, kv := range g.Metadata {
+				fn(kv.Value.String())
 			}
 		}
 		if g := st.GraphQL; g != nil {
@@ -372,6 +390,9 @@ func (e *Engine) Run(ctx context.Context) (*Result, error) {
 	iterCancel()
 	close(tickerStop)
 	<-flushDone
+	if e.grpcPool != nil {
+		e.grpcPool.Close()
+	}
 
 	reason, _ := e.stopReason.Load().(string)
 	return &Result{

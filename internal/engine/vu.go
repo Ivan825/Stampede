@@ -162,6 +162,8 @@ func (v *VU) runStep(ctx context.Context, st *scenario.CStep, intended time.Time
 		return v.wsSend(ctx, st)
 	case scenario.StepExpect:
 		return v.wsExpect(ctx, st)
+	case scenario.StepGRPC:
+		return v.grpcCall(ctx, st, intended)
 	case scenario.StepThink:
 		return sleepCtx(ctx, v.think(st.Think))
 	case scenario.StepBranch:

@@ -6,6 +6,7 @@ require (
 	cel.dev/cel-go v0.32.0
 	github.com/PuerkitoBio/goquery v1.13.0
 	github.com/andybalholm/cascadia v1.3.5
+	github.com/bufbuild/protocompile v0.14.1
 	github.com/charmbracelet/bubbles v1.0.0
 	github.com/charmbracelet/bubbletea v1.3.10
 	github.com/charmbracelet/lipgloss v1.1.0

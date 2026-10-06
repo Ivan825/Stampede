@@ -116,6 +116,19 @@
         "allowErrors": { "type": "boolean", "description": "GraphQL only: accept a response whose errors array is not empty." }
       }
     },
+    "grpcCheck": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "status": {
+          "description": "Accepted gRPC status names, e.g. OK or [OK, NOT_FOUND] (default OK).",
+          "anyOf": [{ "type": "string" }, { "type": "array", "items": { "type": "string" } }]
+        },
+        "json": { "type": "object", "description": "JSONPath -> expected value, or \"exists\"." },
+        "maxLatency": { "$ref": "#/$defs/duration" },
+        "expr": { "type": "string" }
+      }
+    },
     "request": {
       "headers": { "$ref": "#/$defs/stringMap" },
       "query": { "$ref": "#/$defs/stringMap" },
@@ -133,7 +146,7 @@
     },
     "step": {
       "type": "object",
-      "description": "Exactly one action: an HTTP method, graphql, sse, ws (with send and expect inside), think, branch, loop, while or group.",
+      "description": "Exactly one action: an HTTP method, graphql, sse, ws (with send and expect inside), grpc, think, branch, loop, while or group.",
       "properties": {
         "name": { "type": "string" },
         "if": { "type": "string" },
@@ -202,17 +215,25 @@
               }
             }
           ]
-        }
+        },
+        "grpc": { "type": "string", "pattern": "^/?[A-Za-z_][A-Za-z0-9_]*(\\.[A-Za-z_][A-Za-z0-9_]*)*/[A-Za-z_][A-Za-z0-9_]*$", "description": "gRPC method: package.Service/Method (unary or server streaming)." },
+        "target": { "type": "string", "description": "grpc: grpc://host:port or grpcs://host:port (default: the host of target.baseURL)." },
+        "message": { "type": "object", "description": "grpc: the request as JSON (protojson names); strings may contain ${} expressions." },
+        "metadata": { "$ref": "#/$defs/stringMap" },
+        "protoset": { "type": "string", "description": "grpc: FileDescriptorSet file instead of server reflection." },
+        "proto": { "description": "grpc: .proto source file(s) instead of server reflection.", "anyOf": [{ "type": "string" }, { "type": "array", "items": { "type": "string" } }] },
+        "importPaths": { "type": "array", "items": { "type": "string" }, "description": "grpc: where proto files and their imports are found (default: the scenario's directory)." }
       },
       "additionalProperties": false,
       "allOf": [
-        { "if": { "required": ["graphql"] }, "then": { "properties": { "query": { "type": "string" } } } }
+        { "if": { "required": ["graphql"] }, "then": { "properties": { "query": { "type": "string" } } } },
+        { "if": { "required": ["grpc"] }, "then": { "properties": { "check": { "$ref": "#/$defs/grpcCheck" } } } }
       ],
       "oneOf": [
         { "required": ["get"] }, { "required": ["post"] }, { "required": ["put"] }, { "required": ["patch"] },
         { "required": ["delete"] }, { "required": ["head"] }, { "required": ["options"] },
         { "required": ["graphql"] }, { "required": ["sse"] },
-        { "required": ["ws", "steps"] }, { "required": ["send"] }, { "required": ["expect"] },
+        { "required": ["ws", "steps"] }, { "required": ["send"] }, { "required": ["expect"] }, { "required": ["grpc"] },
         { "required": ["think"] }, { "required": ["branch"] }, { "required": ["loop", "steps"] },
         { "required": ["while", "steps"] }, { "required": ["group", "steps"] }
       ]

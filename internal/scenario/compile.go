@@ -4,6 +4,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
+	"net/url"
 	"regexp"
 	"slices"
 	"sort"
@@ -67,6 +68,27 @@ type CStep struct {
 	WS     *CWS
 	Send   *CSend
 	Expect *CExpect
+	// GRPC is set for grpc steps; Req holds their check (without status),
+	// extractors and timeout.
+	GRPC *CGRPC
+}
+
+// CGRPC is a compiled gRPC call.
+type CGRPC struct {
+	// Service is the service's full name and Method the method's name.
+	Service string
+	Method  string
+	// Target is nil when calls go to target.baseURL's host.
+	Target      *Template
+	Message     *JSONTemplate
+	Metadata    []KV
+	Protoset    string
+	Proto       []string
+	ImportPaths []string
+	// Codes are the accepted status code names (canonical, such as
+	// NOT_FOUND); CheckedStatus is set when the scenario listed them.
+	Codes         []string
+	CheckedStatus bool
 }
 
 // CWS is a compiled WebSocket block.
@@ -206,6 +228,8 @@ func Compile(s *Scenario) (*Program, error) {
 type compiler struct {
 	prog *Program
 	errs []string
+	// static are the variables known before any step runs (vars).
+	static []string
 	// inWS is set while compiling the steps of a ws block.
 	inWS bool
 }
@@ -228,6 +252,7 @@ func (c *compiler) compile() (*Program, error) {
 	if err != nil {
 		return nil, err
 	}
+	c.static = initial
 
 	c.prog.BaseURL = c.template(scope, "target.baseURL", s.Target.BaseURL)
 	c.prog.Headers = c.kvs(scope, "target.headers", s.Target.Headers)
@@ -359,6 +384,9 @@ func (c *compiler) step(path, journey string, st Step, vars []string) (*CStep, [
 			cs.Send.Text = c.template(scope, path+".send", st.Send.Text)
 		}
 		c.record(cs)
+	case StepGRPC:
+		vars = c.grpc(path, scope, cs, st.GRPC, vars)
+		c.record(cs)
 	case StepExpect:
 		if !c.inWS {
 			c.errf(path, "expect only works inside a ws block")
@@ -484,6 +512,86 @@ func (c *compiler) sse(path string, scope *Scope, cs *CStep, e *SSE, vars []stri
 		ce.Match = re
 	}
 	cs.SSE = ce
+	return vars
+}
+
+var (
+	grpcMethodRe = regexp.MustCompile(`^/?([A-Za-z_][A-Za-z0-9_]*(?:\.[A-Za-z_][A-Za-z0-9_]*)*)/([A-Za-z_][A-Za-z0-9_]*)$`)
+	grpcCodes    = []string{
+		"OK", "CANCELLED", "UNKNOWN", "INVALID_ARGUMENT", "DEADLINE_EXCEEDED", "NOT_FOUND",
+		"ALREADY_EXISTS", "PERMISSION_DENIED", "RESOURCE_EXHAUSTED", "FAILED_PRECONDITION",
+		"ABORTED", "OUT_OF_RANGE", "UNIMPLEMENTED", "INTERNAL", "UNAVAILABLE", "DATA_LOSS",
+		"UNAUTHENTICATED",
+	}
+)
+
+// GRPCCodeName returns the canonical name of a gRPC status code given in
+// any case, with or without underscores (NOT_FOUND, NotFound, not_found).
+func GRPCCodeName(s string) (string, bool) {
+	key := strings.ReplaceAll(strings.ToUpper(strings.TrimSpace(s)), "_", "")
+	if key == "CANCELED" {
+		key = "CANCELLED"
+	}
+	for _, c := range grpcCodes {
+		if strings.ReplaceAll(c, "_", "") == key {
+			return c, true
+		}
+	}
+	return "", false
+}
+
+func (c *compiler) grpc(path string, scope *Scope, cs *CStep, g *GRPC, vars []string) []string {
+	if cs.Name == "" {
+		cs.Name = "gRPC " + strings.TrimPrefix(g.Method, "/")
+	}
+	cg := &CGRPC{Protoset: g.Protoset, Proto: g.Proto, ImportPaths: g.ImportPaths, Codes: []string{"OK"}}
+	if m := grpcMethodRe.FindStringSubmatch(g.Method); m != nil {
+		cg.Service, cg.Method = m[1], m[2]
+	} else {
+		c.errf(path, "grpc method %q must look like package.Service/Method", g.Method)
+	}
+	if g.Protoset != "" && len(g.Proto) > 0 {
+		c.errf(path, "set protoset or proto, not both")
+	}
+	if len(g.ImportPaths) > 0 && len(g.Proto) == 0 {
+		c.errf(path+".importPaths", "only applies with proto")
+	}
+	if g.Target != "" {
+		// The target is rendered once per run, before any step has run.
+		static, _ := NewScope(c.static...)
+		cg.Target = c.template(static, path+".target", g.Target)
+		if cg.Target != nil && cg.Target.IsLiteral() {
+			if u, err := url.Parse(g.Target); err != nil || (u.Scheme != "grpc" && u.Scheme != "grpcs") || u.Host == "" {
+				c.errf(path+".target", "must look like grpc://host:port or grpcs://host:port")
+			}
+		}
+	}
+	if g.Message != nil {
+		if _, ok := g.Message.(map[string]any); !ok {
+			c.errf(path+".message", "must be a mapping (the request message as JSON)")
+		} else {
+			cg.Message = c.jsonTemplate(scope, path+".message", g.Message)
+		}
+	}
+	cg.Metadata = c.kvs(scope, path+".metadata", g.Metadata)
+
+	cs.Req = &CRequest{Timeout: g.Timeout}
+	if ch := g.Check; ch != nil {
+		if len(ch.Status) > 0 {
+			cg.Codes, cg.CheckedStatus = nil, true
+			for _, s := range ch.Status {
+				name, ok := GRPCCodeName(s)
+				if !ok {
+					c.errf(path+".check.status", "unknown gRPC status %q (use names such as OK, NOT_FOUND, UNAVAILABLE)", s)
+					continue
+				}
+				cg.Codes = append(cg.Codes, name)
+			}
+		}
+		cs.Req.Check = c.check(path+".check", &Check{JSON: ch.JSON, MaxLatency: ch.MaxLatency, Expr: ch.Expr}, vars)
+	}
+	cs.Req.Extract, vars = c.extractors(path, g.Extract, vars, ExtractJSON, ExtractRegex, ExtractBody, ExtractHeader)
+	cs.GRPC = cg
 	return vars
 }
 
