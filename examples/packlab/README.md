@@ -17,6 +17,7 @@ and as a single binary in CI. (The e-commerce pack's reference app is
 | `fintech` | [BankLab](#banklab) | 8097 | [fintech](../../packs/fintech) |
 | `social` | [SocialLab](#sociallab) | 8098 | [social](../../packs/social) |
 | `content` | [NewsLab](#newslab) | 8099 | [content](../../packs/content) |
+| `streaming` | [StreamLab](#streamlab) | 8100 | [streaming](../../packs/streaming) |
 
 ```sh
 go run ./examples/packlab -product ticketing                # on :8094
@@ -198,3 +199,20 @@ costs 40ms (article) to 100ms (home page). The newsroom publishes with
 | `cachekey` | The cache key is the full URL, so links with tracking parameters (`utm_*`, `fbclid`) never hit and every such reader waits for the origin | `breaking-news.yaml`: `social-reader` `article` p95 (seconds, against under a millisecond with the fix) |
 | `stampede` | A page that is not cached is rendered by every request that asks for it, so an expired or purged home page sends a crowd to the four render slots | `breaking-news.yaml` and `cold-cache.yaml`: `home` p99 |
 | `purge` | Publishing an article empties the whole cache instead of the pages it appears on | `breaking-news.yaml`: `top story` p99 after each update |
+
+## StreamLab
+
+A video service that delivers HLS: 30 on-demand videos (`v001` ...
+`v030`, ten minutes each) and two live channels (`live1`, `live2`, on
+air since an hour before start-up) in four renditions, 240p to 1080p.
+`POST /api/playback` returns a manifest URL and a signed token, which
+every playlist and segment request must carry. Segments are two-second
+MPEG-TS files at the rendition's real bitrate (100 KB at 240p to 1.5 MB
+at 1080p); live playlists list the newest six. Starting playback calls
+three backends (entitlement, DRM license, CDN choice) of 40ms each.
+
+| Fix | Bottleneck | Where it shows |
+|---|---|---|
+| `package` | Every segment request packages the segment again, so a thousand live viewers wanting the newest segment do the same work a thousand times | `live-event.yaml`: `newest segment` p95 and CPU |
+| `playlist` | Every live playlist request lists every segment since the event began (thousands, growing by one every two seconds) to find the newest six | `live-event.yaml`: `live playlist` p95, worse the longer the event runs |
+| `startup` | Starting playback calls its three backends one after another (120ms) instead of together (40ms) | `premiere-spike.yaml` and `vod-mix.yaml`: `play` p95 |

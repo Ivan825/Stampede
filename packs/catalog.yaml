@@ -9,7 +9,7 @@ packs:
   - { name: social, title: "Social, feeds, forums", status: shipped, signature: "Feed load, post, like, notifications; viral spike", drivers: [http, websocket] }
   - { name: chat, title: "Chat, collaboration", status: shipped, signature: "Thousands of open connections; message fan-out; reconnect storm", drivers: [websocket, http] }
   - { name: content, title: "News, blogs, content", status: shipped, signature: "Cache hit rate; cold cache; breaking-news spike", drivers: [http] }
-  - { name: streaming, title: "Video and audio streaming", status: planned, signature: "Start-up time; segment delivery; live-event concurrency", drivers: [http] }
+  - { name: streaming, title: "Video and audio streaming", status: shipped, signature: "Start-up time; segment delivery; live-event concurrency", drivers: [http] }
   - { name: llm-apps, title: "AI and LLM apps", status: shipped, signature: "Time to first token; tokens per second; long streaming requests", drivers: [sse, http] }
   - { name: edtech, title: "EdTech, exam platforms", status: planned, signature: "Everyone starts at 10:00; deadline submission rush", drivers: [http, websocket] }
   - { name: government, title: "Government, results portals", status: planned, signature: "Results-day and deadline-day surges", drivers: [http] }

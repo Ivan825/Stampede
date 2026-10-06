@@ -1,0 +1,48 @@
+# Watching a live channel: start playback, then do what an HLS player
+# does every target duration: reload the media playlist, which slides
+# forward, and fetch the newest segment. Each viewer watches for about
+# half a minute.
+apiVersion: stampede.dev/v1
+kind: Scenario
+metadata:
+  name: streaming-live-viewer
+  description: A live viewer polls the sliding playlist and fetches the newest segment every two seconds.
+  tags: [pack:streaming, live]
+target:
+  baseURL: ${env.TARGET_URL}
+vars:
+  channel: live1
+journeys:
+  - name: live
+    steps:
+      - name: play
+        post: /api/playback
+        json: { channel: "${vars.channel}" }
+        check: { status: 201 }
+        extract: { manifest: "$.manifest", token: "$.token", session: "$.sessionId" }
+      - name: master playlist
+        get: ${manifest}
+        check: { status: 200 }
+      - loop: 15
+        steps:
+          - name: live playlist
+            get: /live/${vars.channel}/480p/index.m3u8?token=${token}
+            check: { status: 200, bodyContains: "#EXT-X-MEDIA-SEQUENCE" }
+            # The newest segment is the last one listed.
+            extract: { newest: 'regex:(?s).*\n(/live/\S+\.ts\S*)' }
+          - name: newest segment
+            get: ${newest}
+            check: { status: 200 }
+          - think: 2s
+      - name: heartbeat
+        post: /api/playback/${session}/heartbeat
+        json: { position: 30, rendition: 480p, bufferSeconds: 4, stalls: 0 }
+        check: { status: 204 }
+load:
+  mode: vus
+  vus: 50
+  duration: 3m
+targets:
+  - "live/live playlist.p95 < 200ms"
+  - "live/newest segment.p95 < 1s"
+  - errors < 1%

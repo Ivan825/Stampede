@@ -1,0 +1,24 @@
+apiVersion: stampede.dev/v1
+kind: Pack
+name: streaming
+title: Video and audio streaming
+description: >
+  Video on demand and live streaming over HLS, driven the way a player
+  drives it: start playback, fetch the multivariant and media playlists,
+  buffer the first segments, then fetch one segment per segment duration,
+  switch renditions and send heartbeats; live viewers poll a sliding
+  playlist for the newest segment. Includes a premiere spike and a live
+  event with a thousand viewers. Built for services shaped like StreamLab;
+  adjust paths, rendition names and token handling to match yours.
+status: shipped
+protocols: [http]
+referenceApp: examples/packlab/streamlab
+detect:
+  paths: ["/api/videos", "/api/playback", "/api/live", "/api/titles", "/api/streams", "/vod", "/hls", "/live"]
+  openapiTags: [videos, playback, live, streams, hls, vod]
+  htmlMeta: ['og:type" content="video', 'itemtype="https://schema.org/VideoObject"']
+  headers: {}
+variables:
+  TARGET_URL: { description: Base URL of the streaming API and origin (or the CDN in front of it) }
+targets:
+  - errors < 1%

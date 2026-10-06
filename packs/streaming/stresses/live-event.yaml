@@ -1,0 +1,49 @@
+# A live event: viewers pile in over two minutes until a thousand are
+# watching, then stay. Every viewer reloads the sliding playlist and
+# fetches the newest segment every two seconds, so all of them want the
+# same few segments at the same moment. Playlists and segments must stay
+# fast as the audience and the event's length grow.
+apiVersion: stampede.dev/v1
+kind: Scenario
+metadata:
+  name: streaming-live-event
+  tags: [pack:streaming, live, concurrency]
+target:
+  baseURL: ${env.TARGET_URL}
+vars:
+  channel: live1
+journeys:
+  - name: viewer
+    steps:
+      - name: play
+        post: /api/playback
+        json: { channel: "${vars.channel}" }
+        check: { status: 201 }
+        extract: { manifest: "$.manifest", token: "$.token", session: "$.sessionId" }
+      - name: master playlist
+        get: ${manifest}
+        check: { status: 200 }
+      - loop: 30
+        steps:
+          - name: live playlist
+            get: /live/${vars.channel}/480p/index.m3u8?token=${token}
+            check: { status: 200 }
+            extract: { newest: 'regex:(?s).*\n(/live/\S+\.ts\S*)' }
+          - name: newest segment
+            get: ${newest}
+            check: { status: 200 }
+          - think: 2s
+      - name: heartbeat
+        post: /api/playback/${session}/heartbeat
+        json: { position: 60, rendition: 480p, bufferSeconds: 4, stalls: 0 }
+        check: { status: 204 }
+load:
+  mode: vus
+  stages:
+    - { duration: 2m, target: 1000 }
+    - { duration: 3m, target: 1000 }
+    - { duration: 30s, target: 0 }
+targets:
+  - "viewer/live playlist.p95 < 200ms"
+  - "viewer/newest segment.p95 < 1s"
+  - errors < 1%

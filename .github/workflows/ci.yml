@@ -334,6 +334,7 @@ jobs:
           - { pack: fintech, port: 8097 }
           - { pack: social, port: 8098 }
           - { pack: content, port: 8099 }
+          - { pack: streaming, port: 8100 }
     runs-on: ubuntu-latest
     env:
       PACK: ${{ matrix.pack }}
