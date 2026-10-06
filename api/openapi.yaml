@@ -30,6 +30,8 @@ tags:
   - name: runs
   - name: workers
   - name: audit
+  - name: ai
+    description: Optional AI journey generation (bring your own key). Runs before load, never during.
 
 paths:
   /version:
@@ -728,6 +730,161 @@ paths:
                 items: { $ref: "#/components/schemas/AuditEntry" }
         "403": { $ref: "#/components/responses/Forbidden" }
 
+  /ai/providers:
+    get:
+      tags: [ai]
+      operationId: listAIProviders
+      summary: AI providers configured for the organisation (keys are never returned)
+      responses:
+        "200":
+          description: Providers
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/AIProvider" }
+    post:
+      tags: [ai]
+      operationId: putAIProvider
+      summary: Create or replace an AI provider by name
+      description: |
+        AI journey generation is optional and bring-your-own-key. The key is
+        encrypted with the server's master key and never returned. Omit
+        `apiKey` when replacing a provider to keep its stored key. Needs the
+        admin role.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/AIProviderPut" }
+      responses:
+        "200":
+          description: Replaced
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AIProvider" }
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AIProvider" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "422": { $ref: "#/components/responses/Invalid" }
+
+  /ai/providers/{providerId}:
+    parameters:
+      - name: providerId
+        in: path
+        required: true
+        schema: { type: string, format: uuid }
+    delete:
+      tags: [ai]
+      operationId: deleteAIProvider
+      responses:
+        "204": { description: Deleted }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /projects/{projectId}/ai/jobs:
+    parameters:
+      - $ref: "#/components/parameters/projectId"
+    get:
+      tags: [ai]
+      operationId: listAIJobs
+      parameters:
+        - name: limit
+          in: query
+          schema: { type: integer, minimum: 1, maximum: 200, default: 50 }
+      responses:
+        "200":
+          description: Generation jobs, newest first
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/AIJobSummary" }
+    post:
+      tags: [ai]
+      operationId: createAIJob
+      summary: Generate a scenario with an AI model (asynchronous)
+      description: |
+        Starts a generation job: understand the inputs, draft a scenario,
+        check it statically, dry-run each journey once with one user against
+        the target, and repair failures (up to `maxRepairs` rounds). Recorded
+        traffic is redacted before it reaches the provider. The result is a
+        proposal; nothing is saved until `POST /ai/jobs/{jobId}/approve`.
+        Refused with 429 when the organisation's AI token use this month
+        has reached the provider's cap.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/AIJobCreate" }
+      responses:
+        "202":
+          description: Job accepted
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AIJob" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "422": { $ref: "#/components/responses/Invalid" }
+        "429":
+          description: Monthly AI token cap reached, or too many jobs queued
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+
+  /ai/jobs/{jobId}:
+    parameters:
+      - name: jobId
+        in: path
+        required: true
+        schema: { type: string, format: uuid }
+    get:
+      tags: [ai]
+      operationId: getAIJob
+      summary: Job status, stage, token usage, proposal, dry-run traces, problems and diff
+      responses:
+        "200":
+          description: The job
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AIJob" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /ai/jobs/{jobId}/approve:
+    parameters:
+      - name: jobId
+        in: path
+        required: true
+        schema: { type: string, format: uuid }
+    post:
+      tags: [ai]
+      operationId: approveAIJob
+      summary: Save the proposal as a new scenario or a new scenario version
+      description: |
+        A person approves a finished job by saving its proposal: as a new
+        version of `scenarioId` (default: the scenario the job compared
+        against), otherwise as a new scenario. Jobs with flagged journeys
+        need `allowUnvalidated`. Needs the editor role and is audited.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/AIJobApprove" }
+      responses:
+        "201":
+          description: Saved
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AIJobApproval" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "422": { $ref: "#/components/responses/Invalid" }
+
 components:
   securitySchemes:
     bearer:
@@ -1160,3 +1317,191 @@ components:
           type: object
           additionalProperties: true
         ip: { type: string }
+
+    AIProviderKind:
+      type: string
+      enum: [anthropic, openai, gemini, ollama, openai-compatible]
+      x-enum-varnames: [AIProviderAnthropic, AIProviderOpenAI, AIProviderGemini, AIProviderOllama, AIProviderOpenAICompatible]
+
+    AIProvider:
+      type: object
+      required: [id, name, kind, model, hasKey, monthlyTokenCap, usedTokensThisMonth, createdAt, updatedAt]
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string }
+        kind: { $ref: "#/components/schemas/AIProviderKind" }
+        model: { type: string }
+        baseURL: { type: string }
+        hasKey: { type: boolean, description: Whether an API key is stored. The key itself is never returned. }
+        monthlyTokenCap:
+          type: integer
+          format: int64
+          description: Jobs are refused once the organisation's AI token use this calendar month (UTC) reaches this cap.
+        usedTokensThisMonth: { type: integer, format: int64 }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+
+    AIProviderPut:
+      type: object
+      required: [kind]
+      properties:
+        name: { type: string, minLength: 1, maxLength: 100, default: default }
+        kind: { $ref: "#/components/schemas/AIProviderKind" }
+        model: { type: string, description: Required except for anthropic (default claude-sonnet-5-5). }
+        baseURL: { type: string, description: API base URL; required for openai-compatible. }
+        apiKey: { type: string, description: Stored encrypted; omit to keep the current key. }
+        monthlyTokenCap: { type: integer, format: int64, minimum: 1, description: Default 2000000. }
+
+    AIJobCreate:
+      type: object
+      properties:
+        providerId: { type: string, format: uuid, description: Defaults to the organisation's only provider, or the one named "default". }
+        description: { type: string, maxLength: 20000 }
+        openapi: { type: string, description: OpenAPI 3.x document (YAML or JSON) }
+        har: { type: string, description: HAR recording (JSON) }
+        accessLog: { type: string, description: Web server access log }
+        targetId: { type: string, format: uuid, description: Required for the dry run. }
+        scenarioId: { type: string, format: uuid, description: Existing scenario to compare the proposal with. }
+        dryRun: { type: boolean, default: true }
+        maxRepairs: { type: integer, minimum: 0, maximum: 3, default: 3 }
+
+    AIUsage:
+      type: object
+      required: [inputTokens, outputTokens]
+      properties:
+        inputTokens: { type: integer, format: int64 }
+        outputTokens: { type: integer, format: int64 }
+
+    AIJobStatus:
+      type: string
+      enum: [queued, running, succeeded, needs_review, failed]
+      x-enum-varnames: [AIJobQueued, AIJobRunning, AIJobSucceeded, AIJobNeedsReview, AIJobFailed]
+      description: succeeded means every journey passed its dry run; needs_review means some journeys are flagged.
+
+    AIProblem:
+      type: object
+      required: [message]
+      properties:
+        journey: { type: string }
+        message: { type: string }
+        fatal: { type: boolean, description: The proposal cannot be used while this problem remains. }
+
+    AICheck:
+      type: object
+      required: [name, ok]
+      properties:
+        name: { type: string }
+        ok: { type: boolean }
+        detail: { type: string }
+
+    AIStepTrace:
+      type: object
+      required: [step, ok, durationMs]
+      description: One request of a dry run. Bodies are truncated; secrets and personal data are redacted.
+      properties:
+        step: { type: string }
+        method: { type: string }
+        url: { type: string }
+        requestHeaders:
+          type: object
+          additionalProperties: { type: string }
+        requestBody: { type: string }
+        status: { type: integer }
+        responseHeaders:
+          type: object
+          additionalProperties: { type: string }
+        responseBody: { type: string }
+        durationMs: { type: number, format: double }
+        extracted:
+          type: object
+          additionalProperties: { type: string }
+        checks:
+          type: array
+          items: { $ref: "#/components/schemas/AICheck" }
+        ok: { type: boolean }
+        error: { type: string }
+        note: { type: string }
+
+    AITrace:
+      type: object
+      required: [pass, ok, steps]
+      properties:
+        pass: { type: integer }
+        branches:
+          type: array
+          items: { type: string }
+        ok: { type: boolean }
+        error: { type: string }
+        steps:
+          type: array
+          items: { $ref: "#/components/schemas/AIStepTrace" }
+
+    AIJourney:
+      type: object
+      required: [name, status, attempts, traces]
+      properties:
+        name: { type: string }
+        status:
+          type: string
+          enum: [passed, flagged, not-run]
+          x-enum-varnames: [AIJourneyPassed, AIJourneyFlagged, AIJourneyNotRun]
+        attempts: { type: integer, description: Dry runs of this journey across repair rounds }
+        problems:
+          type: array
+          items: { type: string }
+        traces:
+          type: array
+          items: { $ref: "#/components/schemas/AITrace" }
+
+    AIJobSummary:
+      type: object
+      required: [id, projectId, status, stage, providerKind, model, usage, dryRun, createdAt]
+      properties:
+        id: { type: string, format: uuid }
+        projectId: { type: string, format: uuid }
+        status: { $ref: "#/components/schemas/AIJobStatus" }
+        stage: { type: string, description: "understand, draft, static-check, dry-run, repair or done" }
+        providerKind: { type: string }
+        model: { type: string }
+        usage: { $ref: "#/components/schemas/AIUsage" }
+        dryRun: { type: boolean }
+        error: { type: string }
+        createdBy: { type: string, nullable: true }
+        createdAt: { type: string, format: date-time }
+        finishedAt: { type: string, format: date-time, nullable: true }
+        approvedAt: { type: string, format: date-time, nullable: true }
+
+    AIJob:
+      allOf:
+        - $ref: "#/components/schemas/AIJobSummary"
+        - type: object
+          required: [round, journeys, problems]
+          properties:
+            round: { type: integer, description: Repair round (0 is the first draft) }
+            targetId: { type: string, format: uuid, nullable: true }
+            scenarioId: { type: string, format: uuid, nullable: true }
+            yaml: { type: string, description: The proposed scenario }
+            diff: { type: string, description: Unified diff against scenarioId's latest version }
+            problems:
+              type: array
+              items: { $ref: "#/components/schemas/AIProblem" }
+            journeys:
+              type: array
+              items: { $ref: "#/components/schemas/AIJourney" }
+            startedAt: { type: string, format: date-time, nullable: true }
+            approvedScenarioId: { type: string, format: uuid, nullable: true }
+            approvedVersion: { type: integer, nullable: true }
+
+    AIJobApprove:
+      type: object
+      properties:
+        scenarioId: { type: string, format: uuid, description: Save as a new version of this scenario }
+        message: { type: string, maxLength: 500 }
+        allowUnvalidated: { type: boolean, default: false, description: Approve even though some journeys are flagged }
+
+    AIJobApproval:
+      type: object
+      required: [scenario, version]
+      properties:
+        scenario: { $ref: "#/components/schemas/Scenario" }
+        version: { type: integer }

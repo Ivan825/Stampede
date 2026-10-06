@@ -29,6 +29,81 @@ const (
 	SessionScopes sessionContextKey = "session.Scopes"
 )
 
+// Defines values for AIJobStatus.
+const (
+	AIJobFailed      AIJobStatus = "failed"
+	AIJobNeedsReview AIJobStatus = "needs_review"
+	AIJobQueued      AIJobStatus = "queued"
+	AIJobRunning     AIJobStatus = "running"
+	AIJobSucceeded   AIJobStatus = "succeeded"
+)
+
+// Valid indicates whether the value is a known member of the AIJobStatus enum.
+func (e AIJobStatus) Valid() bool {
+	switch e {
+	case AIJobFailed:
+		return true
+	case AIJobNeedsReview:
+		return true
+	case AIJobQueued:
+		return true
+	case AIJobRunning:
+		return true
+	case AIJobSucceeded:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for AIJourneyStatus.
+const (
+	AIJourneyFlagged AIJourneyStatus = "flagged"
+	AIJourneyNotRun  AIJourneyStatus = "not-run"
+	AIJourneyPassed  AIJourneyStatus = "passed"
+)
+
+// Valid indicates whether the value is a known member of the AIJourneyStatus enum.
+func (e AIJourneyStatus) Valid() bool {
+	switch e {
+	case AIJourneyFlagged:
+		return true
+	case AIJourneyNotRun:
+		return true
+	case AIJourneyPassed:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for AIProviderKind.
+const (
+	AIProviderAnthropic        AIProviderKind = "anthropic"
+	AIProviderGemini           AIProviderKind = "gemini"
+	AIProviderOllama           AIProviderKind = "ollama"
+	AIProviderOpenAI           AIProviderKind = "openai"
+	AIProviderOpenAICompatible AIProviderKind = "openai-compatible"
+)
+
+// Valid indicates whether the value is a known member of the AIProviderKind enum.
+func (e AIProviderKind) Valid() bool {
+	switch e {
+	case AIProviderAnthropic:
+		return true
+	case AIProviderGemini:
+		return true
+	case AIProviderOllama:
+		return true
+	case AIProviderOpenAI:
+		return true
+	case AIProviderOpenAICompatible:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for Role.
 const (
 	Admin  Role = "admin"
@@ -183,6 +258,206 @@ func (e GetRunReportParamsFormat) Valid() bool {
 	default:
 		return false
 	}
+}
+
+// AICheck defines model for AICheck.
+type AICheck struct {
+	Detail *string `json:"detail,omitempty"`
+	Name   string  `json:"name"`
+	Ok     bool    `json:"ok"`
+}
+
+// AIJob defines model for AIJob.
+type AIJob struct {
+	ApprovedAt         *time.Time          `json:"approvedAt,omitempty"`
+	ApprovedScenarioId *openapi_types.UUID `json:"approvedScenarioId,omitempty"`
+	ApprovedVersion    *int                `json:"approvedVersion,omitempty"`
+	CreatedAt          time.Time           `json:"createdAt"`
+	CreatedBy          *string             `json:"createdBy,omitempty"`
+
+	// Diff Unified diff against scenarioId's latest version
+	Diff         *string            `json:"diff,omitempty"`
+	DryRun       bool               `json:"dryRun"`
+	Error        *string            `json:"error,omitempty"`
+	FinishedAt   *time.Time         `json:"finishedAt,omitempty"`
+	Id           openapi_types.UUID `json:"id"`
+	Journeys     []AIJourney        `json:"journeys"`
+	Model        string             `json:"model"`
+	Problems     []AIProblem        `json:"problems"`
+	ProjectId    openapi_types.UUID `json:"projectId"`
+	ProviderKind string             `json:"providerKind"`
+
+	// Round Repair round (0 is the first draft)
+	Round      int                 `json:"round"`
+	ScenarioId *openapi_types.UUID `json:"scenarioId,omitempty"`
+
+	// Stage understand, draft, static-check, dry-run, repair or done
+	Stage     string     `json:"stage"`
+	StartedAt *time.Time `json:"startedAt,omitempty"`
+
+	// Status succeeded means every journey passed its dry run; needs_review means some journeys are flagged.
+	Status   AIJobStatus         `json:"status"`
+	TargetId *openapi_types.UUID `json:"targetId,omitempty"`
+	Usage    AIUsage             `json:"usage"`
+
+	// Yaml The proposed scenario
+	Yaml *string `json:"yaml,omitempty"`
+}
+
+// AIJobApproval defines model for AIJobApproval.
+type AIJobApproval struct {
+	Scenario Scenario `json:"scenario"`
+	Version  int      `json:"version"`
+}
+
+// AIJobApprove defines model for AIJobApprove.
+type AIJobApprove struct {
+	// AllowUnvalidated Approve even though some journeys are flagged
+	AllowUnvalidated *bool   `json:"allowUnvalidated,omitempty"`
+	Message          *string `json:"message,omitempty"`
+
+	// ScenarioId Save as a new version of this scenario
+	ScenarioId *openapi_types.UUID `json:"scenarioId,omitempty"`
+}
+
+// AIJobCreate defines model for AIJobCreate.
+type AIJobCreate struct {
+	// AccessLog Web server access log
+	AccessLog   *string `json:"accessLog,omitempty"`
+	Description *string `json:"description,omitempty"`
+	DryRun      *bool   `json:"dryRun,omitempty"`
+
+	// Har HAR recording (JSON)
+	Har        *string `json:"har,omitempty"`
+	MaxRepairs *int    `json:"maxRepairs,omitempty"`
+
+	// Openapi OpenAPI 3.x document (YAML or JSON)
+	Openapi *string `json:"openapi,omitempty"`
+
+	// ProviderId Defaults to the organisation's only provider
+	ProviderId *openapi_types.UUID `json:"providerId,omitempty"`
+
+	// ScenarioId Existing scenario to compare the proposal with.
+	ScenarioId *openapi_types.UUID `json:"scenarioId,omitempty"`
+
+	// TargetId Required for the dry run.
+	TargetId *openapi_types.UUID `json:"targetId,omitempty"`
+}
+
+// AIJobStatus succeeded means every journey passed its dry run; needs_review means some journeys are flagged.
+type AIJobStatus string
+
+// AIJobSummary defines model for AIJobSummary.
+type AIJobSummary struct {
+	ApprovedAt   *time.Time         `json:"approvedAt,omitempty"`
+	CreatedAt    time.Time          `json:"createdAt"`
+	CreatedBy    *string            `json:"createdBy,omitempty"`
+	DryRun       bool               `json:"dryRun"`
+	Error        *string            `json:"error,omitempty"`
+	FinishedAt   *time.Time         `json:"finishedAt,omitempty"`
+	Id           openapi_types.UUID `json:"id"`
+	Model        string             `json:"model"`
+	ProjectId    openapi_types.UUID `json:"projectId"`
+	ProviderKind string             `json:"providerKind"`
+
+	// Stage understand, draft, static-check, dry-run, repair or done
+	Stage string `json:"stage"`
+
+	// Status succeeded means every journey passed its dry run; needs_review means some journeys are flagged.
+	Status AIJobStatus `json:"status"`
+	Usage  AIUsage     `json:"usage"`
+}
+
+// AIJourney defines model for AIJourney.
+type AIJourney struct {
+	// Attempts Dry runs of this journey across repair rounds
+	Attempts int             `json:"attempts"`
+	Name     string          `json:"name"`
+	Problems *[]string       `json:"problems,omitempty"`
+	Status   AIJourneyStatus `json:"status"`
+	Traces   []AITrace       `json:"traces"`
+}
+
+// AIJourneyStatus defines model for AIJourney.Status.
+type AIJourneyStatus string
+
+// AIProblem defines model for AIProblem.
+type AIProblem struct {
+	// Fatal The proposal cannot be used while this problem remains.
+	Fatal   *bool   `json:"fatal,omitempty"`
+	Journey *string `json:"journey,omitempty"`
+	Message string  `json:"message"`
+}
+
+// AIProvider defines model for AIProvider.
+type AIProvider struct {
+	BaseURL   *string   `json:"baseURL,omitempty"`
+	CreatedAt time.Time `json:"createdAt"`
+
+	// HasKey Whether an API key is stored. The key itself is never returned.
+	HasKey bool               `json:"hasKey"`
+	Id     openapi_types.UUID `json:"id"`
+	Kind   AIProviderKind     `json:"kind"`
+	Model  string             `json:"model"`
+
+	// MonthlyTokenCap Jobs are refused once the organisation's AI token use this calendar month (UTC) reaches this cap.
+	MonthlyTokenCap     int64     `json:"monthlyTokenCap"`
+	Name                string    `json:"name"`
+	UpdatedAt           time.Time `json:"updatedAt"`
+	UsedTokensThisMonth int64     `json:"usedTokensThisMonth"`
+}
+
+// AIProviderKind defines model for AIProviderKind.
+type AIProviderKind string
+
+// AIProviderPut defines model for AIProviderPut.
+type AIProviderPut struct {
+	// ApiKey Stored encrypted; omit to keep the current key.
+	ApiKey *string `json:"apiKey,omitempty"`
+
+	// BaseURL API base URL; required for openai-compatible.
+	BaseURL *string        `json:"baseURL,omitempty"`
+	Kind    AIProviderKind `json:"kind"`
+
+	// Model Required except for anthropic (default claude-sonnet-5-5).
+	Model *string `json:"model,omitempty"`
+
+	// MonthlyTokenCap Default 2000000.
+	MonthlyTokenCap *int64  `json:"monthlyTokenCap,omitempty"`
+	Name            *string `json:"name,omitempty"`
+}
+
+// AIStepTrace One request of a dry run. Bodies are truncated; secrets and personal data are redacted.
+type AIStepTrace struct {
+	Checks          *[]AICheck         `json:"checks,omitempty"`
+	DurationMs      float64            `json:"durationMs"`
+	Error           *string            `json:"error,omitempty"`
+	Extracted       *map[string]string `json:"extracted,omitempty"`
+	Method          *string            `json:"method,omitempty"`
+	Note            *string            `json:"note,omitempty"`
+	Ok              bool               `json:"ok"`
+	RequestBody     *string            `json:"requestBody,omitempty"`
+	RequestHeaders  *map[string]string `json:"requestHeaders,omitempty"`
+	ResponseBody    *string            `json:"responseBody,omitempty"`
+	ResponseHeaders *map[string]string `json:"responseHeaders,omitempty"`
+	Status          *int               `json:"status,omitempty"`
+	Step            string             `json:"step"`
+	Url             *string            `json:"url,omitempty"`
+}
+
+// AITrace defines model for AITrace.
+type AITrace struct {
+	Branches *[]string     `json:"branches,omitempty"`
+	Error    *string       `json:"error,omitempty"`
+	Ok       bool          `json:"ok"`
+	Pass     int           `json:"pass"`
+	Steps    []AIStepTrace `json:"steps"`
+}
+
+// AIUsage defines model for AIUsage.
+type AIUsage struct {
+	InputTokens  int64 `json:"inputTokens"`
+	OutputTokens int64 `json:"outputTokens"`
 }
 
 // AuditEntry defines model for AuditEntry.
@@ -576,6 +851,11 @@ type ChangePasswordJSONBody struct {
 	New     string `json:"new"`
 }
 
+// ListAIJobsParams defines parameters for ListAIJobs.
+type ListAIJobsParams struct {
+	Limit *int `form:"limit,omitempty" json:"limit,omitempty"`
+}
+
 // ListRunsParams defines parameters for ListRuns.
 type ListRunsParams struct {
 	ScenarioId *openapi_types.UUID `form:"scenarioId,omitempty" json:"scenarioId,omitempty"`
@@ -609,6 +889,12 @@ type UpdateUserJSONBody struct {
 	Role *Role   `json:"role,omitempty"`
 }
 
+// ApproveAIJobJSONRequestBody defines body for ApproveAIJob for application/json ContentType.
+type ApproveAIJobJSONRequestBody = AIJobApprove
+
+// PutAIProviderJSONRequestBody defines body for PutAIProvider for application/json ContentType.
+type PutAIProviderJSONRequestBody = AIProviderPut
+
 // LoginJSONRequestBody defines body for Login for application/json ContentType.
 type LoginJSONRequestBody = LoginRequest
 
@@ -620,6 +906,9 @@ type CreateProjectJSONRequestBody = ProjectCreate
 
 // UpdateProjectJSONRequestBody defines body for UpdateProject for application/json ContentType.
 type UpdateProjectJSONRequestBody = ProjectCreate
+
+// CreateAIJobJSONRequestBody defines body for CreateAIJob for application/json ContentType.
+type CreateAIJobJSONRequestBody = AIJobCreate
 
 // CreateRunJSONRequestBody defines body for CreateRun for application/json ContentType.
 type CreateRunJSONRequestBody = RunCreate
@@ -656,6 +945,21 @@ type UpdateUserJSONRequestBody UpdateUserJSONBody
 
 // ServerInterface represents all server handlers.
 type ServerInterface interface {
+	// Job status, stage, token usage, proposal, dry-run traces, problems and diff
+	// (GET /ai/jobs/{jobId})
+	GetAIJob(w http.ResponseWriter, r *http.Request, jobId openapi_types.UUID)
+	// Save the proposal as a new scenario or a new scenario version
+	// (POST /ai/jobs/{jobId}/approve)
+	ApproveAIJob(w http.ResponseWriter, r *http.Request, jobId openapi_types.UUID)
+	// AI providers configured for the organisation (keys are never returned)
+	// (GET /ai/providers)
+	ListAIProviders(w http.ResponseWriter, r *http.Request)
+	// Create or replace an AI provider by name
+	// (POST /ai/providers)
+	PutAIProvider(w http.ResponseWriter, r *http.Request)
+
+	// (DELETE /ai/providers/{providerId})
+	DeleteAIProvider(w http.ResponseWriter, r *http.Request, providerId openapi_types.UUID)
 
 	// (GET /audit)
 	ListAudit(w http.ResponseWriter, r *http.Request, params ListAuditParams)
@@ -686,6 +990,12 @@ type ServerInterface interface {
 
 	// (PATCH /projects/{projectId})
 	UpdateProject(w http.ResponseWriter, r *http.Request, projectId ProjectId)
+
+	// (GET /projects/{projectId}/ai/jobs)
+	ListAIJobs(w http.ResponseWriter, r *http.Request, projectId ProjectId, params ListAIJobsParams)
+	// Generate a scenario with an AI model (asynchronous)
+	// (POST /projects/{projectId}/ai/jobs)
+	CreateAIJob(w http.ResponseWriter, r *http.Request, projectId ProjectId)
 
 	// (GET /projects/{projectId}/runs)
 	ListRuns(w http.ResponseWriter, r *http.Request, projectId ProjectId, params ListRunsParams)
@@ -800,6 +1110,35 @@ type ServerInterface interface {
 
 type Unimplemented struct{}
 
+// Job status, stage, token usage, proposal, dry-run traces, problems and diff
+// (GET /ai/jobs/{jobId})
+func (_ Unimplemented) GetAIJob(w http.ResponseWriter, r *http.Request, jobId openapi_types.UUID) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Save the proposal as a new scenario or a new scenario version
+// (POST /ai/jobs/{jobId}/approve)
+func (_ Unimplemented) ApproveAIJob(w http.ResponseWriter, r *http.Request, jobId openapi_types.UUID) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// AI providers configured for the organisation (keys are never returned)
+// (GET /ai/providers)
+func (_ Unimplemented) ListAIProviders(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Create or replace an AI provider by name
+// (POST /ai/providers)
+func (_ Unimplemented) PutAIProvider(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// (DELETE /ai/providers/{providerId})
+func (_ Unimplemented) DeleteAIProvider(w http.ResponseWriter, r *http.Request, providerId openapi_types.UUID) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
 // (GET /audit)
 func (_ Unimplemented) ListAudit(w http.ResponseWriter, r *http.Request, params ListAuditParams) {
 	w.WriteHeader(http.StatusNotImplemented)
@@ -847,6 +1186,17 @@ func (_ Unimplemented) GetProject(w http.ResponseWriter, r *http.Request, projec
 
 // (PATCH /projects/{projectId})
 func (_ Unimplemented) UpdateProject(w http.ResponseWriter, r *http.Request, projectId ProjectId) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// (GET /projects/{projectId}/ai/jobs)
+func (_ Unimplemented) ListAIJobs(w http.ResponseWriter, r *http.Request, projectId ProjectId, params ListAIJobsParams) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Generate a scenario with an AI model (asynchronous)
+// (POST /projects/{projectId}/ai/jobs)
+func (_ Unimplemented) CreateAIJob(w http.ResponseWriter, r *http.Request, projectId ProjectId) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -1044,6 +1394,152 @@ type ServerInterfaceWrapper struct {
 }
 
 type MiddlewareFunc func(http.Handler) http.Handler
+
+// GetAIJob operation middleware
+func (siw *ServerInterfaceWrapper) GetAIJob(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "jobId" -------------
+	var jobId openapi_types.UUID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "jobId", chi.URLParam(r, "jobId"), &jobId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid"})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "jobId", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerScopes, []string{})
+
+	ctx = context.WithValue(ctx, SessionScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetAIJob(w, r, jobId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ApproveAIJob operation middleware
+func (siw *ServerInterfaceWrapper) ApproveAIJob(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "jobId" -------------
+	var jobId openapi_types.UUID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "jobId", chi.URLParam(r, "jobId"), &jobId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid"})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "jobId", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerScopes, []string{})
+
+	ctx = context.WithValue(ctx, SessionScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ApproveAIJob(w, r, jobId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ListAIProviders operation middleware
+func (siw *ServerInterfaceWrapper) ListAIProviders(w http.ResponseWriter, r *http.Request) {
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerScopes, []string{})
+
+	ctx = context.WithValue(ctx, SessionScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListAIProviders(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// PutAIProvider operation middleware
+func (siw *ServerInterfaceWrapper) PutAIProvider(w http.ResponseWriter, r *http.Request) {
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerScopes, []string{})
+
+	ctx = context.WithValue(ctx, SessionScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.PutAIProvider(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// DeleteAIProvider operation middleware
+func (siw *ServerInterfaceWrapper) DeleteAIProvider(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "providerId" -------------
+	var providerId openapi_types.UUID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "providerId", chi.URLParam(r, "providerId"), &providerId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid"})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "providerId", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerScopes, []string{})
+
+	ctx = context.WithValue(ctx, SessionScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.DeleteAIProvider(w, r, providerId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
 
 // ListAudit operation middleware
 func (siw *ServerInterfaceWrapper) ListAudit(w http.ResponseWriter, r *http.Request) {
@@ -1316,6 +1812,90 @@ func (siw *ServerInterfaceWrapper) UpdateProject(w http.ResponseWriter, r *http.
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.UpdateProject(w, r, projectId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ListAIJobs operation middleware
+func (siw *ServerInterfaceWrapper) ListAIJobs(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "projectId" -------------
+	var projectId ProjectId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "projectId", chi.URLParam(r, "projectId"), &projectId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid"})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "projectId", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerScopes, []string{})
+
+	ctx = context.WithValue(ctx, SessionScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ListAIJobsParams
+
+	// ------------- Optional query parameter "limit" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "limit", r.URL.Query(), &params.Limit, runtime.BindQueryParameterOptions{Type: "integer", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "limit"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "limit", Err: err})
+		}
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListAIJobs(w, r, projectId, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// CreateAIJob operation middleware
+func (siw *ServerInterfaceWrapper) CreateAIJob(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "projectId" -------------
+	var projectId ProjectId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "projectId", chi.URLParam(r, "projectId"), &projectId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid"})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "projectId", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, BearerScopes, []string{})
+
+	ctx = context.WithValue(ctx, SessionScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.CreateAIJob(w, r, projectId)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -2631,6 +3211,21 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 	}
 
 	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/ai/jobs/{jobId}", wrapper.GetAIJob)
+	})
+	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/ai/jobs/{jobId}/approve", wrapper.ApproveAIJob)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/ai/providers", wrapper.ListAIProviders)
+	})
+	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/ai/providers", wrapper.PutAIProvider)
+	})
+	r.Group(func(r chi.Router) {
+		r.Delete(options.BaseURL+"/ai/providers/{providerId}", wrapper.DeleteAIProvider)
+	})
+	r.Group(func(r chi.Router) {
 		r.Get(options.BaseURL+"/audit", wrapper.ListAudit)
 	})
 	r.Group(func(r chi.Router) {
@@ -2659,6 +3254,12 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 	})
 	r.Group(func(r chi.Router) {
 		r.Patch(options.BaseURL+"/projects/{projectId}", wrapper.UpdateProject)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/projects/{projectId}/ai/jobs", wrapper.ListAIJobs)
+	})
+	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/projects/{projectId}/ai/jobs", wrapper.CreateAIJob)
 	})
 	r.Group(func(r chi.Router) {
 		r.Get(options.BaseURL+"/projects/{projectId}/runs", wrapper.ListRuns)
@@ -2783,6 +3384,264 @@ type NotFoundJSONResponse Error
 type TooManyJSONResponse Error
 
 type UnauthorizedJSONResponse Error
+
+type GetAIJobRequestObject struct {
+	JobId openapi_types.UUID `json:"jobId"`
+}
+
+type GetAIJobResponseObject interface {
+	VisitGetAIJobResponse(w http.ResponseWriter) error
+}
+
+type GetAIJob200JSONResponse AIJob
+
+func (response GetAIJob200JSONResponse) VisitGetAIJobResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetAIJob404JSONResponse struct{ NotFoundJSONResponse }
+
+func (response GetAIJob404JSONResponse) VisitGetAIJobResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ApproveAIJobRequestObject struct {
+	JobId openapi_types.UUID `json:"jobId"`
+	Body  *ApproveAIJobJSONRequestBody
+}
+
+type ApproveAIJobResponseObject interface {
+	VisitApproveAIJobResponse(w http.ResponseWriter) error
+}
+
+type ApproveAIJob201JSONResponse AIJobApproval
+
+func (response ApproveAIJob201JSONResponse) VisitApproveAIJobResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(201)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ApproveAIJob403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response ApproveAIJob403JSONResponse) VisitApproveAIJobResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ApproveAIJob404JSONResponse struct{ NotFoundJSONResponse }
+
+func (response ApproveAIJob404JSONResponse) VisitApproveAIJobResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ApproveAIJob409JSONResponse struct{ ConflictJSONResponse }
+
+func (response ApproveAIJob409JSONResponse) VisitApproveAIJobResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(409)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ApproveAIJob422JSONResponse struct{ InvalidJSONResponse }
+
+func (response ApproveAIJob422JSONResponse) VisitApproveAIJobResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(422)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListAIProvidersRequestObject struct {
+}
+
+type ListAIProvidersResponseObject interface {
+	VisitListAIProvidersResponse(w http.ResponseWriter) error
+}
+
+type ListAIProviders200JSONResponse []AIProvider
+
+func (response ListAIProviders200JSONResponse) VisitListAIProvidersResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type PutAIProviderRequestObject struct {
+	Body *PutAIProviderJSONRequestBody
+}
+
+type PutAIProviderResponseObject interface {
+	VisitPutAIProviderResponse(w http.ResponseWriter) error
+}
+
+type PutAIProvider200JSONResponse AIProvider
+
+func (response PutAIProvider200JSONResponse) VisitPutAIProviderResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type PutAIProvider201JSONResponse AIProvider
+
+func (response PutAIProvider201JSONResponse) VisitPutAIProviderResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(201)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type PutAIProvider403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response PutAIProvider403JSONResponse) VisitPutAIProviderResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type PutAIProvider409JSONResponse struct{ ConflictJSONResponse }
+
+func (response PutAIProvider409JSONResponse) VisitPutAIProviderResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(409)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type PutAIProvider422JSONResponse struct{ InvalidJSONResponse }
+
+func (response PutAIProvider422JSONResponse) VisitPutAIProviderResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(422)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type DeleteAIProviderRequestObject struct {
+	ProviderId openapi_types.UUID `json:"providerId"`
+}
+
+type DeleteAIProviderResponseObject interface {
+	VisitDeleteAIProviderResponse(w http.ResponseWriter) error
+}
+
+type DeleteAIProvider204Response struct {
+}
+
+func (response DeleteAIProvider204Response) VisitDeleteAIProviderResponse(w http.ResponseWriter) error {
+	w.WriteHeader(204)
+	return nil
+}
+
+type DeleteAIProvider403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response DeleteAIProvider403JSONResponse) VisitDeleteAIProviderResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type DeleteAIProvider404JSONResponse struct{ NotFoundJSONResponse }
+
+func (response DeleteAIProvider404JSONResponse) VisitDeleteAIProviderResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
 
 type ListAuditRequestObject struct {
 	Params ListAuditParams
@@ -3134,6 +3993,108 @@ func (response UpdateProject404JSONResponse) VisitUpdateProjectResponse(w http.R
 	}
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListAIJobsRequestObject struct {
+	ProjectId ProjectId `json:"projectId"`
+	Params    ListAIJobsParams
+}
+
+type ListAIJobsResponseObject interface {
+	VisitListAIJobsResponse(w http.ResponseWriter) error
+}
+
+type ListAIJobs200JSONResponse []AIJobSummary
+
+func (response ListAIJobs200JSONResponse) VisitListAIJobsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateAIJobRequestObject struct {
+	ProjectId ProjectId `json:"projectId"`
+	Body      *CreateAIJobJSONRequestBody
+}
+
+type CreateAIJobResponseObject interface {
+	VisitCreateAIJobResponse(w http.ResponseWriter) error
+}
+
+type CreateAIJob202JSONResponse AIJob
+
+func (response CreateAIJob202JSONResponse) VisitCreateAIJobResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(202)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateAIJob403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response CreateAIJob403JSONResponse) VisitCreateAIJobResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateAIJob409JSONResponse struct{ ConflictJSONResponse }
+
+func (response CreateAIJob409JSONResponse) VisitCreateAIJobResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(409)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateAIJob422JSONResponse struct{ InvalidJSONResponse }
+
+func (response CreateAIJob422JSONResponse) VisitCreateAIJobResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(422)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateAIJob429JSONResponse Error
+
+func (response CreateAIJob429JSONResponse) VisitCreateAIJobResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(429)
 	_, err := buf.WriteTo(w)
 	return err
 }
@@ -4478,6 +5439,21 @@ func (response ListWorkers200JSONResponse) VisitListWorkersResponse(w http.Respo
 
 // StrictServerInterface represents all server handlers.
 type StrictServerInterface interface {
+	// Job status, stage, token usage, proposal, dry-run traces, problems and diff
+	// (GET /ai/jobs/{jobId})
+	GetAIJob(ctx context.Context, request GetAIJobRequestObject) (GetAIJobResponseObject, error)
+	// Save the proposal as a new scenario or a new scenario version
+	// (POST /ai/jobs/{jobId}/approve)
+	ApproveAIJob(ctx context.Context, request ApproveAIJobRequestObject) (ApproveAIJobResponseObject, error)
+	// AI providers configured for the organisation (keys are never returned)
+	// (GET /ai/providers)
+	ListAIProviders(ctx context.Context, request ListAIProvidersRequestObject) (ListAIProvidersResponseObject, error)
+	// Create or replace an AI provider by name
+	// (POST /ai/providers)
+	PutAIProvider(ctx context.Context, request PutAIProviderRequestObject) (PutAIProviderResponseObject, error)
+
+	// (DELETE /ai/providers/{providerId})
+	DeleteAIProvider(ctx context.Context, request DeleteAIProviderRequestObject) (DeleteAIProviderResponseObject, error)
 
 	// (GET /audit)
 	ListAudit(ctx context.Context, request ListAuditRequestObject) (ListAuditResponseObject, error)
@@ -4508,6 +5484,12 @@ type StrictServerInterface interface {
 
 	// (PATCH /projects/{projectId})
 	UpdateProject(ctx context.Context, request UpdateProjectRequestObject) (UpdateProjectResponseObject, error)
+
+	// (GET /projects/{projectId}/ai/jobs)
+	ListAIJobs(ctx context.Context, request ListAIJobsRequestObject) (ListAIJobsResponseObject, error)
+	// Generate a scenario with an AI model (asynchronous)
+	// (POST /projects/{projectId}/ai/jobs)
+	CreateAIJob(ctx context.Context, request CreateAIJobRequestObject) (CreateAIJobResponseObject, error)
 
 	// (GET /projects/{projectId}/runs)
 	ListRuns(ctx context.Context, request ListRunsRequestObject) (ListRunsResponseObject, error)
@@ -4645,6 +5627,146 @@ type strictHandler struct {
 	ssi         StrictServerInterface
 	middlewares []StrictMiddlewareFunc
 	options     StrictHTTPServerOptions
+}
+
+// GetAIJob operation middleware
+func (sh *strictHandler) GetAIJob(w http.ResponseWriter, r *http.Request, jobId openapi_types.UUID) {
+	var request GetAIJobRequestObject
+
+	request.JobId = jobId
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.GetAIJob(ctx, request.(GetAIJobRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "GetAIJob")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(GetAIJobResponseObject); ok {
+		if err := validResponse.VisitGetAIJobResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ApproveAIJob operation middleware
+func (sh *strictHandler) ApproveAIJob(w http.ResponseWriter, r *http.Request, jobId openapi_types.UUID) {
+	var request ApproveAIJobRequestObject
+
+	request.JobId = jobId
+
+	var body ApproveAIJobJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ApproveAIJob(ctx, request.(ApproveAIJobRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ApproveAIJob")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ApproveAIJobResponseObject); ok {
+		if err := validResponse.VisitApproveAIJobResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ListAIProviders operation middleware
+func (sh *strictHandler) ListAIProviders(w http.ResponseWriter, r *http.Request) {
+	var request ListAIProvidersRequestObject
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ListAIProviders(ctx, request.(ListAIProvidersRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ListAIProviders")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ListAIProvidersResponseObject); ok {
+		if err := validResponse.VisitListAIProvidersResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// PutAIProvider operation middleware
+func (sh *strictHandler) PutAIProvider(w http.ResponseWriter, r *http.Request) {
+	var request PutAIProviderRequestObject
+
+	var body PutAIProviderJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.PutAIProvider(ctx, request.(PutAIProviderRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "PutAIProvider")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(PutAIProviderResponseObject); ok {
+		if err := validResponse.VisitPutAIProviderResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// DeleteAIProvider operation middleware
+func (sh *strictHandler) DeleteAIProvider(w http.ResponseWriter, r *http.Request, providerId openapi_types.UUID) {
+	var request DeleteAIProviderRequestObject
+
+	request.ProviderId = providerId
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.DeleteAIProvider(ctx, request.(DeleteAIProviderRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "DeleteAIProvider")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(DeleteAIProviderResponseObject); ok {
+		if err := validResponse.VisitDeleteAIProviderResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
 }
 
 // ListAudit operation middleware
@@ -4916,6 +6038,66 @@ func (sh *strictHandler) UpdateProject(w http.ResponseWriter, r *http.Request, p
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(UpdateProjectResponseObject); ok {
 		if err := validResponse.VisitUpdateProjectResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ListAIJobs operation middleware
+func (sh *strictHandler) ListAIJobs(w http.ResponseWriter, r *http.Request, projectId ProjectId, params ListAIJobsParams) {
+	var request ListAIJobsRequestObject
+
+	request.ProjectId = projectId
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ListAIJobs(ctx, request.(ListAIJobsRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ListAIJobs")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ListAIJobsResponseObject); ok {
+		if err := validResponse.VisitListAIJobsResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// CreateAIJob operation middleware
+func (sh *strictHandler) CreateAIJob(w http.ResponseWriter, r *http.Request, projectId ProjectId) {
+	var request CreateAIJobRequestObject
+
+	request.ProjectId = projectId
+
+	var body CreateAIJobJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.CreateAIJob(ctx, request.(CreateAIJobRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "CreateAIJob")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(CreateAIJobResponseObject); ok {
+		if err := validResponse.VisitCreateAIJobResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {
@@ -5928,85 +7110,122 @@ func (sh *strictHandler) ListWorkers(w http.ResponseWriter, r *http.Request) {
 // const string: with thousands of chunks the chained `+` fold is several
 // times slower for the Go compiler than parsing a slice literal.
 var swaggerSpec = []string{
-	"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",
-	"1VdF16P7VZlbc77URTLn7xI7LpAx0a8s/e8A",
+	"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",
 }
 
 // decodeSpec returns the embedded OpenAPI spec as raw JSON bytes,
