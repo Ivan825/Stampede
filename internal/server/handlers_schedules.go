@@ -252,7 +252,7 @@ func (h *handlers) UpdateSchedule(ctx context.Context, req gen.UpdateScheduleReq
 	}
 	// Disabling a schedule is always allowed, even one whose run would no
 	// longer be accepted; anything else is checked in full.
-	full := !(onlyToggle && !sp.enabled)
+	full := !onlyToggle || sp.enabled
 	next, err := h.checkSchedule(ctx, p.OrgID, pr, &sp, full)
 	if err != nil {
 		return nil, err
