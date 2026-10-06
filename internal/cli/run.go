@@ -58,6 +58,8 @@ type runFlags struct {
 	iterations            int
 	allowHosts            []string
 	quiet                 bool
+	repeat                int
+	pause                 string
 	verbose               bool
 }
 
@@ -94,6 +96,8 @@ fails, 1 on any other error.`,
 	fl.IntVar(&f.iterations, "iterations", 0, "run a fixed number of iterations instead")
 	fl.StringSliceVar(&f.allowHosts, "allow-host", nil, "extra public hosts requests may reach besides the target")
 	fl.BoolVarP(&f.quiet, "quiet", "q", false, "no live progress")
+	fl.IntVar(&f.repeat, "repeat", 1, "run the scenario this many times (for stampede compare); report files get -1, -2 ... suffixes")
+	fl.StringVar(&f.pause, "pause", "10s", "pause between repeats")
 	fl.BoolVarP(&f.verbose, "verbose", "v", false, "log step errors as they happen")
 	return cmd
 }
@@ -150,27 +154,44 @@ func runScenario(ctx context.Context, stdout, stderr io.Writer, path string, f *
 		return err
 	}
 
-	runID := newRunID()
-	var prog func(runner.Progress)
-	if !f.quiet {
-		fmt.Fprintf(stderr, "stampede: running %s against %s (%s, %s planned)\n", s.Metadata.Name, base, plan.Executor, plan.TotalDuration())
-		prog = progressPrinter(stderr)
-	}
-	rep, err := runner.Run(ctx, runner.Options{
-		Scenario: s, RunID: runID, Env: env, Secrets: secrets,
-		AllowHost: policy, Logger: logger, Progress: prog,
-	})
+	pause, err := scenario.ParseDuration(f.pause)
 	if err != nil {
-		return err
+		return fmt.Errorf("--pause: %w", err)
 	}
-
-	if f.json != "-" && f.md != "-" {
-		rep.WriteText(stdout)
+	failed := false
+	for n := 1; n <= max(f.repeat, 1); n++ {
+		if n > 1 {
+			fmt.Fprintf(stderr, "stampede: pausing %s before repeat %d of %d\n", pause, n, f.repeat)
+			select {
+			case <-time.After(pause.D()):
+			case <-ctx.Done():
+				return ctx.Err()
+			}
+		}
+		var prog func(runner.Progress)
+		if !f.quiet {
+			fmt.Fprintf(stderr, "stampede: running %s against %s (%s, %s planned)\n", s.Metadata.Name, base, plan.Executor, plan.TotalDuration())
+			prog = progressPrinter(stderr)
+		}
+		rep, err := runner.Run(ctx, runner.Options{
+			Scenario: s, RunID: newRunID(), Env: env, Secrets: secrets,
+			AllowHost: policy, Logger: logger, Progress: prog,
+		})
+		if err != nil {
+			return err
+		}
+		if f.json != "-" && f.md != "-" {
+			rep.WriteText(stdout)
+		}
+		out := *f
+		out.html, out.json = repeatPath(f.html, n, f.repeat), repeatPath(f.json, n, f.repeat)
+		out.junit, out.md = repeatPath(f.junit, n, f.repeat), repeatPath(f.md, n, f.repeat)
+		if err := writeOutputs(stdout, rep, &out); err != nil {
+			return err
+		}
+		failed = failed || rep.Verdict == report.VerdictFail
 	}
-	if err := writeOutputs(stdout, rep, f); err != nil {
-		return err
-	}
-	if rep.Verdict == report.VerdictFail {
+	if failed {
 		return &exitError{code: ExitTargetsFailed, msg: "one or more targets failed"}
 	}
 	return nil
@@ -244,27 +265,30 @@ func checkTarget(ctx context.Context, stderr io.Writer, base string, plan *scena
 	return policy.Allow, nil
 }
 
-func writeOutputs(stdout io.Writer, rep *report.Report, f *runFlags) error {
-	write := func(path string, fn func(io.Writer) error) error {
-		if path == "" {
-			return nil
-		}
-		if path == "-" {
-			return fn(stdout)
-		}
-		if err := os.MkdirAll(filepath.Dir(path), 0o750); err != nil {
-			return err
-		}
-		fh, err := os.Create(path)
-		if err != nil {
-			return err
-		}
-		if err := fn(fh); err != nil {
-			fh.Close()
-			return err
-		}
-		return fh.Close()
+// writeFile writes to path, "-" meaning stdout; empty path is a no-op.
+func writeFile(stdout io.Writer, path string, fn func(io.Writer) error) error {
+	if path == "" {
+		return nil
 	}
+	if path == "-" {
+		return fn(stdout)
+	}
+	if err := os.MkdirAll(filepath.Dir(path), 0o750); err != nil {
+		return err
+	}
+	fh, err := os.Create(path)
+	if err != nil {
+		return err
+	}
+	if err := fn(fh); err != nil {
+		fh.Close()
+		return err
+	}
+	return fh.Close()
+}
+
+func writeOutputs(stdout io.Writer, rep *report.Report, f *runFlags) error {
+	write := func(path string, fn func(io.Writer) error) error { return writeFile(stdout, path, fn) }
 	if err := write(f.html, rep.WriteHTML); err != nil {
 		return err
 	}
