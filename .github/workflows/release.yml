@@ -70,3 +70,26 @@ jobs:
             dist/*.json
             dist/*.sigstore.json
           if-no-files-found: ignore
+
+  airgap:
+    # Offline bundles for amd64 and arm64, attached to the release.
+    needs: goreleaser
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    strategy:
+      matrix:
+        arch: [amd64, arm64]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - uses: docker/setup-qemu-action@v3
+      - uses: docker/setup-buildx-action@v3
+      - uses: azure/setup-helm@v4
+      - name: build the bundle
+        run: deploy/airgap/build-bundle.sh "${GITHUB_REF_NAME}" "${{ matrix.arch }}" dist/airgap
+      - name: attach it to the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release upload "${GITHUB_REF_NAME}" dist/airgap/*.tar.gz dist/airgap/*.sha256 --clobber

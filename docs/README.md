@@ -35,6 +35,7 @@ not built yet are marked **planned**.
 ## Operate
 
 - [Docker Compose](deploy/compose.md), [Helm](deploy/helm.md), [operator](deploy/operator.md), [Terraform workers](deploy/terraform.md)
+- [Air-gapped install](deploy/airgap.md)
 - [Upgrades, backups and restore](deploy/upgrades.md)
 - [Safety](safety.md): ownership checks, caps, kill switch
 - [Configuration](reference/configuration.md)

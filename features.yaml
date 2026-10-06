@@ -57,6 +57,7 @@ groups:
       - { name: Helm chart, status: shipped, doc: docs/deploy/helm }
       - { name: Kubernetes operator (alpha), status: shipped, doc: docs/deploy/operator }
       - { name: Terraform examples for multi-region workers, status: shipped, doc: docs/deploy/terraform }
+      - { name: Air-gapped install bundle, status: planned, doc: docs/deploy/airgap }
   - name: Safety
     features:
       - { name: Ownership verification and caps for public targets, status: shipped, doc: safety }

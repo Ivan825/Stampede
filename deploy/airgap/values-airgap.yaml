@@ -1,0 +1,12 @@
+# Helm values for an air-gapped cluster. Push the bundle's images to your
+# registry first (./install.sh --registry <host:port>), replace
+# registry.internal:5000 below with that registry, then:
+#   helm install stampede helm/stampede -f helm/values-airgap.yaml
+image:
+  repository: registry.internal:5000/ivan825/stampede
+  tag: "__VERSION__"
+  pullPolicy: IfNotPresent
+timescaledb:
+  image:
+    repository: registry.internal:5000/timescale/timescaledb
+    tag: 2.22.1-pg17

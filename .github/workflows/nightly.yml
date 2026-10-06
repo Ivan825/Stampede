@@ -57,3 +57,37 @@ jobs:
           name: compare-nightly-${{ github.run_number }}
           path: compare-*.json
           retention-days: 90
+
+  airgap:
+    # Builds an offline bundle, deletes the images it holds, then installs
+    # and starts Stampede from the bundle alone.
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - uses: docker/setup-buildx-action@v3
+      - name: build the bundle
+        run: deploy/airgap/build-bundle.sh nightly amd64 "$RUNNER_TEMP/airgap"
+      - name: install from the bundle only
+        run: |
+          docker image rm ghcr.io/ivan825/stampede:nightly ghcr.io/ivan825/stampede-browser-worker:nightly timescale/timescaledb:2.22.1-pg17
+          cd "$RUNNER_TEMP" && tar xzf airgap/stampede-airgap-nightly-linux-amd64.tar.gz
+          cd stampede-airgap-nightly-linux-amd64
+          ./install.sh
+          mkdir -p compose/data
+          STAMPEDE_JOIN_TOKEN=nightly-airgap-join-token-0123456789 docker compose -f compose/docker-compose.yml up -d --wait
+          curl -fsS http://localhost:8080/readyz
+          "bin/stampede-linux-amd64" version
+      - name: workers connected
+        run: |
+          cd "$RUNNER_TEMP/stampede-airgap-nightly-linux-amd64"
+          for i in $(seq 1 30); do
+            n=$(docker compose -f compose/docker-compose.yml logs server 2>&1 | grep -c 'worker connected' || true)
+            [ "$n" -ge 2 ] && exit 0
+            sleep 2
+          done
+          docker compose -f compose/docker-compose.yml logs
+          exit 1
