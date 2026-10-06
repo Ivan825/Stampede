@@ -100,7 +100,11 @@ jobs:
       - run: pnpm test
       - run: pnpm build
       - name: committed build matches the source
-        run: git diff --exit-code -- dist || (echo "web/dist is stale: run pnpm build in web/ and commit it"; exit 1)
+        run: |
+          if ! git diff --exit-code -- dist; then
+            echo "web/dist is stale. Run pnpm build in web/ and commit it."
+            exit 1
+          fi
 
   shoplab:
     runs-on: ubuntu-latest
