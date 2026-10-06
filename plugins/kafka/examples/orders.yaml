@@ -1,0 +1,33 @@
+apiVersion: stampede.dev/v1
+kind: Scenario
+metadata:
+  name: kafka-orders
+  description: Users place orders as Kafka records and time how long each takes to become readable.
+journeys:
+  - name: checkout
+    steps:
+      - name: place order
+        plugin: kafka.produce
+        with:
+          brokers: ["${env.KAFKA_BROKERS}"]   # host:port of one or more seed brokers
+          topic: orders
+          key: "order-${vu}-${iter}"
+          value: '{"user": ${vu}, "order": ${iter}, "total": ${rand(5, 500)}}'
+          headers: { source: stampede }
+          acks: all                            # latency waits for all in-sync replicas
+        extract: { partition: "$.partition", offset: "$.offset" }
+      - name: order visible                    # read our own write back
+        plugin: kafka.consume
+        with:
+          brokers: ["${env.KAFKA_BROKERS}"]
+          topic: orders
+          partition: ${partition}
+          offset: ${offset}
+          key: "order-${vu}-${iter}"           # skip anything else
+          latency: age                         # produce timestamp -> receipt
+        timeout: 10s
+      - think: 200ms..800ms
+load: { vus: 50, duration: 2m }
+targets:
+  - checkout/place order.p99 < 100ms
+  - checkout/order visible.p95 < 250ms
