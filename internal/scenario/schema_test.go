@@ -39,6 +39,42 @@ func TestSchemaAcceptsExamples(t *testing.T) {
 	}
 }
 
+// TestSchemaTargets checks the targets pattern agrees with ParseThreshold,
+// including scopes with spaces such as default step names ("GET /b").
+func TestSchemaTargets(t *testing.T) {
+	c := jsonschema.NewCompiler()
+	sch, err := c.Compile(filepath.Join("..", "..", "schema", "scenario.schema.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	tests := []struct {
+		target string
+		ok     bool
+	}{
+		{"http.p95 < 500ms", true},
+		{"errors<1%", true},
+		{"shop/GET /b.p99 < 200ms", true},
+		{"browse/get product.p99 <= 1s", true},
+		{"p95 500ms", false},
+		{" < 1s", false},
+	}
+	for _, tc := range tests {
+		var doc any
+		_ = yaml.Unmarshal([]byte(`
+metadata: {name: x}
+journeys: [{name: a, steps: [{get: /a}]}]
+load: {vus: 1, duration: 1s}
+targets: ["`+tc.target+`"]`), &doc)
+		err := sch.Validate(normalizeYAML(doc))
+		if (err == nil) != tc.ok {
+			t.Errorf("target %q: schema error %v, want ok=%v", tc.target, err, tc.ok)
+		}
+		if _, perr := ParseThreshold(tc.target); tc.ok && perr != nil {
+			t.Errorf("target %q passes the schema but not the parser: %v", tc.target, perr)
+		}
+	}
+}
+
 func TestSchemaRejectsTwoActions(t *testing.T) {
 	c := jsonschema.NewCompiler()
 	sch, err := c.Compile(filepath.Join("..", "..", "schema", "scenario.schema.json"))

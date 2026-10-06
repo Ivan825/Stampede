@@ -53,8 +53,8 @@
     "load": { "$ref": "#/$defs/load" },
     "targets": {
       "type": "array",
-      "description": "Pass/fail targets such as 'http.p95 < 500ms', 'errors < 1%', 'checkout.p99 < 1s'.",
-      "items": { "type": "string", "pattern": "^\\s*\\S+\\s*(<=|>=|==|<|>)\\s*\\S+\\s*$" }
+      "description": "Pass/fail targets such as 'http.p95 < 500ms', 'errors < 1%', 'checkout.p99 < 1s', 'shop/GET /cart.p95 < 300ms'.",
+      "items": { "type": "string", "pattern": "^\\s*[^<>=\\s][^<>=]*(<=|>=|==|<|>)\\s*\\S+\\s*$" }
     }
   },
   "$defs": {
