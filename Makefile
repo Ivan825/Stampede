@@ -25,8 +25,11 @@ lint:
 fmt:
 	gofmt -s -w .
 
+# Every module: the plugins replace the main module, so they need tidying
+# whenever its dependencies change.
 tidy:
 	$(GO) mod tidy
+	for m in plugins/*/ examples/shoplab deploy/operator; do (cd $$m && $(GO) mod tidy) || exit 1; done
 
 clean:
 	rm -rf bin dist

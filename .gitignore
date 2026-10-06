@@ -3,7 +3,8 @@
 /dist/
 *.test
 *.out
-coverage.*
+/coverage.*
+*.coverprofile
 
 # Plugin binaries built in place (go build in plugins/<name>)
 /plugins/kafka/kafka

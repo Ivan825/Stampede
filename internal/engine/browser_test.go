@@ -58,6 +58,9 @@ load: {iterations: 2, vus: 1}`, srv.URL), func(o *Options) {
 		o.AllowHost = func(u *url.URL) bool { return u.Host == host }
 	})
 	tot := out.total.Totals()
+	if tot.Failed > 0 && out.total.Steps[0] != nil && out.total.Steps[0].Errors["browser unavailable"] > 0 {
+		t.Fatalf("Chrome did not start (set STAMPEDE_CHROME_NO_SANDBOX=true where its sandbox is unavailable): %v", tot.Errors)
+	}
 	ids := map[string]int{}
 	for _, st := range out.prog.Steps {
 		ids[st.Name] = st.ID
@@ -69,6 +72,9 @@ load: {iterations: 2, vus: 1}`, srv.URL), func(o *Options) {
 		}
 	}
 	load := out.total.Steps[ids["browser /"]]
+	if load == nil {
+		t.Fatalf("no stats for the page load; errors %v", tot.Errors)
+	}
 	if load.PhaseSum[metrics.PhaseLoad] == 0 || load.PhaseSum[metrics.PhaseFCP] == 0 {
 		t.Errorf("the page load must record load and FCP: %v", load.PhaseSum)
 	}
