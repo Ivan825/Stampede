@@ -1,0 +1,46 @@
+# The morning scroll: arrivals climb from 10/s to 200/s as people wake
+# up, each reading three pages of their home feed. Feed reads are the
+# heaviest read most social apps serve; this finds where they stop being
+# fast.
+apiVersion: stampede.dev/v1
+kind: Scenario
+metadata:
+  name: social-feed-rush
+  tags: [pack:social, ramp]
+target:
+  baseURL: ${env.TARGET_URL}
+data:
+  users: { csv: ../data/users.csv, mode: random }
+journeys:
+  - name: morning-scroll
+    steps:
+      - name: sign in
+        post: /api/login
+        json: { username: "${data.users.username}", password: "${data.users.password}" }
+        check: { status: 200 }
+        extract: { token: "$.token" }
+      - name: feed
+        get: /api/feed
+        headers: { Authorization: "Bearer ${token}" }
+        check: { status: 200, json: { "$.posts[0].id": exists } }
+        extract: { cursor: "$.next_cursor" }
+      - think: 2s..4s
+      - name: page 2
+        get: /api/feed?before=${cursor}
+        headers: { Authorization: "Bearer ${token}" }
+        check: { status: 200 }
+        extract: { cursor: "$.next_cursor" }
+      - think: 2s..4s
+      - name: page 3
+        get: /api/feed?before=${cursor}
+        headers: { Authorization: "Bearer ${token}" }
+        check: { status: 200 }
+load:
+  mode: rate
+  stages:
+    - { duration: 1m, target: 10/s }
+    - { duration: 3m, target: 200/s }
+    - { duration: 1m, target: 200/s }
+targets:
+  - "morning-scroll/feed.p95 < 300ms"
+  - errors < 1%

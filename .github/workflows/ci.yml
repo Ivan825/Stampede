@@ -332,6 +332,7 @@ jobs:
           - { pack: identity, port: 8095 }
           - { pack: public-apis, port: 8096 }
           - { pack: fintech, port: 8097 }
+          - { pack: social, port: 8098 }
     runs-on: ubuntu-latest
     env:
       PACK: ${{ matrix.pack }}

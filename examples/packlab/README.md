@@ -15,6 +15,7 @@ and as a single binary in CI. (The e-commerce pack's reference app is
 | `identity` | [AuthLab](#authlab) | 8095 | [identity](../../packs/identity) |
 | `public-apis` | [APILab](#apilab) | 8096 | [public-apis](../../packs/public-apis) |
 | `fintech` | [BankLab](#banklab) | 8097 | [fintech](../../packs/fintech) |
+| `social` | [SocialLab](#sociallab) | 8098 | [social](../../packs/social) |
 
 ```sh
 go run ./examples/packlab -product ticketing                # on :8094
@@ -161,3 +162,20 @@ transfer runs a fraud check that takes 5ms.
 | `lock` | Every transfer and payment holds one ledger-wide lock, fraud check included, so money moves one transfer at a time and balance reads queue behind it | `month-end-peak.yaml`: `payment` and `accounts` p95 as arrivals climb |
 | `balance` | A balance is the sum of the account's whole history, recomputed on every read and every transfer | `banking-mix.yaml`: `accounts` and `transfer`, slower as postings pile up |
 | `statements` | A monthly statement scans the whole bank's journal (about 100,000 postings) for one account's lines | `month-end-peak.yaml`: `statement` p95 |
+
+## SocialLab
+
+A social network with 5,000 accounts (`user0001` ... `user5000`,
+password `sociallab-pass`) and a week of posts. The 20 celebrities
+(`user0001` ... `user0020`) post a lot and are followed by everyone; other
+accounts follow 50 to 400 others. `POST /api/login` returns a bearer
+token; then the home feed, posts, likes, comments, profiles, follows,
+trending posts and notifications, live on the WebSocket
+`/api/notifications/ws`. Writing a like or a notification costs a 2ms
+database round trip.
+
+| Fix | Bottleneck | Where it shows |
+|---|---|---|
+| `timeline` | The home feed gathers every post of every followed account (several thousand) and sorts them all to show twenty | `feed-rush.yaml`: `feed` p95 and CPU as the rate climbs |
+| `likes` | Every like takes one global lock, scans the post's likers for a repeat and writes the like row before letting go, so likes run one at a time across the app | `viral-spike.yaml`: `like` p95 |
+| `notify` | Notifications are stored and written to the recipient's sockets inside the like, comment or follow request, under one lock | `viral-spike.yaml`: `like` and `comment` p95 |

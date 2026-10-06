@@ -1,0 +1,68 @@
+# Notifications end to end: one user keeps the app open on a WebSocket,
+# another comments on their latest post, and the comment must reach the
+# open socket within two seconds. Each iteration uses two accounts: the
+# author from the data file and a fan from a separate range, so the two
+# are never the same person.
+apiVersion: stampede.dev/v1
+kind: Scenario
+metadata:
+  name: social-live-notifications
+  description: A comment reaches the post author's open notification socket.
+  tags: [pack:social, websocket]
+target:
+  baseURL: ${env.TARGET_URL}
+data:
+  users: { csv: ../data/users.csv, mode: random }
+vars:
+  # Accounts from user3000 to user4999 act as fans; users.csv stops below.
+  fanPassword: sociallab-pass
+journeys:
+  - name: notified
+    steps:
+      - name: author signs in
+        post: /api/login
+        json: { username: "${data.users.username}", password: "${data.users.password}" }
+        check: { status: 200 }
+        extract: { authorToken: "$.token" }
+      - name: fan signs in
+        post: /api/login
+        json: { username: "user${rand(3000, 4999)}", password: "${vars.fanPassword}" }
+        check: { status: 200 }
+        extract: { fanToken: "$.token" }
+      - name: notification socket
+        ws: /api/notifications/ws
+        headers: { Authorization: "Bearer ${authorToken}" }
+        timeout: 5s
+        steps:
+          - name: welcome
+            expect: { json: { "$.type": welcome }, timeout: 5s }
+          - name: latest post
+            get: /api/users/${data.users.username}/posts?limit=1
+            headers: { Authorization: "Bearer ${fanToken}" }
+            check: { status: 200, json: { "$.posts[0].id": exists } }
+            extract: { postId: "$.posts[0].id" }
+          - think: 1s..3s
+          # An expect is timed from the last message sent, so ping just
+          # before the comment: the notification's time is then the
+          # comment request plus delivery.
+          - send: { type: ping }
+          - name: pong
+            expect: { json: { "$.type": pong }, timeout: 2s }
+          - name: fan comments
+            post: /api/posts/${postId}/comments
+            headers: { Authorization: "Bearer ${fanToken}" }
+            json: { text: "Love this ${randString(6)}" }
+            check: { status: 201 }
+          - name: comment notification
+            expect: { json: { "$.type": notification, "$.kind": comment }, timeout: 2s }
+          - think: 5s..10s
+          - send: { type: ping }
+          - name: pong
+            expect: { json: { "$.type": pong }, timeout: 2s }
+load:
+  mode: rate
+  rate: 5/s
+  duration: 2m
+targets:
+  - "notified/comment notification.p95 < 1s"
+  - errors < 1%

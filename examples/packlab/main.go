@@ -28,6 +28,7 @@ import (
 	"github.com/Ivan825/Stampede/examples/packlab/labkit"
 	"github.com/Ivan825/Stampede/examples/packlab/llmlab"
 	"github.com/Ivan825/Stampede/examples/packlab/saaslab"
+	"github.com/Ivan825/Stampede/examples/packlab/sociallab"
 	"github.com/Ivan825/Stampede/examples/packlab/ticketlab"
 )
 
@@ -48,6 +49,7 @@ var products = map[string]product{
 	"identity":    {pack: "identity", addr: ":8095", new: authlab.New},
 	"public-apis": {pack: "public-apis", addr: ":8096", new: apilab.New},
 	"fintech":     {pack: "fintech", addr: ":8097", new: banklab.New},
+	"social":      {pack: "social", addr: ":8098", new: sociallab.New},
 }
 
 func names() []string {

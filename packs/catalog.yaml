@@ -6,7 +6,7 @@ packs:
   - { name: ticketing, title: "Ticketing, booking, travel", status: shipped, signature: "On-sale rush; seat-lock contention; waiting-room queues", drivers: [http, websocket] }
   - { name: fintech, title: "Fintech, banking, payments", status: shipped, signature: "Transfers, statements; duplicate-payment safety; month-end peaks", drivers: [http] }
   - { name: saas, title: "SaaS dashboards, B2B tools", status: shipped, signature: "Login, create and edit records, heavy reports; noisy tenant", drivers: [http, graphql] }
-  - { name: social, title: "Social, feeds, forums", status: planned, signature: "Feed load, post, like, notifications; viral spike", drivers: [http, websocket] }
+  - { name: social, title: "Social, feeds, forums", status: shipped, signature: "Feed load, post, like, notifications; viral spike", drivers: [http, websocket] }
   - { name: chat, title: "Chat, collaboration", status: shipped, signature: "Thousands of open connections; message fan-out; reconnect storm", drivers: [websocket, http] }
   - { name: content, title: "News, blogs, content", status: planned, signature: "Cache hit rate; cold cache; breaking-news spike", drivers: [http] }
   - { name: streaming, title: "Video and audio streaming", status: planned, signature: "Start-up time; segment delivery; live-event concurrency", drivers: [http] }
