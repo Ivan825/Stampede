@@ -185,7 +185,7 @@ func (q *Queries) FinishAIJob(ctx context.Context, arg FinishAIJobParams) error 
 }
 
 const getAIJob = `-- name: GetAIJob :one
-SELECT id, org_id, project_id, provider_id, provider_kind, model, status, stage, round, target_id, scenario_id, dry_run, inputs, yaml, diff, result, error, input_tokens, output_tokens, created_by, created_at, started_at, finished_at, approved_at, approved_scenario_id, approved_version FROM ai_jobs WHERE id = $1 AND org_id = $2
+SELECT id, org_id, project_id, provider_id, provider_kind, model, status, stage, round, target_id, scenario_id, dry_run, inputs, yaml, diff, result, error, input_tokens, output_tokens, created_by, created_at, started_at, finished_at, approved_at, approved_scenario_id, approved_version, owner_replica FROM ai_jobs WHERE id = $1 AND org_id = $2
 `
 
 type GetAIJobParams struct {
@@ -223,6 +223,7 @@ func (q *Queries) GetAIJob(ctx context.Context, arg GetAIJobParams) (AiJob, erro
 		&i.ApprovedAt,
 		&i.ApprovedScenarioID,
 		&i.ApprovedVersion,
+		&i.OwnerReplica,
 	)
 	return i, err
 }

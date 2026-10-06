@@ -87,7 +87,7 @@ func (q *Queries) GetReport(ctx context.Context, runID uuid.UUID) (json.RawMessa
 }
 
 const getRun = `-- name: GetRun :one
-SELECT r.id, r.project_id, r.scenario_id, r.scenario_version, r.target_id, r.status, r.verdict, r.stop_reason, r.error, r.overrides, r.plan, r.env, r.workers, r.note, r.summary, r.created_by, r.created_at, r.started_at, r.ended_at, s.name AS scenario_name, t.base_url AS target_url
+SELECT r.id, r.project_id, r.scenario_id, r.scenario_version, r.target_id, r.status, r.verdict, r.stop_reason, r.error, r.overrides, r.plan, r.env, r.workers, r.note, r.summary, r.created_by, r.created_at, r.started_at, r.ended_at, r.owner_replica, s.name AS scenario_name, t.base_url AS target_url
 FROM runs r
 JOIN projects p ON p.id = r.project_id
 JOIN scenarios s ON s.id = r.scenario_id
@@ -120,6 +120,7 @@ type GetRunRow struct {
 	CreatedAt       time.Time
 	StartedAt       *time.Time
 	EndedAt         *time.Time
+	OwnerReplica    *uuid.UUID
 	ScenarioName    string
 	TargetUrl       string
 }
@@ -147,6 +148,7 @@ func (q *Queries) GetRun(ctx context.Context, arg GetRunParams) (GetRunRow, erro
 		&i.CreatedAt,
 		&i.StartedAt,
 		&i.EndedAt,
+		&i.OwnerReplica,
 		&i.ScenarioName,
 		&i.TargetUrl,
 	)
@@ -360,7 +362,7 @@ func (q *Queries) ListRunSnapshots(ctx context.Context, runID uuid.UUID) ([][]by
 }
 
 const listRuns = `-- name: ListRuns :many
-SELECT r.id, r.project_id, r.scenario_id, r.scenario_version, r.target_id, r.status, r.verdict, r.stop_reason, r.error, r.overrides, r.plan, r.env, r.workers, r.note, r.summary, r.created_by, r.created_at, r.started_at, r.ended_at, s.name AS scenario_name, t.base_url AS target_url
+SELECT r.id, r.project_id, r.scenario_id, r.scenario_version, r.target_id, r.status, r.verdict, r.stop_reason, r.error, r.overrides, r.plan, r.env, r.workers, r.note, r.summary, r.created_by, r.created_at, r.started_at, r.ended_at, r.owner_replica, s.name AS scenario_name, t.base_url AS target_url
 FROM runs r
 JOIN scenarios s ON s.id = r.scenario_id
 JOIN targets t ON t.id = r.target_id
@@ -398,6 +400,7 @@ type ListRunsRow struct {
 	CreatedAt       time.Time
 	StartedAt       *time.Time
 	EndedAt         *time.Time
+	OwnerReplica    *uuid.UUID
 	ScenarioName    string
 	TargetUrl       string
 }
@@ -436,6 +439,7 @@ func (q *Queries) ListRuns(ctx context.Context, arg ListRunsParams) ([]ListRunsR
 			&i.CreatedAt,
 			&i.StartedAt,
 			&i.EndedAt,
+			&i.OwnerReplica,
 			&i.ScenarioName,
 			&i.TargetUrl,
 		); err != nil {

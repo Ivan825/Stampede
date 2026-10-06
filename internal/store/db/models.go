@@ -38,6 +38,7 @@ type AiJob struct {
 	ApprovedAt         *time.Time
 	ApprovedScenarioID *uuid.UUID
 	ApprovedVersion    *int32
+	OwnerReplica       *uuid.UUID
 }
 
 type AiProvider struct {
@@ -160,6 +161,14 @@ type Project struct {
 	CreatedAt   time.Time
 }
 
+type Replica struct {
+	ID        uuid.UUID
+	Addr      string
+	Version   string
+	StartedAt time.Time
+	LastSeen  time.Time
+}
+
 type Report struct {
 	RunID     uuid.UUID
 	Report    json.RawMessage
@@ -186,6 +195,7 @@ type Run struct {
 	CreatedAt       time.Time
 	StartedAt       *time.Time
 	EndedAt         *time.Time
+	OwnerReplica    *uuid.UUID
 }
 
 type RunEvent struct {

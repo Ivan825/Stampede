@@ -11,6 +11,7 @@ import (
 	"fmt"
 	"io/fs"
 	"log/slog"
+	"time"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
@@ -175,4 +176,45 @@ func (s *Store) AdvisoryLock(ctx context.Context, key int64) (*Lock, error) {
 		_, _ = conn.Exec(context.Background(), "SELECT pg_advisory_unlock($1)", key)
 		conn.Release()
 	}}, nil
+}
+
+// Notify sends payload to everyone listening on channel (pg_notify).
+func (s *Store) Notify(ctx context.Context, channel, payload string) error {
+	_, err := s.Pool.Exec(ctx, "SELECT pg_notify($1, $2)", channel, payload)
+	return err
+}
+
+// Listen calls fn with every notification on channel until ctx ends. It
+// holds a dedicated connection and reconnects after errors, calling
+// onReconnect (if set) each time it listens again, since notifications
+// sent while it was disconnected are lost.
+func (s *Store) Listen(ctx context.Context, channel string, fn func(payload string), onReconnect func()) {
+	ident := pgx.Identifier{channel}.Sanitize()
+	first := true
+	for ctx.Err() == nil {
+		conn, err := s.Pool.Acquire(ctx)
+		if err == nil {
+			_, err = conn.Exec(ctx, "LISTEN "+ident)
+			if err == nil {
+				if !first && onReconnect != nil {
+					onReconnect()
+				}
+				first = false
+				for {
+					n, err := conn.Conn().WaitForNotification(ctx)
+					if err != nil {
+						break
+					}
+					fn(n.Payload)
+				}
+			}
+			// The connection may be mid-LISTEN or broken; do not return it.
+			conn.Hijack().Close(context.Background())
+		}
+		select {
+		case <-ctx.Done():
+			return
+		case <-time.After(2 * time.Second):
+		}
+	}
 }
