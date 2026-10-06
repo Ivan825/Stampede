@@ -114,7 +114,7 @@ func (w *Worker) prepare(ctx context.Context, sr *workerv1.StartRun) (*activeRun
 		WorkerIndex: int(sr.GetWorkerIndex()), WorkerCount: int(sr.GetWorkerCount()),
 		T0: t0, Interval: time.Duration(sr.GetIntervalNs()),
 		OnSnapshot: func(s *metrics.Snapshot) { w.onSnapshot(r, s) },
-		AllowHost:  policy.Allow, HTTP: w.cfg.HTTP, Logger: w.log,
+		AllowHost:  policy.Allow, HTTP: w.cfg.HTTP, Logger: w.log, PluginDir: w.cfg.PluginDir,
 	})
 	if err != nil {
 		r.cancel()
