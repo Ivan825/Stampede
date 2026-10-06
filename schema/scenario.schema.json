@@ -263,7 +263,17 @@
         "cycles": { "type": "integer", "minimum": 1, "description": "Cycles in the wave shape." },
         "iterations": { "type": "integer", "minimum": 1 },
         "maxVUs": { "type": "integer", "minimum": 1 },
-        "gracefulStop": { "$ref": "#/$defs/duration" }
+        "gracefulStop": { "$ref": "#/$defs/duration" },
+        "abort": {
+          "type": "object",
+          "additionalProperties": false,
+          "description": "Stop the run early when errors or p95 stay above a limit for 'for' (default 10s).",
+          "properties": {
+            "errors": { "$ref": "#/$defs/percent" },
+            "p95": { "$ref": "#/$defs/duration" },
+            "for": { "$ref": "#/$defs/duration" }
+          }
+        }
       }
     }
   }

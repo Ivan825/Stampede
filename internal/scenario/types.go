@@ -340,6 +340,19 @@ type Load struct {
 	MaxVUs int `yaml:"maxVUs,omitempty" json:"maxVUs,omitempty"`
 	// GracefulStop lets in-flight iterations finish after the end (default 30s).
 	GracefulStop Duration `yaml:"gracefulStop,omitempty" json:"gracefulStop,omitempty"`
+	// Abort stops the run early when the target is clearly failing.
+	Abort *Abort `yaml:"abort,omitempty" json:"abort,omitempty"`
+}
+
+// Abort ends a run when errors or latency stay above a limit for a while,
+// so a broken target is not hammered for the rest of the test.
+type Abort struct {
+	// Errors is the failed-request ratio that trips the abort.
+	Errors *Percent `yaml:"errors,omitempty" json:"errors,omitempty"`
+	// P95 is the latency that trips the abort.
+	P95 Duration `yaml:"p95,omitempty" json:"p95,omitempty"`
+	// For is how long the limit must be exceeded (default 10s).
+	For Duration `yaml:"for,omitempty" json:"for,omitempty"`
 }
 
 // Load modes.
