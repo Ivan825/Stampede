@@ -18,6 +18,9 @@ linters:
         - (net.Conn).Close
         - (net.Listener).Close
         - os.RemoveAll
+        - (net/http.ResponseWriter).Write
+        - (*database/sql.DB).Close
+        - (*github.com/jackc/pgx/v5.Conn).Close
     gosec:
       excludes:
         - G104 # unhandled errors are covered by errcheck

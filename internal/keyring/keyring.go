@@ -47,7 +47,7 @@ func New(key []byte) (*Keyring, error) {
 func FromEnv() (*Keyring, error) {
 	raw := os.Getenv("STAMPEDE_MASTER_KEY")
 	if f := os.Getenv("STAMPEDE_MASTER_KEY_FILE"); raw == "" && f != "" {
-		b, err := os.ReadFile(f)
+		b, err := os.ReadFile(f) //nolint:gosec // the operator chooses the key file
 		if err != nil {
 			return nil, fmt.Errorf("read master key file: %w", err)
 		}
