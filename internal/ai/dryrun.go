@@ -22,6 +22,7 @@ import (
 	"github.com/tidwall/gjson"
 	"golang.org/x/net/html"
 
+	"github.com/Ivan825/Stampede/internal/feed"
 	"github.com/Ivan825/Stampede/internal/protocol/httpx"
 	"github.com/Ivan825/Stampede/internal/scenario"
 )
@@ -580,6 +581,28 @@ func (p *pass) loadData() error {
 
 func (d *DryRunner) rows(f scenario.Feeder) ([]any, error) {
 	switch {
+	case len(f.Generate) > 0:
+		g, err := feed.NewGenerator(f.Generate, 0, 1)
+		if err != nil {
+			return nil, err
+		}
+		out := make([]any, maxPasses)
+		for i := range out {
+			out[i] = g.Row()
+		}
+		return out, nil
+	case f.SQL != nil:
+		dsn := feed.Expand(f.SQL.DSN, d.Env, d.Secrets)
+		host, err := feed.SQLHost(f.SQL.Driver, dsn)
+		if err != nil {
+			return nil, err
+		}
+		if d.Allow != nil {
+			if why := d.Allow(&url.URL{Scheme: f.SQL.Driver, Host: host}); why != "" {
+				return nil, fmt.Errorf("database host %s: %s", host, why)
+			}
+		}
+		return feed.SQLRows(context.Background(), f.SQL.Driver, dsn, f.SQL.Query, maxPasses)
 	case len(f.List) > 0:
 		return f.List, nil
 	case len(f.Range) == 2:

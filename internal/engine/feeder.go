@@ -1,15 +1,18 @@
 package engine
 
 import (
+	"context"
 	"encoding/csv"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
 	"math/rand/v2"
+	"net/url"
 	"os"
 	"sync/atomic"
 
+	"github.com/Ivan825/Stampede/internal/feed"
 	"github.com/Ivan825/Stampede/internal/scenario"
 )
 
@@ -23,15 +26,35 @@ type feeder struct {
 	wrap   bool
 	rows   []any
 	cursor atomic.Uint64
+	// gen, when set, makes a new row for every use instead.
+	gen *feed.Generator
 }
 
 // loadFeeder reads a feeder's rows and keeps the partition that belongs to
 // this worker: row i is ours when i % count == index, so two workers never
 // use the same row in unique mode.
-func loadFeeder(name string, f scenario.Feeder, index, count int) (*feeder, error) {
+// env and secrets expand a SQL feeder's DSN; allow (nil allows all) vets
+// the database host like a request host.
+func loadFeeder(ctx context.Context, name string, f scenario.Feeder, index, count int, env, secrets map[string]string, allow func(*url.URL) bool) (*feeder, error) {
+	if len(f.Generate) > 0 {
+		g, err := feed.NewGenerator(f.Generate, index, count)
+		if err != nil {
+			return nil, fmt.Errorf("data.%s: %w", name, err)
+		}
+		return &feeder{name: name, gen: g}, nil
+	}
 	var rows []any
 	var err error
 	switch {
+	case f.SQL != nil:
+		dsn := feed.Expand(f.SQL.DSN, env, secrets)
+		var host string
+		if host, err = feed.SQLHost(f.SQL.Driver, dsn); err == nil {
+			if allow != nil && !allow(&url.URL{Scheme: f.SQL.Driver, Host: host}) {
+				return nil, fmt.Errorf("data.%s: database host %s is not allowed for this run", name, host)
+			}
+			rows, err = feed.SQLRows(ctx, f.SQL.Driver, dsn, f.SQL.Query, f.SQL.Limit)
+		}
 	case f.CSV != "":
 		rows, err = readCSV(f.CSV)
 	case f.JSON != "":
@@ -69,6 +92,9 @@ func loadFeeder(name string, f scenario.Feeder, index, count int) (*feeder, erro
 
 // next returns a row for virtual user vu.
 func (f *feeder) next(vu int) (any, error) {
+	if f.gen != nil {
+		return f.gen.Row(), nil
+	}
 	switch f.mode {
 	case scenario.FeedRandom:
 		return f.rows[rand.IntN(len(f.rows))], nil

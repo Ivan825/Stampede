@@ -178,7 +178,7 @@ func New(opts Options) (*Engine, error) {
 	}
 
 	for name, f := range s.Data {
-		fd, err := loadFeeder(name, f, opts.WorkerIndex, opts.WorkerCount)
+		fd, err := loadFeeder(context.Background(), name, f, opts.WorkerIndex, opts.WorkerCount, opts.Env, opts.Secrets, opts.AllowHost)
 		if err != nil {
 			return nil, err
 		}
