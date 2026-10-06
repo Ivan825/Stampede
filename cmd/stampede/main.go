@@ -18,6 +18,6 @@ func main() {
 
 	if err := cli.NewRoot().ExecuteContext(ctx); err != nil {
 		fmt.Fprintln(os.Stderr, "error:", err)
-		os.Exit(1)
+		os.Exit(cli.ExitCode(err))
 	}
 }

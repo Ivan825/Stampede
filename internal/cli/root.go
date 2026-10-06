@@ -18,7 +18,7 @@ reports where your product breaks.`,
 		SilenceUsage:  true,
 		SilenceErrors: true,
 	}
-	root.AddCommand(newVersionCmd())
+	root.AddCommand(newVersionCmd(), newRunCmd(), newValidateCmd(), newTargetCmd())
 	return root
 }
 
