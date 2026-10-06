@@ -1,0 +1,6 @@
+node_modules/
+*.tsbuildinfo
+coverage/
+# The built UI is committed so `go build` and `go install` embed a working
+# UI without Node. The repository root ignores web/dist/; re-include it here.
+!/dist/
