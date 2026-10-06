@@ -7,6 +7,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"cel.dev/cel-go/interpreter"
 )
 
 // protocolScenario wraps steps in a minimal scenario.
@@ -131,6 +133,31 @@ func TestProtocolStepErrors(t *testing.T) {
 		"allowErrors on http": {`
       - get: /x
         check: {allowErrors: true}`, "only applies to graphql steps"},
+		"plugin bad name": {`
+      - plugin: mqtt`, "must look like <plugin>.<step>"},
+		"plugin upper-case name": {`
+      - plugin: MQTT.publish`, "must look like <plugin>.<step>"},
+		"plugin unknown key": {`
+      - plugin: mqtt.publish
+        topic: a`, `line 9: unknown key "topic" in plugin step`},
+		"plugin with not a mapping": {`
+      - plugin: mqtt.publish
+        with: [a]`, "with takes the step's settings as a mapping"},
+		"plugin http key": {`
+      - plugin: mqtt.publish
+        headers: {a: b}`, `"headers" does not apply to plugin steps`},
+		"plugin status check": {`
+      - plugin: mqtt.publish
+        check: {status: 200}`, "does not apply to plugin steps"},
+		"plugin header extractor": {`
+      - plugin: mqtt.publish
+        extract: {h: "header:x"}`, "header extractors do not apply here"},
+		"plugin undeclared variable": {`
+      - plugin: mqtt.publish
+        with: {topic: "t/${nope}"}`, `is "nope" extracted in an earlier step`},
+		"with on http": {`
+      - get: /x
+        with: {a: 1}`, `"with" does not apply to get steps`},
 		"request key on think": {`
       - think: 1s
         check: {status: 200}`, `"check" does not apply to think steps`},
@@ -181,6 +208,56 @@ func TestProtocolVariablesFlow(t *testing.T) {
 		t.Errorf("recorded steps %q, want %q", names, want)
 	}
 }
+
+func TestPluginCompile(t *testing.T) {
+	s, err := Parse([]byte(protocolScenario(`
+      - plugin: mqtt.publish
+        with:
+          topic: "devices/${vu}"
+          qos: 1
+          tags: [a, "${iter}"]
+          nested: {"a/b": "${vu}"}
+        extract: {id: "$.packetId"}
+      - plugin: kafka.produce
+      - get: /x/${id}`)))
+	if err != nil {
+		t.Fatal(err)
+	}
+	p, err := Compile(s)
+	if err != nil {
+		t.Fatal(err)
+	}
+	st := p.Steps[0]
+	if st.Name != "mqtt.publish" || st.Plugin.Plugin != "mqtt" || st.Plugin.Step != "publish" {
+		t.Fatalf("compiled %q %+v", st.Name, st.Plugin)
+	}
+	if got := strings.Join(st.Plugin.Templated, " "); got != "/nested/a~1b /tags/1 /topic" {
+		t.Errorf("templated %q", got)
+	}
+	v, err := st.Plugin.With.Value(&testActivation{"vu": int64(3), "iter": int64(2)})
+	if err != nil {
+		t.Fatal(err)
+	}
+	m := v.(map[string]any)
+	if m["topic"] != "devices/3" || m["qos"] != 1 {
+		t.Errorf("rendered %v", m)
+	}
+	if p.Steps[1].Plugin.Config == nil {
+		t.Error("a plugin step without with gets an empty config")
+	}
+	if got := strings.Join(p.PluginNames(), ","); got != "kafka,mqtt" {
+		t.Errorf("plugins %s", got)
+	}
+}
+
+type testActivation map[string]any
+
+func (a *testActivation) ResolveName(n string) (any, bool) {
+	v, ok := (*a)[n]
+	return v, ok
+}
+
+func (a *testActivation) Parent() interpreter.Activation { return nil }
 
 func TestGraphQLCompile(t *testing.T) {
 	const q = "query { me { id } }"

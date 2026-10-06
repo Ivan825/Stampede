@@ -20,7 +20,7 @@ var httpMethods = map[string]string{
 
 // kindKeys are the step keys that name a step kind, besides HTTP methods,
 // in the order they are listed in error messages.
-var kindKeys = []string{"think", "branch", "loop", "while", "group", "script", "graphql", "sse", "ws", "send", "expect", "grpc"}
+var kindKeys = []string{"think", "branch", "loop", "while", "group", "script", "graphql", "sse", "ws", "send", "expect", "grpc", "plugin"}
 
 // requestKeys are the HTTP request parts shared by request-like steps.
 var requestKeys = []string{"headers", "query", "json", "body", "form", "check", "extract", "timeout"}
@@ -41,6 +41,7 @@ var stepKeys = map[string][]string{
 	"send":    nil,
 	"expect":  {"extract"},
 	"grpc":    {"target", "message", "metadata", "protoset", "proto", "importPaths", "check", "extract", "timeout"},
+	"plugin":  {"with", "check", "extract", "timeout"},
 }
 
 // UnmarshalYAML reads the compact step syntax, for example
@@ -212,6 +213,13 @@ func (s *Step) UnmarshalYAML(n *yaml.Node) error {
 			return err
 		}
 		out.GRPC = g
+	case "plugin":
+		out.Kind = StepPlugin
+		p, err := decodePlugin(fields)
+		if err != nil {
+			return err
+		}
+		out.Plugin = p
 	}
 	*s = out
 	return nil
@@ -447,6 +455,37 @@ func decodeGRPC(f map[string]*yaml.Node) (*GRPC, error) {
 	return g, nil
 }
 
+func decodePlugin(f map[string]*yaml.Node) (*PluginStep, error) {
+	p := &PluginStep{Use: f["plugin"].Value}
+	if v, ok := f["with"]; ok && v.Tag != "!!null" {
+		if v.Kind != yaml.MappingNode {
+			return nil, fmt.Errorf("line %d: with takes the step's settings as a mapping", v.Line)
+		}
+		var m map[string]any
+		if err := v.Decode(&m); err != nil {
+			return nil, err
+		}
+		p.With, _ = normalizeYAML(m).(map[string]any)
+	}
+	if v, ok := f["check"]; ok {
+		p.Check = &Check{}
+		if err := decodeStrict(v, "check", p.Check); err != nil {
+			return nil, err
+		}
+	}
+	if v, ok := f["extract"]; ok {
+		if err := v.Decode(&p.Extract); err != nil {
+			return nil, err
+		}
+	}
+	if v, ok := f["timeout"]; ok {
+		if err := v.Decode(&p.Timeout); err != nil {
+			return nil, err
+		}
+	}
+	return p, nil
+}
+
 // UnmarshalYAML accepts one code name or a list.
 func (c *GRPCCodes) UnmarshalYAML(n *yaml.Node) error {
 	switch n.Kind {
@@ -639,6 +678,21 @@ func (s Step) toMap() map[string]any {
 		}
 		if g.Timeout > 0 {
 			m["timeout"] = g.Timeout
+		}
+	case StepPlugin:
+		p := s.Plugin
+		m["plugin"] = p.Use
+		if len(p.With) > 0 {
+			m["with"] = p.With
+		}
+		if p.Check != nil {
+			m["check"] = p.Check
+		}
+		if len(p.Extract) > 0 {
+			m["extract"] = p.Extract
+		}
+		if p.Timeout > 0 {
+			m["timeout"] = p.Timeout
 		}
 	}
 	return m

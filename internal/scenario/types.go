@@ -144,6 +144,7 @@ const (
 	StepSend    StepKind = "send"
 	StepExpect  StepKind = "expect"
 	StepGRPC    StepKind = "grpc"
+	StepPlugin  StepKind = "plugin"
 )
 
 // Step is one action within a journey. Exactly one kind-specific field is
@@ -169,6 +170,7 @@ type Step struct {
 	Send    *Send
 	Expect  *Expect
 	GRPC    *GRPC
+	Plugin  *PluginStep
 }
 
 // Request is an HTTP call.
@@ -275,6 +277,19 @@ type GRPC struct {
 	Check       *GRPCCheck
 	Extract     map[string]string
 	Timeout     Duration
+}
+
+// PluginStep runs a step implemented by a plugin, such as mqtt.publish.
+type PluginStep struct {
+	// Use is "<plugin>.<step>".
+	Use string
+	// With is the step's config: a mapping whose strings may contain ${}
+	// expressions, checked against the schema the plugin describes.
+	With map[string]any
+	// Check and Extract work on the JSON object the step returns.
+	Check   *Check
+	Extract map[string]string
+	Timeout Duration
 }
 
 // GRPCCheck asserts on a gRPC response. Status lists the accepted status
