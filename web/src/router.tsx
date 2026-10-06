@@ -160,15 +160,23 @@ const workersRoute = createRoute({
   component: lazyRouteComponent(() => import('@/pages/Workers'), 'WorkersPage'),
 });
 
-export type SettingsTab = 'account' | 'tokens' | 'users' | 'audit';
+export type SettingsTab =
+  'account' | 'tokens' | 'users' | 'audit' | 'integrations' | 'notifications';
+
+const settingsTabs: readonly SettingsTab[] = [
+  'account',
+  'tokens',
+  'users',
+  'audit',
+  'integrations',
+  'notifications',
+];
 
 const settingsRoute = createRoute({
   getParentRoute: () => appRoute,
   path: '/settings',
   validateSearch: (s: Record<string, unknown>): { tab?: SettingsTab } =>
-    s.tab === 'tokens' || s.tab === 'users' || s.tab === 'audit' || s.tab === 'account'
-      ? { tab: s.tab }
-      : {},
+    settingsTabs.includes(s.tab as SettingsTab) ? { tab: s.tab as SettingsTab } : {},
   component: lazyRouteComponent(() => import('@/pages/Settings'), 'SettingsPage'),
 });
 

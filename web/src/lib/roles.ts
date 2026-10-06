@@ -30,6 +30,7 @@ export function permissions(role: Role | undefined) {
     deleteProjects: atLeast(role, 'admin'),
     manageUsers: atLeast(role, 'admin'),
     viewAudit: atLeast(role, 'admin'),
+    manageIntegrations: atLeast(role, 'admin'),
   };
 }
 
