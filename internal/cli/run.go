@@ -103,7 +103,9 @@ func runScenario(ctx context.Context, stdout, stderr io.Writer, path string, f *
 	if err != nil {
 		return err
 	}
-	applyOverrides(s, f)
+	if err := applyOverrides(s, f); err != nil {
+		return err
+	}
 	if err := s.Validate(); err != nil {
 		return err
 	}
@@ -174,41 +176,13 @@ func runScenario(ctx context.Context, stdout, stderr io.Writer, path string, f *
 	return nil
 }
 
-func applyOverrides(s *scenario.Scenario, f *runFlags) {
-	l := &s.Load
+func applyOverrides(s *scenario.Scenario, f *runFlags) error {
 	if f.baseURL != "" {
 		s.Target.BaseURL = f.baseURL
 	}
-	if f.shape != "" {
-		l.Shape = f.shape
-		l.Stages = nil
-		l.Iterations = 0
-	}
-	if f.rate != "" {
-		if r, err := scenario.ParseRate(f.rate); err == nil {
-			l.Mode, l.Rate = scenario.ModeRate, r
-			if f.shape == "" && len(l.Stages) == 0 && l.Shape == "" {
-				l.Iterations = 0
-			}
-		}
-	}
-	if f.vus > 0 {
-		l.VUs = f.vus
-		if f.rate == "" {
-			l.Mode = scenario.ModeVUs
-		}
-	}
-	if f.duration != "" {
-		if d, err := scenario.ParseDuration(f.duration); err == nil {
-			l.Duration = d
-			if f.shape == "" {
-				l.Stages, l.Iterations = nil, 0
-			}
-		}
-	}
-	if f.iterations > 0 {
-		l.Iterations, l.Shape, l.Stages, l.Mode, l.Duration = f.iterations, "", nil, scenario.ModeVUs, 0
-	}
+	return scenario.Overrides{
+		Shape: f.shape, VUs: f.vus, Rate: f.rate, Duration: f.duration, Iterations: f.iterations,
+	}.Apply(s)
 }
 
 func renderBaseURL(s *scenario.Scenario, env, secrets map[string]string) (string, error) {
