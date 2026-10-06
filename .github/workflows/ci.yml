@@ -119,6 +119,22 @@ jobs:
       - run: go vet ./...
       - run: go test -race ./...
 
+  packs:
+    # A pack is only "shipped" when its journeys work against its reference
+    # app; this job proves it on every push.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - name: start ShopLab
+        working-directory: examples/shoplab
+        run: docker compose up -d --build --wait
+      - run: make build
+      - name: dry-run the e-commerce pack against ShopLab
+        run: ./bin/stampede pack test ecommerce --target http://localhost:8090
+
   security:
     runs-on: ubuntu-latest
     steps:
