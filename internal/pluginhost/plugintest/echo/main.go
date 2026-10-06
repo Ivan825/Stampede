@@ -118,6 +118,9 @@ func say(ctx context.Context, c *pluginsdk.Call) (*pluginsdk.Result, error) {
 			return nil, pluginsdk.Fail("echo timeout", ctx.Err())
 		}
 	}
+	// The reported latency (3ms) is real: the host never records more
+	// than the call took.
+	time.Sleep(3 * time.Millisecond)
 	if cfg.Fail != "" {
 		return &pluginsdk.Result{Latency: 2 * time.Millisecond}, pluginsdk.Fail(cfg.Fail, errors.New("told to fail"))
 	}

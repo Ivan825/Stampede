@@ -20,6 +20,7 @@ import (
 	"time"
 
 	"github.com/Ivan825/Stampede/internal/metrics"
+	"github.com/Ivan825/Stampede/internal/pluginhost"
 	"github.com/Ivan825/Stampede/internal/protocol/grpcx"
 	"github.com/Ivan825/Stampede/internal/protocol/httpx"
 	"github.com/Ivan825/Stampede/internal/protocol/netem"
@@ -56,8 +57,11 @@ type Options struct {
 	// (default 10 MiB).
 	MaxBodyBytes int64
 	// Transport overrides the HTTP dialer (tests, network emulation).
-	HTTP   httpx.Options
-	Logger *slog.Logger
+	HTTP httpx.Options
+	// PluginDir is where plugin executables are looked for before PATH
+	// (default: pluginhost.Dir()).
+	PluginDir string
+	Logger    *slog.Logger
 }
 
 // Result describes a finished run.
@@ -94,12 +98,15 @@ type Engine struct {
 	grpcPool  *grpcx.Pool
 	grpcDescs *grpcx.Descriptors
 	grpcSteps map[int]*grpcStep
-	httpOpts  httpx.Options
-	baseURL   string
-	headers   []headerKV
-	userAgent string
-	maxBody   int64
-	allowHost func(*url.URL) bool
+	// plugins serve plugin steps; nil without any.
+	plugins    pluginhost.Set
+	pluginOnce sync.Once
+	httpOpts   httpx.Options
+	baseURL    string
+	headers    []headerKV
+	userAgent  string
+	maxBody    int64
+	allowHost  func(*url.URL) bool
 
 	t0        time.Time
 	activeVUs atomic.Int64
@@ -246,6 +253,9 @@ func New(opts Options) (*Engine, error) {
 	if err := e.prepareGRPC(static); err != nil {
 		return nil, err
 	}
+	if err := e.preparePlugins(); err != nil {
+		return nil, err
+	}
 	return e, nil
 }
 
@@ -291,6 +301,9 @@ func walkCompiled(steps []*scenario.CStep, fn func(string)) {
 			for _, kv := range g.Metadata {
 				fn(kv.Value.String())
 			}
+		}
+		if p := st.Plugin; p != nil && p.With != nil {
+			fn(p.With.Source())
 		}
 		if g := st.GraphQL; g != nil {
 			if g.Query != nil {
@@ -343,6 +356,7 @@ func (e *Engine) shareFrac() float64 { return e.opts.ShareHi - e.opts.ShareLo }
 
 // Run executes the plan and blocks until all load has stopped.
 func (e *Engine) Run(ctx context.Context) (*Result, error) {
+	defer e.closePlugins()
 	e.t0 = e.opts.T0
 	if e.t0.IsZero() {
 		e.t0 = time.Now()
