@@ -1,0 +1,122 @@
+name: kubernetes
+
+# Checks the Helm chart, the operator and the Terraform examples, then
+# installs both on a kind cluster and runs real distributed tests through
+# them (deploy/kind/smoke.sh and deploy/kind/operator-smoke.sh).
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - deploy/**
+      - Dockerfile
+      - cmd/**
+      - internal/**
+      - web/dist/**
+      - go.mod
+      - go.sum
+      - .github/workflows/k8s.yml
+  pull_request:
+    paths:
+      - deploy/**
+      - Dockerfile
+      - cmd/**
+      - internal/**
+      - web/dist/**
+      - go.mod
+      - go.sum
+      - .github/workflows/k8s.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: k8s-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  helm:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: azure/setup-helm@v4
+      - name: lint
+        run: |
+          helm lint --strict deploy/helm/stampede
+          helm lint --strict deploy/helm/stampede -f deploy/helm/stampede/ci/kind-values.yaml
+      - name: template with optional features on
+        run: |
+          helm template t deploy/helm/stampede >/dev/null
+          helm template t deploy/helm/stampede \
+            --set ingress.enabled=true --set serviceMonitor.enabled=true \
+            --set workers.autoscaling.enabled=true --set workerTLS.enabled=true --set workerTLS.secretName=tls \
+            --set server.caps.maxRate=100 --set 'workers.labels.pool=spot' >/dev/null
+          helm template t deploy/helm/stampede \
+            --set timescaledb.enabled=false --set database.external.existingSecret=db >/dev/null
+      - name: invalid values are rejected
+        run: |
+          for bad in "timescaledb.enabled=false" "server.executor=nope" "server.caps.maxDuration=ten"; do
+            if helm template t deploy/helm/stampede --set "$bad" >/dev/null 2>&1; then
+              echo "--set $bad was accepted"; exit 1
+            fi
+          done
+
+  operator:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: deploy/operator
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: deploy/operator/go.mod
+          cache-dependency-path: deploy/operator/go.sum
+      - name: gofmt
+        run: test -z "$(gofmt -s -l .)" || { gofmt -s -l .; exit 1; }
+      - run: go vet ./...
+      - name: generated code and manifests are up to date
+        run: |
+          make generate manifests
+          git diff --exit-code -- . || (echo "run make generate manifests in deploy/operator and commit"; exit 1)
+      - name: unit and envtest tests
+        run: make test TESTFLAGS=-race
+
+  terraform:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: hashicorp/setup-terraform@v3
+      - run: terraform fmt -check -recursive deploy/terraform
+      - name: validate
+        run: |
+          for d in deploy/terraform/aws deploy/terraform/gcp; do
+            terraform -chdir=$d init -backend=false -input=false
+            terraform -chdir=$d validate
+          done
+
+  kind:
+    needs: [helm, operator]
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+      - uses: azure/setup-helm@v4
+      - uses: helm/kind-action@v1
+        with:
+          cluster_name: stampede
+          config: deploy/kind/cluster.yaml
+      - name: chart on kind (build, install, helm test, distributed run)
+        run: SKIP_CLUSTER=1 deploy/kind/smoke.sh
+      - name: operator on kind (StampedeCluster and StampedeRun)
+        run: deploy/kind/operator-smoke.sh
+      - name: diagnostics
+        if: failure()
+        run: |
+          kubectl get pods -A -o wide
+          kubectl -n stampede logs deploy/stampede-server --tail=100 || true
+          kubectl -n stampede logs deploy/stampede-worker --tail=50 || true
+          kubectl -n stampede-op logs deploy/lab-server --tail=100 || true
+          kubectl -n stampede-system logs deploy/stampede-operator-controller-manager --tail=100 || true
+          kubectl get events -A --sort-by=.lastTimestamp | tail -50
