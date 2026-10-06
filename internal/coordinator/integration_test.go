@@ -215,11 +215,12 @@ func TestWorkerLossMidRunIsMarked(t *testing.T) {
 		t.Errorf("degraded %v reason %q", res.Degraded, res.StopReason)
 	}
 
-	var sum uint64
+	var sum, lostKept, lostShare uint64
 	for _, ws := range res.Workers {
 		sum += ws.Iterations
 		exp := expectedArrivals(rate*secs, ws.ShareLo, ws.ShareHi)
 		if ws.Name == "b" {
+			lostKept, lostShare = ws.Iterations, exp
 			if ws.State != coordinator.WorkerLost || ws.Lost == nil {
 				t.Fatalf("b: state %s lost %v", ws.State, ws.Lost)
 			}
@@ -248,7 +249,8 @@ func TestWorkerLossMidRunIsMarked(t *testing.T) {
 	if deg := out.eventsOf(coordinator.EventDegraded); len(deg) != 1 || !strings.Contains(deg[0].Message, "66.7% of plan") {
 		t.Errorf("degraded events %+v", deg)
 	}
-	t.Logf("lost worker kept %d iterations; survivors exact; merged %d of %d planned", res.Workers[1].Iterations, sum, rate*secs)
+	t.Logf("lost worker's data kept: %d of its %d iterations (killed 1.5s into 4s); survivors exact; merged %d of %d planned",
+		lostKept, lostShare, sum, rate*secs)
 }
 
 func TestKillReachesWorkersWithinOneSecond(t *testing.T) {

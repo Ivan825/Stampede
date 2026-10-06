@@ -72,15 +72,40 @@ func serve(t *testing.T, coord *coordinator.Coordinator) *cluster {
 			w.cancel()
 			<-w.done
 		}
+		c.mu.Lock()
 		c.srv.Stop()
+		c.mu.Unlock()
 	})
 	return c
+}
+
+// restart replaces the server with a fresh coordinator, as after a
+// server restart. Workers keep dialling the same address.
+func (c *cluster) restart(cfg coordinator.Config) {
+	if cfg.JoinToken == "" {
+		cfg.JoinToken = token
+	}
+	if cfg.Logger == nil {
+		cfg.Logger = quiet
+	}
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.srv.Stop()
+	c.coord = coordinator.New(cfg)
+	c.lis = bufconn.Listen(1 << 20)
+	c.srv = grpc.NewServer(coordinator.ServerOptions(nil)...)
+	c.coord.Register(c.srv)
+	srv, lis := c.srv, c.lis
+	go func() { _ = srv.Serve(lis) }()
 }
 
 func (c *cluster) dialOptions() []grpc.DialOption {
 	return []grpc.DialOption{
 		grpc.WithContextDialer(func(ctx context.Context, _ string) (net.Conn, error) {
-			conn, err := c.lis.DialContext(ctx)
+			c.mu.Lock()
+			lis := c.lis
+			c.mu.Unlock()
+			conn, err := lis.DialContext(ctx)
 			if err != nil || c.delay == 0 {
 				return conn, err
 			}
