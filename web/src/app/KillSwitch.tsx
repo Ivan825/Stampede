@@ -37,6 +37,7 @@ export function KillSwitch() {
         </Button>
       }
       title="Stop all load now?"
+      width="max-w-xl"
       destructive
       confirmLabel={`Kill ${label}`}
       description={

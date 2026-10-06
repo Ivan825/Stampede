@@ -25,7 +25,7 @@ const variants: Record<Variant, string> = {
   secondary: 'bg-surface text-fg border border-line hover:bg-surface-2 hover:border-line-strong',
   ghost: 'text-fg hover:bg-surface-2 border border-transparent',
   danger: 'bg-surface text-fail border border-line hover:bg-fail-bg hover:border-fail',
-  'danger-solid': 'bg-fail text-white border border-transparent hover:opacity-90 shadow-sm',
+  'danger-solid': 'bg-fail text-danger-fg border border-transparent hover:opacity-90 shadow-sm',
 };
 
 const sizes: Record<Size, string> = {

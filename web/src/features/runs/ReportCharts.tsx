@@ -10,7 +10,7 @@ import { CanvasRenderer } from 'echarts/renderers';
 import { useEffect, useMemo, useRef } from 'react';
 import type { Point } from '@/api/types';
 import { cssVar, useIsDark } from '@/components/misc';
-import { ms, secs } from '@/lib/format';
+import { axisMs, axisPct, clock, ms, secs } from '@/lib/format';
 
 echarts.use([
   LineChart,
@@ -105,7 +105,7 @@ function TimelineChart({
         boundaryGap: false,
         axisLine: { lineStyle: { color: line } },
         axisTick: { show: false },
-        axisLabel: { color: muted, fontSize: 11, formatter: (v: string) => secs(Number(v)) },
+        axisLabel: { color: muted, fontSize: 11, formatter: (v: string) => clock(Number(v)) },
       },
       yAxis: [
         {
@@ -176,8 +176,13 @@ export function ReportCharts({ timeline, mode }: { timeline: Point[]; mode: stri
         leftFmt={perSec}
         rightFmt={count}
       />
-      <TimelineChart title="Latency (from scheduled send)" xs={xs} series={latency} leftFmt={ms} />
-      <TimelineChart title="Error rate" xs={xs} series={errors} leftFmt={percent} height={160} />
+      <TimelineChart
+        title="Latency (from scheduled send)"
+        xs={xs}
+        series={latency}
+        leftFmt={axisMs}
+      />
+      <TimelineChart title="Error rate" xs={xs} series={errors} leftFmt={axisPct} height={160} />
     </div>
   );
 }
