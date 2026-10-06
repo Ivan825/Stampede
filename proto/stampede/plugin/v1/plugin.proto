@@ -1,0 +1,122 @@
+// Contract between Stampede (the host) and a protocol plugin.
+//
+// A plugin is an executable that Stampede starts as a child process and
+// talks to over gRPC through hashicorp/go-plugin, so a plugin that crashes
+// cannot take a worker down with it. One process serves every virtual user
+// of a run on that worker: each user opens a session, runs steps in it and
+// closes it when it retires.
+//
+// Configuration travels as JSON: the host renders a step's `with:` block
+// (its ${} expressions included) and sends the result; the plugin
+// validates it against the JSON Schema it described for that step type.
+// What a step returns (its values) is a JSON object too, so checks and
+// extractors work on it exactly as on an HTTP response's JSON body.
+//
+// Durations are nanoseconds.
+syntax = "proto3";
+
+package stampede.plugin.v1;
+
+option go_package = "github.com/Ivan825/Stampede/gen/stampede/plugin/v1;pluginv1";
+
+// PluginService is served by the plugin.
+service PluginService {
+  // Describe returns the plugin's name, version and step types. The host
+  // calls it once after starting the plugin.
+  rpc Describe(DescribeRequest) returns (DescribeResponse);
+  // Open starts a session for one virtual user.
+  rpc Open(OpenRequest) returns (OpenResponse);
+  // Execute runs one step in a session. A failed step is a successful
+  // RPC with ok = false; an RPC error means the plugin itself failed.
+  rpc Execute(ExecuteRequest) returns (ExecuteResponse);
+  // Close ends a session and releases what it holds (connections,
+  // clients). Closing an unknown session is not an error.
+  rpc Close(CloseRequest) returns (CloseResponse);
+}
+
+message DescribeRequest {
+  // host_version is the Stampede build that started the plugin.
+  string host_version = 1;
+}
+
+message DescribeResponse {
+  // name is the plugin's name as used in scenarios (mqtt in mqtt.publish):
+  // lowercase letters, digits and hyphens.
+  string name = 1;
+  // version is the plugin's own version, such as 0.1.0.
+  string version = 2;
+  string description = 3;
+  repeated StepType steps = 4;
+}
+
+// StepType is one kind of step the plugin can run.
+message StepType {
+  // name is the step's name within the plugin (publish in mqtt.publish).
+  string name = 1;
+  string description = 2;
+  // config_schema is a JSON Schema (draft 2020-12) for the step's config.
+  // A top-level property marked "x-stampede-target": true names the host
+  // the step connects to; Stampede vets it against the run's target
+  // policy before every call.
+  bytes config_schema = 3;
+}
+
+message OpenRequest {
+  // vu is the virtual user's id, unique within the run.
+  int64 vu = 1;
+  string run_id = 2;
+}
+
+message OpenResponse {
+  // session identifies the session in Execute and Close.
+  string session = 1;
+}
+
+message ExecuteRequest {
+  string session = 1;
+  // step is the step type's name (publish).
+  string step = 2;
+  // config is the rendered `with:` block as a JSON object.
+  bytes config = 3;
+  // timeout bounds the step; the plugin should give up and report a
+  // timeout before it passes.
+  int64 timeout_ns = 4;
+  // traceparent and baggage carry W3C trace context for plugins whose
+  // protocol has somewhere to put it (message headers, metadata).
+  string traceparent = 5;
+  string baggage = 6;
+  // iteration counts the virtual user's journeys, from 1.
+  int64 iteration = 7;
+}
+
+message ExecuteResponse {
+  // ok is false when the step failed.
+  bool ok = 1;
+  // error_class is a short, bounded label for a failure, such as
+  // "mqtt timeout"; it groups errors in reports, so it must not contain
+  // ids or other unbounded text. error is the detail, logged by the host.
+  string error_class = 2;
+  string error = 3;
+  // latency is the step's own duration as the plugin measured it.
+  int64 latency_ns = 4;
+  // phases breaks latency down where meaningful. Keys are Stampede's
+  // phase names: dns, connect, tls, wait, download, firstEvent.
+  map<string, int64> phases_ns = 5;
+  int64 bytes_in = 6;
+  int64 bytes_out = 7;
+  // values is a JSON object of what the step returned (a message id, the
+  // rows read, the reply). Checks and extractors read it.
+  bytes values = 8;
+  // events counts messages a streaming step received; with a firstEvent
+  // phase the host reports the step like a server-sent event stream.
+  int64 events = 9;
+  // skipped means the step had nothing to do (for example connect on a
+  // session that is already connected): no sample is recorded.
+  bool skipped = 10;
+}
+
+message CloseRequest {
+  string session = 1;
+}
+
+message CloseResponse {}
