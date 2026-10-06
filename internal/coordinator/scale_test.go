@@ -31,7 +31,11 @@ func TestCoordinates200Workers(t *testing.T) {
 	c.waitConnected(n, 30*time.Second)
 	registered := time.Since(begin)
 
-	const rate, secs = 400, 2
+	// The engine skips an arrival it cannot dispatch before the plan's
+	// end; at 400/s the last one is due 2.5ms before it, which 200 engines
+	// under the race detector on a busy machine occasionally miss. 100/s
+	// leaves 10ms, so the check stays exact without being flaky.
+	const rate, secs = 100, 3
 	startAt := time.Now()
 	r, err := c.coord.Start(context.Background(), coordinator.RunSpec{
 		ID: "scale", Scenario: rateScenario(srv.URL, rate, secs), StartDelay: 2 * time.Second,
