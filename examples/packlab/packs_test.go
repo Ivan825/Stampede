@@ -219,7 +219,8 @@ func checkLoad(t *testing.T, target, name string) {
 // wantStatus lists stresses whose point is a refusal; under load they must
 // actually provoke it, or they test nothing.
 var wantStatus = map[string]int{
-	"public-apis/stresses/rate-limit-burst.yaml": 429,
+	"public-apis/stresses/rate-limit-burst.yaml":   429,
+	"ticketing/stresses/seat-lock-contention.yaml": 409,
 }
 
 func shorten(s *scenario.Scenario) {

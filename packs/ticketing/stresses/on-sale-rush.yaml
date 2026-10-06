@@ -1,0 +1,57 @@
+# The on-sale opens: arrivals jump thirtyfold in seconds and everyone goes
+# through the waiting room. The room should admit people at a steady pace,
+# holds and orders behind it should stay fast, and once the event sells
+# out everyone left should get a clean 409. The rest of the site (other
+# events) is browsed at the same time and must not suffer.
+apiVersion: stampede.dev/v1
+kind: Scenario
+metadata:
+  name: ticketing-on-sale-rush
+  tags: [pack:ticketing, spike]
+target:
+  baseURL: ${env.TARGET_URL}
+vars:
+  eventId: 1
+journeys:
+  - name: on-sale
+    weight: 9
+    steps:
+      - name: join queue
+        post: /api/queue/${vars.eventId}/join
+        check: { status: 200 }
+      - name: waiting room
+        ws: /ws/queue?event=${vars.eventId}
+        timeout: 10s
+        steps:
+          - name: admitted
+            expect: { json: { "$.type": admitted }, timeout: 10m }
+      - name: hold seats
+        post: /api/holds
+        json: { eventId: "${vars.eventId}", quantity: "${rand(1, 4)}" }
+        check: { status: [201, 409] }
+        extract: { held: status }
+      - name: order
+        if: "${held == 201}"
+        post: /api/orders
+        json: {}
+        check: { status: 201 }
+  - name: other-events
+    weight: 1
+    steps:
+      - name: seat map
+        get: /api/events/${rand(3, 20)}/seats
+        check: { status: 200 }
+      - name: hold seats
+        post: /api/holds
+        json: { eventId: "${rand(3, 20)}", quantity: 2 }
+        check: { status: [201, 409] }
+load:
+  shape: spike
+  mode: rate
+  start: 10/s
+  max: 300/s
+  duration: 3m
+targets:
+  - "on-sale/hold seats.p95 < 500ms"
+  - "other-events/hold seats.p95 < 300ms"
+  - errors < 1%

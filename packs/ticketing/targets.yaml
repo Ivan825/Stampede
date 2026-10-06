@@ -1,0 +1,7 @@
+# Default targets for ticketing. Holding a seat is the moment of truth and
+# is held tighter than browsing; "sold out" (409) is a correct answer, not
+# an error. Time in a waiting room is by design and has no target.
+targets:
+  - http.p95 < 500ms
+  - errors < 1%
+  - "book/hold seats.p95 < 300ms"

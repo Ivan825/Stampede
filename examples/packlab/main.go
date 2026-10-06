@@ -26,6 +26,7 @@ import (
 	"github.com/Ivan825/Stampede/examples/packlab/chatlab"
 	"github.com/Ivan825/Stampede/examples/packlab/labkit"
 	"github.com/Ivan825/Stampede/examples/packlab/llmlab"
+	"github.com/Ivan825/Stampede/examples/packlab/ticketlab"
 )
 
 // product is one reference app.
@@ -40,6 +41,7 @@ type product struct {
 var products = map[string]product{
 	"llm-apps":    {pack: "llm-apps", addr: ":8092", new: llmlab.New},
 	"chat":        {pack: "chat", addr: ":8093", new: chatlab.New},
+	"ticketing":   {pack: "ticketing", addr: ":8094", new: ticketlab.New},
 	"identity":    {pack: "identity", addr: ":8095", new: authlab.New},
 	"public-apis": {pack: "public-apis", addr: ":8096", new: apilab.New},
 }

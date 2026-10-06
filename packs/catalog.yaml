@@ -3,7 +3,7 @@
 # and `stampede pack list` read this file, so labels always match the repo.
 packs:
   - { name: ecommerce, title: "E-commerce, marketplaces", status: shipped, signature: "Browse, search, cart, checkout; flash-sale spike; last-item contention", drivers: [http] }
-  - { name: ticketing, title: "Ticketing, booking, travel", status: planned, signature: "On-sale rush; seat-lock contention; waiting-room queues", drivers: [http, websocket] }
+  - { name: ticketing, title: "Ticketing, booking, travel", status: shipped, signature: "On-sale rush; seat-lock contention; waiting-room queues", drivers: [http, websocket] }
   - { name: fintech, title: "Fintech, banking, payments", status: planned, signature: "Transfers, statements; duplicate-payment safety; month-end peaks", drivers: [http, grpc] }
   - { name: saas, title: "SaaS dashboards, B2B tools", status: planned, signature: "Login, create and edit records, heavy reports; noisy tenant", drivers: [http, graphql] }
   - { name: social, title: "Social, feeds, forums", status: planned, signature: "Feed load, post, like, notifications; viral spike", drivers: [http, websocket] }

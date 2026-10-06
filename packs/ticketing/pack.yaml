@@ -1,0 +1,23 @@
+apiVersion: stampede.dev/v1
+kind: Pack
+name: ticketing
+title: Ticketing, booking, travel
+description: >
+  Browsing events and seat maps, holding and buying seats, and a waiting
+  room in front of a big on-sale, with an on-sale rush and a seat-lock
+  contention test that checks nothing is sold twice. Built for booking
+  APIs shaped like TicketLab (seat holds that expire, then an order);
+  adjust paths and fields to match yours.
+status: shipped
+protocols: [http, websocket]
+referenceApp: examples/packlab/ticketlab
+detect:
+  paths: ["/api/events", "/api/holds", "/api/seats", "/api/bookings", "/api/reservations", "/api/queue", "/api/showtimes"]
+  openapiTags: [events, seats, holds, bookings, reservations, waiting-room, tickets]
+  htmlMeta: ['itemtype="https://schema.org/Event"', 'og:type" content="event']
+  headers: {}
+variables:
+  TARGET_URL: { description: Base URL of the ticketing API }
+targets:
+  - http.p95 < 500ms
+  - errors < 1%
