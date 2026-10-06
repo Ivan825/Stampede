@@ -19,7 +19,8 @@
 | `--trusted-proxy` | `STAMPEDE_TRUSTED_PROXIES` (comma separated) | none | reverse proxies whose `X-Forwarded-For` is believed |
 | `--secure-cookies` | `STAMPEDE_SECURE_COOKIES=true` | `false` | mark the session cookie Secure (behind HTTPS) |
 | `--public-url` | `STAMPEDE_PUBLIC_URL` | — | external URL of the web UI; notifications link to `<url>/runs/<id>` when set |
-| `--scheduler-interval` | `STAMPEDE_SCHEDULER_INTERVAL` | `15s` | how often the active replica looks for due [schedules](../guides/schedules.md); `0` disables scheduled runs |
+| `--ha` | `STAMPEDE_HA` | `standby` | how server replicas share the work: `standby` (one serves, the others wait) or `active` (all serve; see [Helm](../deploy/helm.md#server-replicas)) |
+| `--scheduler-interval` | `STAMPEDE_SCHEDULER_INTERVAL` | `15s` | how often a serving replica looks for due [schedules](../guides/schedules.md); `0` disables scheduled runs |
 | `--log-level`, `--log-format` | `STAMPEDE_LOG_LEVEL`, `STAMPEDE_LOG_FORMAT` | `info`, `json` | logging |
 | `--migrate-only`, `--migrate-dry-run` | — | — | apply or report migrations, then exit |
 
@@ -124,6 +125,7 @@ Grafana (Dashboards → New → Import) and pick your Prometheus data source; th
 | Flag | Meaning |
 |---|---|
 | `--server host:8081` | the server's worker port (workers connect out, so they work behind NAT) |
+| `--server a:8081,b:8081`, `--server dns:host:8081` | with active server replicas, every replica's worker port, listed or found through DNS (re-resolved every 30 seconds); the worker runs load for one replica at a time |
 | `--token` / `STAMPEDE_JOIN_TOKEN` | the join token |
 | `--name`, `--region`, `--label k=v` | identity; regions let a run split load by region |
 | `--max-vus` | the most users this worker accepts |

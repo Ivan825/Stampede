@@ -134,20 +134,42 @@ takes precedence over `workerMTLS`. These settings render and match the
 server's `--worker-tls-cert/key` and the worker's `--ca` flags, but have not
 been exercised on a cluster yet.
 
-## One server replica
+## Server replicas
 
-Keep `server.replicas` at 1 (the default). In this version:
+`server.ha` decides what extra server replicas do.
 
-- each run is owned by the server replica that started it;
-- each worker holds one long-lived gRPC stream to one replica, so a run only
-  uses the workers attached to the replica that owns it;
-- a starting server marks **every** unfinished run in the database as
-  failed, including runs another replica is still driving.
+**`standby`** (the default): one replica holds a Postgres advisory lock and
+serves; the others wait (healthy, not ready) and take over within a few
+seconds if it goes away. The Deployment uses the `Recreate` strategy, since
+a new pod cannot become ready while the old one serves: the old pod stops
+(finishing its runs' reports within `server.terminationGracePeriodSeconds`)
+before the new one starts, so an upgrade has a short UI/API outage.
 
-For the same reason the server Deployment uses the `Recreate` strategy: the
-old pod stops (finishing its runs' reports within
-`server.terminationGracePeriodSeconds`) before the new one starts. An
-upgrade therefore has a short UI/API outage; plan upgrades between runs.
+**`active`**: every replica serves the API and the UI and runs tests.
+
+```yaml
+server:
+  replicas: 3
+  ha: active
+```
+
+- Each run is owned by the replica that started it. Stop, kill and "kill
+  all" sent to any replica reach the owner through Postgres
+  `LISTEN/NOTIFY`, and the live view works from any replica (a replica that
+  does not own the run follows it from the database, about a second
+  behind).
+- The chart adds a headless service, `<release>-stampede-replicas`, and
+  workers start with `--server dns:<that service>:<worker port>`: each
+  worker connects to every replica and re-resolves every 30 seconds. A
+  worker runs load for one replica at a time and tells the others it is
+  busy, so they do not assign it work.
+- Replicas send a heartbeat to the database every 5 seconds. When a replica
+  has been silent for 30 seconds, another one marks its unfinished runs and
+  AI jobs as failed. Runs are not handed over to another replica.
+- Upgrades roll one pod at a time with no outage; runs on the pod being
+  replaced end when it stops.
+- Scheduled runs: every replica looks for due schedules, and each firing
+  is claimed with one conditional update, so it starts one run.
 
 ## Ingress and TLS for the UI
 

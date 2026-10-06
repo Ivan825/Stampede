@@ -49,10 +49,10 @@ the files it runs. This page lists what is defended today and what is not.
 
 ## Known gaps
 
-- Server replicas are active-passive: one holds a Postgres advisory lock
-  and serves; others wait as standbys (healthy, not ready) and take over
-  within a few seconds if the leader's database session ends. Running runs
-  are not handed over: the new leader marks them as interrupted.
+- Runs are not handed over between server replicas. With `--ha standby`
+  a new leader marks the old leader's running runs as failed; with
+  `--ha active` the other replicas do so once the owner has been silent
+  for 30 seconds. Either way the run's data so far is kept.
 - Workers share a join token for enrollment; a leaked token lets an
   attacker enroll a worker and receive scenarios (including the run's
   secrets) for runs assigned to it. Rotate the token if it leaks: enrolled

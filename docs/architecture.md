@@ -54,10 +54,22 @@ One Go binary in several roles.
    asks for them (through the organisation's integrations), stores it with
    the verdict and notifies the organisation's channels.
 
-Server replicas are active-passive through a Postgres advisory lock: one
-serves, the others wait as standbys and take over if it goes away. Only
-the serving replica fires [scheduled runs](guides/schedules.md); it claims
-each due schedule with one conditional update, so a firing starts one run.
+Server replicas are active-passive by default (`--ha standby`): one holds
+a Postgres advisory lock and serves, the others wait and take over if it
+goes away. With `--ha active` every replica serves:
+
+- each run belongs to the replica that started it (`runs.owner_replica`);
+- replicas heartbeat into a `replicas` table, and a replica silent for 30
+  seconds has its unfinished runs and AI jobs marked failed by the others;
+- stop and kill requests reach the owning replica through Postgres
+  `LISTEN/NOTIFY`, and other replicas serve the live view by polling the
+  run's stored points;
+- workers connect to every replica (`--server a,b,c` or `--server
+  dns:host:port`) and run load for one at a time; their heartbeat tells
+  the other replicas they are busy.
+
+[Scheduled runs](guides/schedules.md) are claimed with one conditional
+update per firing, so a firing starts one run however many replicas look.
 
 ## Worker security
 
@@ -89,5 +101,5 @@ own CA (`--worker-tls-cert`, `--worker-tls-key`, workers `--ca`) or no TLS
 on a trusted network (`--insecure`). In both cases the join token travels
 in `Hello`.
 
-**Planned:** several active replicas sharing runs, reassigning a lost
-worker's share.
+**Planned:** handing a run to another replica when its owner dies, and
+reassigning a lost worker's share.

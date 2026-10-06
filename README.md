@@ -171,8 +171,7 @@ per server and per target; audit log ([safety](docs/safety.md)).
 ## Planned for v1.0
 
 The other 13 product packs (including the
-IoT, event-pipeline, database and gaming packs that use the plugins), several
-active server replicas (today extra replicas are hot standbys), side-by-side benchmarks with k6 and
+IoT, event-pipeline, database and gaming packs that use the plugins), side-by-side benchmarks with k6 and
 wrk2, and the website.
 
 ## Deploy

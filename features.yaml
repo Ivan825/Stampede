@@ -32,7 +32,7 @@ groups:
     features:
       - { name: "Distributed workers over gRPC, synchronised start, lossless merge", status: shipped, doc: how-it-works }
       - { name: "Worker loss marked in reports, dead man's switch", status: shipped }
-      - { name: "Active-passive server replicas", status: shipped }
+      - { name: "Server replicas, standby or all active", status: shipped }
       - { name: "Mutual TLS with a built-in certificate authority", status: shipped, doc: docs/architecture }
   - name: Workflow
     features:
