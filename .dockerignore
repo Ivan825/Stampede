@@ -1,0 +1,10 @@
+.git
+.claude
+.github
+bin
+dist
+**/node_modules
+examples
+site
+*.html
+*.json.out
