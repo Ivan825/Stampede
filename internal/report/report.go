@@ -247,8 +247,15 @@ func Build(in Input) *Report {
 	sort.Slice(r.Errors, func(i, j int) bool { return r.Errors[i].Count > r.Errors[j].Count })
 
 	// Timeline.
+	// The timeline covers the planned load phase. Iterations finishing
+	// during the graceful stop still count in the totals above, but a
+	// partial trailing interval would distort per-second rates.
 	secs := in.Interval.Seconds()
+	planned := in.Plan.TotalDuration().Seconds()
 	for _, s := range snaps {
+		if planned > 0 && float64(s.Interval)*secs >= planned && len(r.Timeline) > 0 {
+			continue
+		}
 		t := s.Totals()
 		p := Point{
 			T:       float64(s.Interval) * secs,
