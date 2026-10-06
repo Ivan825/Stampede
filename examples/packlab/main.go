@@ -12,7 +12,7 @@ import (
 	"errors"
 	"flag"
 	"fmt"
-	"log"
+	"log/slog"
 	"net/http"
 	"os"
 	"os/signal"
@@ -84,8 +84,9 @@ func main() {
 		defer cancel()
 		_ = srv.Shutdown(sctx)
 	}()
-	log.Printf("packlab: %s on %s (fixes: %q)", *name, *addr, *fix)
+	slog.Info("packlab serving", "product", *name, "addr", *addr, "fixes", *fix)
 	if err := srv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
-		log.Fatal(err)
+		slog.Error("packlab stopped", "err", err)
+		os.Exit(1)
 	}
 }

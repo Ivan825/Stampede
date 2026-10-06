@@ -142,20 +142,25 @@ func newServer(cfg labkit.Config) (*server, http.Handler) {
 }
 
 // session gives every visitor a session cookie.
+type sidKey struct{}
+
 func session(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if c, err := r.Cookie("sid"); err != nil || c.Value == "" {
-			sid := labkit.Token("s_")
-			http.SetCookie(w, &http.Cookie{Name: "sid", Value: sid, Path: "/", HttpOnly: true, SameSite: http.SameSiteLaxMode})
-			r.AddCookie(&http.Cookie{Name: "sid", Value: sid})
+		id := ""
+		if c, err := r.Cookie("sid"); err == nil {
+			id = c.Value
 		}
-		next.ServeHTTP(w, r)
+		if id == "" {
+			id = labkit.Token("s_")
+			http.SetCookie(w, &http.Cookie{Name: "sid", Value: id, Path: "/", HttpOnly: true, Secure: r.TLS != nil, SameSite: http.SameSiteLaxMode}) //nolint:gosec // Secure only under TLS: the lab usually serves plain HTTP on localhost
+		}
+		next.ServeHTTP(w, r.WithContext(context.WithValue(r.Context(), sidKey{}, id)))
 	})
 }
 
 func sid(r *http.Request) string {
-	c, _ := r.Cookie("sid")
-	return c.Value
+	id, _ := r.Context().Value(sidKey{}).(string)
+	return id
 }
 
 // lock takes the lock that guards an event's seats.
@@ -490,7 +495,7 @@ func (s *server) queueSocket(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		return
 	}
-	defer conn.CloseNow()
+	defer func() { _ = conn.CloseNow() }()
 	ctx, cancel := context.WithTimeout(r.Context(), 10*time.Minute)
 	defer cancel()
 	ctx = conn.CloseRead(ctx)
@@ -517,5 +522,5 @@ func (s *server) queueSocket(w http.ResponseWriter, r *http.Request) {
 	}
 	// Keep the socket open until the client closes it.
 	<-ctx.Done()
-	conn.Close(websocket.StatusNormalClosure, "")
+	_ = conn.Close(websocket.StatusNormalClosure, "")
 }

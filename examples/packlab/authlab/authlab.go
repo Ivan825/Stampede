@@ -36,7 +36,7 @@ import (
 // user1000@authlab.test, all with the password Password.
 const (
 	Users    = 1000
-	Password = "authlab-pass"
+	Password = "authlab-pass" //nolint:gosec // demo password, published in the README
 )
 
 const (
@@ -92,7 +92,7 @@ func newServer(cfg labkit.Config) (*server, http.Handler) {
 	s.clients = map[string]client{
 		"web":               {grants: []string{"password", "refresh_token"}},
 		"mobile":            {grants: []string{"password", "refresh_token"}},
-		"reporting-service": {secret: "authlab-secret", grants: []string{"client_credentials"}},
+		"reporting-service": {secret: "authlab-secret", grants: []string{"client_credentials"}}, //nolint:gosec // demo secret, published in the README
 	}
 	s.seed()
 

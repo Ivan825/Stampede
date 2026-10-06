@@ -224,7 +224,7 @@ func (s *server) ws(w http.ResponseWriter, r *http.Request) {
 			close(m.out)
 		}
 		s.presence(context.Background(), rm, user, "left")
-		conn.Close(websocket.StatusNormalClosure, "")
+		_ = conn.Close(websocket.StatusNormalClosure, "")
 	}()
 
 	for {
@@ -288,7 +288,7 @@ func (s *server) deliver(ctx context.Context, m *member, b []byte) {
 		case m.out <- b:
 		default:
 			// Too far behind: drop the reader rather than stall the room.
-			m.conn.Close(websocket.StatusPolicyViolation, "slow consumer")
+			_ = m.conn.Close(websocket.StatusPolicyViolation, "slow consumer")
 		}
 		return
 	}
