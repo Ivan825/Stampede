@@ -166,6 +166,22 @@ message StepStats {
   // protocols counts requests by negotiated protocol, such as "HTTP/1.1"
   // or "HTTP/2.0". Added in protocol v1.1.
   map<string, uint64> protocols = 15;
+  // slowest holds up to five of the step's slowest requests in the
+  // interval, slowest first. Added in protocol v1.2.
+  repeated SlowRequest slowest = 16;
+}
+
+// SlowRequest is one of the slowest requests of a step, with the W3C
+// trace ID it was sent with so a report can link to the trace.
+message SlowRequest {
+  // latency_ns is measured from the intended send time.
+  int64 latency_ns = 1;
+  // start_unix_nano is when the request was sent, in the worker's clock.
+  int64 start_unix_nano = 2;
+  // trace_id is the 16-byte trace ID, empty when none was sent.
+  bytes trace_id = 3;
+  int32 status = 4;
+  string error = 5;
 }
 
 // JourneyStats aggregates whole iterations of a journey.
