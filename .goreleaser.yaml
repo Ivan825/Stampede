@@ -117,6 +117,28 @@ dockers_v2:
       org.opencontainers.image.revision: "{{ .FullCommit }}"
       org.opencontainers.image.created: "{{ .CommitDate }}"
 
+  - id: browser-worker
+    ids: [stampede]
+    dockerfile: deploy/docker/Dockerfile.browser-worker.release
+    images:
+      - ghcr.io/ivan825/stampede-browser-worker
+    tags:
+      - "{{ .Version }}"
+      - "{{ if not .Prerelease }}v{{ .Major }}.{{ .Minor }}{{ end }}"
+      - "{{ if not .Prerelease }}latest{{ end }}"
+    platforms:
+      - linux/amd64
+      - linux/arm64
+    sbom: true
+    labels:
+      org.opencontainers.image.title: stampede-browser-worker
+      org.opencontainers.image.description: Stampede worker with Chromium for browser steps
+      org.opencontainers.image.source: https://github.com/Ivan825/Stampede
+      org.opencontainers.image.licenses: Apache-2.0
+      org.opencontainers.image.version: "{{ .Version }}"
+      org.opencontainers.image.revision: "{{ .FullCommit }}"
+      org.opencontainers.image.created: "{{ .CommitDate }}"
+
   - id: operator
     ids: [operator]
     dockerfile: deploy/docker/Dockerfile.operator.release

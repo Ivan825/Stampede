@@ -1,7 +1,8 @@
 # Protocols
 
 Besides plain HTTP requests (`get: /path`, `post: /path`, ...), a step can
-speak GraphQL, server-sent events, WebSocket or gRPC, or any protocol a
+speak GraphQL, server-sent events, WebSocket or gRPC, drive a real
+browser page, or speak any protocol a
 [plugin](plugins.md) adds (MQTT, Kafka, Redis, SQL and UDP plugins are in
 this repository). Every protocol step:
 
@@ -26,6 +27,9 @@ A failed step ends its iteration, as for HTTP.
 | `send` (in `ws`) | writing the message | `ws closed`, `ws error` |
 | `expect` (in `ws`) | from the last `send` to the matching message | `ws expect timeout`, `ws closed`, `ws message too large` |
 | `grpc` | the call (all messages of a server stream) | `gRPC <STATUS>`, `check status (gRPC <STATUS>)`, `grpc unknown method`, `grpc reflection failed`, `grpc invalid message` |
+| `browser`, `goto` | the page load, from navigation to the load event | `HTTP 404` and other statuses, `browser net::ERR_...`, `timeout`, `browser unavailable`, `blocked by safety` |
+| `click`, `fill`, `press`, `waitFor` | the action, including waiting for the element | `timeout`, `browser error` |
+| `assert` (in `browser`) | reading the elements' text | `check failed`, `timeout` |
 | `plugin` | measured by the plugin around its operation | the plugin's own (such as `mqtt timeout`, `sql 23505`), `invalid config`, `plugin crashed`, `plugin unavailable`, `timeout` |
 
 ## GraphQL
@@ -210,6 +214,61 @@ In `check.expr`, `status` is the numeric code.
 
 A server stream records its messages, time to first message and message
 rate, reported like an SSE stream.
+
+## Browser
+
+A `browser` step opens its URL in a real page of headless Chrome, as one
+visitor would, and runs browser actions in it. Every iteration gets a fresh
+browser context, so cookies and storage start empty, and every request the
+page makes (scripts, images, API calls) passes the same host policy as
+other steps: a page cannot pull load onto a third-party CDN unless that host
+is allowed with `--allow-host` (or the target's `allowHosts`).
+
+```yaml
+journeys:
+  - name: checkout
+    steps:
+      - name: home
+        browser: /                       # opens the page: one measured page load
+        viewport: { width: 390, height: 844 }
+        timeout: 20s                     # per action (default the target timeout)
+        steps:
+          - click: "a.product"           # waits until the element is visible
+          - waitFor: "#add-to-cart"
+          - click: "#add-to-cart"
+          - goto: /checkout              # another measured page load
+          - fill: { "#email": "${data.users.email}", "#card": "4242 4242 4242 4242" }
+          - press: Enter                 # Enter, Tab, Escape, ArrowDown ... or a character
+          - assert: { ".order-status": "Thank you" }
+targets:
+  - checkout/home.p95 < 3s
+```
+
+Selectors are CSS selectors and every value may use `${}` expressions.
+`fill` types the text into each field after clearing it; `assert` fails the
+step as a check when an element's text does not contain the value.
+
+**Web Vitals.** Page loads (`browser` and `goto`) record time to first
+byte, first contentful paint, largest contentful paint, cumulative layout
+shift and the load event; clicks and key presses record interaction to
+next paint. Reports show them per step as mean and p95 under *Web vitals*.
+
+**Chrome.** The worker or CLI running the scenario needs Chrome or
+Chromium: it is found on `PATH` (`chromium`, `google-chrome`, ...), in the
+standard install location, or at `STAMPEDE_CHROME`. A run with browser
+steps fails before any load when it is missing, and a worker without it
+refuses such runs. Workers report `browser` among their protocols when
+they have it. The `ghcr.io/ivan825/stampede-browser-worker` image (built
+from [`deploy/docker/Dockerfile.browser-worker`](../deploy/docker/Dockerfile.browser-worker))
+bundles Chromium; inside a container Chrome's own sandbox is turned off
+with `STAMPEDE_CHROME_NO_SANDBOX=true`, because the container is the
+sandbox.
+
+**Cost.** Each browser user is a real Chrome page: count on about one
+virtual user per 100–200 MB of memory and a fraction of a CPU core, against
+thousands of HTTP users per core. Use browser steps for the journeys whose
+front-end experience you need to measure, and HTTP steps for the bulk of
+the load. A published per-worker capacity figure is planned.
 
 ## Plugin steps
 

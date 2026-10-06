@@ -445,3 +445,27 @@ func truncate(s string, n int) string {
 	}
 	return s[:n] + "…"
 }
+
+// usesBrowser reports whether any journey has a browser step.
+func (e *Engine) usesBrowser() bool {
+	var has func([]*scenario.CStep) bool
+	has = func(steps []*scenario.CStep) bool {
+		for _, st := range steps {
+			if st.Kind == scenario.StepBrowser || has(st.Steps) {
+				return true
+			}
+			for _, b := range st.Branches {
+				if has(b.Steps) {
+					return true
+				}
+			}
+		}
+		return false
+	}
+	for _, j := range e.prog.Journeys {
+		if has(j.Steps) {
+			return true
+		}
+	}
+	return false
+}

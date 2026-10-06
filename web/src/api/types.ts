@@ -143,6 +143,17 @@ export interface ReportStep {
   stats: Stats;
   phases: Record<string, PhaseStat>;
   slowest?: SlowRequest[];
+  /** Browser page timings and Web Vitals (seconds; cls unitless). */
+  browser?: BrowserStat;
+}
+
+export interface BrowserStat {
+  ttfb?: PhaseStat;
+  fcp?: PhaseStat;
+  lcp?: PhaseStat;
+  cls?: PhaseStat;
+  inp?: PhaseStat;
+  load?: PhaseStat;
 }
 
 /** One Prometheus query evaluated over the run (observe.prometheus). */

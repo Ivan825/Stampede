@@ -1,0 +1,27 @@
+# syntax=docker/dockerfile:1
+# Stampede browser worker: the stampede binary with Chromium, for scenarios
+# with browser steps. Build from the repository root:
+#   docker build -f deploy/docker/Dockerfile.browser-worker -t stampede-browser-worker .
+FROM golang:1.27-alpine AS build
+WORKDIR /src
+COPY go.mod go.sum ./
+RUN --mount=type=cache,target=/go/pkg/mod go mod download
+COPY . .
+ARG VERSION=dev
+RUN --mount=type=cache,target=/go/pkg/mod --mount=type=cache,target=/root/.cache/go-build \
+    CGO_ENABLED=0 go build -trimpath -ldflags "-s -w -X github.com/Ivan825/Stampede/internal/version.Version=${VERSION}" \
+      -o /out/stampede ./cmd/stampede
+
+FROM debian:bookworm-slim
+RUN apt-get update \
+ && apt-get install -y --no-install-recommends chromium fonts-liberation fonts-noto-color-emoji ca-certificates \
+ && rm -rf /var/lib/apt/lists/* \
+ && useradd --create-home --uid 65532 stampede
+COPY --from=build /out/stampede /usr/local/bin/stampede
+# Chromium's own sandbox needs privileges a container does not have; the
+# container is the sandbox. Each virtual user still gets its own browser
+# context.
+ENV STAMPEDE_CHROME=/usr/bin/chromium STAMPEDE_CHROME_NO_SANDBOX=true
+USER stampede
+ENTRYPOINT ["/usr/local/bin/stampede"]
+CMD ["worker"]

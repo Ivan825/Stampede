@@ -1,0 +1,29 @@
+apiVersion: stampede.dev/v1
+kind: Scenario
+metadata:
+  name: storefront-in-a-browser
+target:
+  baseURL: ${env.TARGET_URL}
+data:
+  users: { csv: users.csv, mode: unique }
+journeys:
+  - name: buy
+    steps:
+      - name: home
+        browser: /
+        viewport: { width: 390, height: 844 }
+        timeout: 20s
+        steps:
+          - click: "a.product"
+          - waitFor: "#add-to-cart"
+          - click: "#add-to-cart"
+          - goto: /checkout
+          - fill: { "#email": "${data.users.email}", "#card": "4242 4242 4242 4242" }
+          - press: Enter
+          - assert: { ".order-status": "Thank you" }
+load:
+  mode: rate
+  rate: 2/s
+  duration: 5m
+targets:
+  - buy/home.p95 < 3s

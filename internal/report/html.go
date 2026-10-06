@@ -22,6 +22,15 @@ var htmlTmpl = template.Must(template.New("report").Funcs(template.FuncMap{
 	"rate":    func(f float64) string { return strconv.FormatFloat(f, 'f', 1, 64) },
 	"when":    func(t time.Time) string { return t.Format("2 Jan 2006 15:04:05 MST") },
 	"secs":    func(f float64) string { return fmtSecs(f) },
+	"vital": func(ps *PhaseStat, cls bool) string {
+		if ps == nil {
+			return "–"
+		}
+		if cls {
+			return CLS(ps.Mean) + " / " + CLS(ps.P95)
+		}
+		return Ms(ps.Mean) + " / " + Ms(ps.P95)
+	},
 	"offset":  fmtOffset,
 }).Parse(htmlTemplate))
 
@@ -35,6 +44,8 @@ type htmlData struct {
 	Unit            string
 	// HasStreams shows the streams table.
 	HasStreams bool
+	// HasBrowser shows the web vitals table.
+	HasBrowser bool
 	// SlowRows lists every step's slowest requests.
 	SlowRows []SlowRow
 	// MetricCharts are the target's own metrics (observe.prometheus).
@@ -105,6 +116,7 @@ func (r *Report) WriteHTML(w io.Writer) error {
 	for _, j := range r.Journeys {
 		for _, s := range j.Steps {
 			d.HasStreams = d.HasStreams || s.Stream != nil
+			d.HasBrowser = d.HasBrowser || s.Browser != nil
 		}
 	}
 	d.NarrativeHTML = narrativeHTML(r.Narrative, r.Facts())

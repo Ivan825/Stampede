@@ -29,6 +29,7 @@ import (
 	"google.golang.org/grpc/status"
 
 	workerv1 "github.com/Ivan825/Stampede/gen/stampede/worker/v1"
+	"github.com/Ivan825/Stampede/internal/engine"
 	"github.com/Ivan825/Stampede/internal/pluginhost"
 	"github.com/Ivan825/Stampede/internal/protocol/httpx"
 	"github.com/Ivan825/Stampede/internal/version"
@@ -118,6 +119,9 @@ type Worker struct {
 // still found.
 func (w *Worker) protocols() []string {
 	out := []string{"http", "graphql", "sse", "ws", "grpc"}
+	if _, err := engine.FindChrome(); err == nil {
+		out = append(out, "browser")
+	}
 	list, err := pluginhost.List(w.cfg.PluginDir)
 	if err != nil {
 		return out

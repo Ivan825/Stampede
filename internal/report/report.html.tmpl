@@ -185,6 +185,19 @@ footer a, td a { color: var(--accent); }
 </table></div>
 {{end}}
 
+{{if .HasBrowser}}
+<h2>Web vitals</h2>
+<div class="table-wrap"><table>
+  <thead><tr><th>Step</th><th>TTFB</th><th>FCP</th><th>LCP</th><th>CLS</th><th>INP</th><th>Load</th></tr></thead>
+  <tbody>
+  {{range .Journeys}}{{range .Steps}}{{if .Browser}}
+    <tr><td><code>{{.Name}}</code></td><td>{{vital .Browser.TTFB false}}</td><td>{{vital .Browser.FCP false}}</td><td>{{vital .Browser.LCP false}}</td><td>{{vital .Browser.CLS true}}</td><td>{{vital .Browser.INP false}}</td><td>{{vital .Browser.Load false}}</td></tr>
+  {{end}}{{end}}{{end}}
+  </tbody>
+</table></div>
+<p class="sub">Mean / p95. Page loads (browser and goto steps) record TTFB, first and largest contentful paint, cumulative layout shift and the load event; clicks and key presses record interaction to next paint.</p>
+{{end}}
+
 {{if .SlowRows}}
 <h2>Slowest requests</h2>
 <div class="table-wrap"><table>

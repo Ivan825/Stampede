@@ -2,7 +2,7 @@ import { render, screen, within } from '@testing-library/react';
 import { describe, expect, it } from 'vitest';
 import type { ReportJourney, Stats } from '@/api/types';
 import { metricValue } from '@/lib/format';
-import { SlowestRequests } from './ReportView';
+import { SlowestRequests, WebVitals } from './ReportView';
 
 const stats = {
   requests: 10,
@@ -73,5 +73,41 @@ describe('metricValue', () => {
     expect(metricValue(1234)).toBe('1234');
     expect(metricValue(45600)).toBe('45.6k');
     expect(metricValue(120e6)).toBe('120M');
+  });
+});
+
+describe('WebVitals', () => {
+  it('shows page timings and CLS for browser steps only', () => {
+    const journeys: ReportJourney[] = [
+      {
+        name: 'buy',
+        stats,
+        steps: [
+          {
+            id: 1,
+            name: 'browser /',
+            stats,
+            phases: {},
+            browser: {
+              fcp: { mean: 0.12, p95: 0.2 },
+              lcp: { mean: 0.3, p95: 0.5 },
+              cls: { mean: 0.05, p95: 0.1 },
+              load: { mean: 0.4, p95: 0.6 },
+            },
+          },
+          { id: 2, name: 'GET /api', stats, phases: {} },
+        ],
+      },
+    ];
+    render(<WebVitals journeys={journeys} />);
+    const rows = screen.getAllByRole('row');
+    expect(rows).toHaveLength(2);
+    expect(within(rows[1]!).getByText('browser /')).toBeInTheDocument();
+    expect(within(rows[1]!).getByText('0.050 / 0.100')).toBeInTheDocument();
+  });
+
+  it('renders nothing without browser steps', () => {
+    const { container } = render(<WebVitals journeys={[{ name: 'a', stats, steps: [] }]} />);
+    expect(container).toBeEmptyDOMElement();
   });
 });

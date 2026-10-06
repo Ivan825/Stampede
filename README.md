@@ -77,8 +77,10 @@ when the run ends, and the report shades the fault windows on its charts
 
 **Protocols:** HTTP/1.1, HTTP/2 (TLS and h2c), REST, GraphQL (with
 persisted queries), WebSocket, server-sent events with time to first event
-(for LLM apps), and gRPC unary and server streaming via reflection or proto
-files ([protocols](docs/protocols.md)).
+(for LLM apps), gRPC unary and server streaming via reflection or proto
+files, and real browser pages in headless Chrome (click, fill, press,
+assert) with Web Vitals: LCP, CLS, INP, first contentful paint and load
+time ([protocols](docs/protocols.md)).
 
 **Plugins** add step types for other protocols, each running as its own
 process so a crash cannot take a worker down: `stampede plugin install
@@ -164,7 +166,7 @@ per server and per target; audit log ([safety](docs/safety.md)).
 
 ## Planned for v1.0
 
-Browser (Playwright) workers, the other 19 product packs (including the
+The other 19 product packs (including the
 IoT, event-pipeline, database and gaming packs that use the plugins), AI
 generation from browser crawls, several
 active server replicas (today extra replicas are hot standbys), side-by-side benchmarks with k6 and

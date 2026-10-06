@@ -319,7 +319,15 @@
         "proto": { "description": "grpc: .proto source file(s) instead of server reflection.", "anyOf": [{ "type": "string" }, { "type": "array", "items": { "type": "string" } }] },
         "importPaths": { "type": "array", "items": { "type": "string" }, "description": "grpc: where proto files and their imports are found (default: the scenario's directory)." },
         "plugin": { "type": "string", "pattern": "^[a-z][a-z0-9-]{0,62}\\.[A-Za-z][A-Za-z0-9_-]{0,62}$", "description": "A step implemented by a plugin: <plugin>.<step>, such as mqtt.publish. Install plugins with `stampede plugin install`." },
-        "with": { "type": "object", "description": "plugin: the step's settings; strings may contain ${} expressions. Checked against the schema the plugin describes when it is installed." }
+        "with": { "type": "object", "description": "plugin: the step's settings; strings may contain ${} expressions. Checked against the schema the plugin describes when it is installed." },
+        "browser": { "type": "string", "description": "Opens this URL in a real browser page (headless Chrome), in a fresh browser context per iteration; the page load is the step. The steps inside are browser actions." },
+        "viewport": { "type": "object", "additionalProperties": false, "required": ["width", "height"], "properties": { "width": { "type": "integer", "minimum": 200, "maximum": 8000 }, "height": { "type": "integer", "minimum": 200, "maximum": 8000 } }, "description": "browser: page size in CSS pixels (default 1280x800)." },
+        "goto": { "type": "string", "description": "Inside browser: load another URL; measured like the first page load." },
+        "click": { "type": "string", "description": "Inside browser: click the first element matching this CSS selector, waiting until it is visible." },
+        "fill": { "$ref": "#/$defs/stringMap", "description": "Inside browser: CSS selector -> text to type into it, in order." },
+        "press": { "type": "string", "description": "Inside browser: press a key, such as Enter, Tab, Escape or ArrowDown, or type a character." },
+        "waitFor": { "type": "string", "description": "Inside browser: wait until an element matching this CSS selector is visible." },
+        "assert": { "$ref": "#/$defs/stringMap", "description": "Inside browser: CSS selector -> text the element must contain; a mismatch fails the step as a check." }
       },
       "additionalProperties": false,
       "allOf": [
@@ -332,6 +340,8 @@
         { "required": ["graphql"] }, { "required": ["sse"] },
         { "required": ["ws", "steps"] }, { "required": ["send"] }, { "required": ["expect"] }, { "required": ["grpc"] },
         { "required": ["plugin"] },
+        { "required": ["browser", "steps"] }, { "required": ["goto"] }, { "required": ["click"] }, { "required": ["fill"] },
+        { "required": ["press"] }, { "required": ["waitFor"] }, { "required": ["assert"] },
         { "required": ["think"] }, { "required": ["branch"] }, { "required": ["loop", "steps"] },
         { "required": ["while", "steps"] }, { "required": ["group", "steps"] }
       ]

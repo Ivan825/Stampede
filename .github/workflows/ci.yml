@@ -197,6 +197,42 @@ jobs:
       - run: go vet ./...
       - run: go test -race ./...
 
+  browser-image:
+    # The browser worker image runs a browser scenario end to end.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: build the browser worker image
+        run: docker build -f deploy/docker/Dockerfile.browser-worker -t stampede-browser-worker .
+      - name: serve a test page
+        run: |
+          mkdir -p "$RUNNER_TEMP/site"
+          cat > "$RUNNER_TEMP/site/index.html" <<'HTML'
+          <!doctype html><title>Smoke</title><h1>Smoke</h1>
+          <form action="/done.html"><input id="q" name="q"><button>Go</button></form>
+          HTML
+          echo '<!doctype html><p class="msg">Done</p>' > "$RUNNER_TEMP/site/done.html"
+          (cd "$RUNNER_TEMP/site" && python3 -m http.server 8765 --bind 127.0.0.1 >/dev/null 2>&1 &)
+          sleep 1
+      - name: run a browser scenario in the image
+        run: |
+          cat > "$RUNNER_TEMP/smoke.yaml" <<'YAML'
+          metadata: {name: browser-smoke}
+          target: {baseURL: "http://127.0.0.1:8765"}
+          journeys:
+            - name: search
+              steps:
+                - browser: /
+                  steps:
+                    - fill: {"#q": "boots"}
+                    - press: Enter
+                    - waitFor: .msg
+                    - assert: {".msg": "Done"}
+          load: {iterations: 3, vus: 1}
+          targets: ["errors < 1%"]
+          YAML
+          docker run --rm --network host -v "$RUNNER_TEMP:/work:ro" stampede-browser-worker run /work/smoke.yaml
+
   plugins:
     # Each first-party plugin is its own module: build it, lint it, and
     # run its tests, which include the conformance suite and its example

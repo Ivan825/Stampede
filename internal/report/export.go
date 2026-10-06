@@ -130,6 +130,7 @@ func (r *Report) WriteText(w io.Writer) {
 		}
 	}
 	r.writeStreams(w)
+	r.writeBrowser(w)
 	r.writeSlowest(w)
 	r.writeTargetMetrics(w)
 	if len(r.Errors) > 0 {
@@ -427,4 +428,44 @@ func Unit(mode string) string {
 		return "/s"
 	}
 	return " VUs"
+}
+
+// writeBrowser lists page timings and Web Vitals of browser steps.
+func (r *Report) writeBrowser(w io.Writer) {
+	header := false
+	for _, j := range r.Journeys {
+		for _, s := range j.Steps {
+			b := s.Browser
+			if b == nil {
+				continue
+			}
+			if !header {
+				fmt.Fprintf(w, "\n  web vitals (mean / p95)\n")
+				header = true
+			}
+			var parts []string
+			add := func(name string, ps *PhaseStat, f func(float64) string) {
+				if ps != nil {
+					parts = append(parts, fmt.Sprintf("%s %s/%s", name, f(ps.Mean), f(ps.P95)))
+				}
+			}
+			add("ttfb", b.TTFB, Ms)
+			add("fcp", b.FCP, Ms)
+			add("lcp", b.LCP, Ms)
+			add("cls", b.CLS, CLS)
+			add("inp", b.INP, Ms)
+			add("load", b.Load, Ms)
+			fmt.Fprintf(w, "    %-36s %s\n", truncName(j.Name+" › "+s.Name, 36), strings.Join(parts, "  "))
+		}
+	}
+}
+
+// CLS formats a cumulative layout shift score.
+func CLS(f float64) string { return strconv.FormatFloat(f, 'f', 3, 64) }
+
+func truncName(s string, n int) string {
+	if len([]rune(s)) <= n {
+		return s
+	}
+	return string([]rune(s)[:n-1]) + "…"
 }

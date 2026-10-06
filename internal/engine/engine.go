@@ -258,6 +258,11 @@ func New(opts Options) (*Engine, error) {
 	if err := e.preparePlugins(); err != nil {
 		return nil, err
 	}
+	if e.usesBrowser() {
+		if _, err := FindChrome(); err != nil {
+			return nil, err
+		}
+	}
 	return e, nil
 }
 

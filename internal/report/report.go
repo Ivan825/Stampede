@@ -178,6 +178,44 @@ type Step struct {
 	Stream *StreamStat `json:"stream,omitempty"`
 	// Slowest lists the step's slowest requests, slowest first.
 	Slowest []SlowRequest `json:"slowest,omitempty"`
+	// Browser is set for browser page loads and interactions.
+	Browser *BrowserStat `json:"browser,omitempty"`
+}
+
+// BrowserStat holds a browser step's page timings and Web Vitals: mean
+// and p95 in seconds, except CLS, which is unitless. Page loads have
+// TTFB, FCP, LCP, CLS and Load; clicks and key presses have INP.
+type BrowserStat struct {
+	TTFB *PhaseStat `json:"ttfb,omitempty"`
+	FCP  *PhaseStat `json:"fcp,omitempty"`
+	LCP  *PhaseStat `json:"lcp,omitempty"`
+	CLS  *PhaseStat `json:"cls,omitempty"`
+	INP  *PhaseStat `json:"inp,omitempty"`
+	Load *PhaseStat `json:"load,omitempty"`
+}
+
+func browserStatOf(st *metrics.StepStats, ph *[metrics.NumPhases]*metrics.Histogram) *BrowserStat {
+	stat := func(p metrics.Phase) *PhaseStat {
+		if st.PhaseSum[p] == 0 || st.Requests == 0 {
+			return nil
+		}
+		ps := &PhaseStat{Mean: float64(st.PhaseSum[p]) / float64(st.Requests) / 1e6}
+		if ph != nil && ph[p] != nil {
+			ps.P95 = ph[p].QuantileSeconds(0.95)
+		}
+		return ps
+	}
+	b := &BrowserStat{FCP: stat(metrics.PhaseFCP), LCP: stat(metrics.PhaseLCP), CLS: stat(metrics.PhaseCLS), INP: stat(metrics.PhaseINP), Load: stat(metrics.PhaseLoad)}
+	if b.FCP == nil && b.LCP == nil && b.Load == nil && b.INP == nil && b.CLS == nil {
+		return nil
+	}
+	if b.Load != nil {
+		b.TTFB = stat(metrics.PhaseWait)
+		if b.CLS == nil {
+			b.CLS = &PhaseStat{}
+		}
+	}
+	return b
 }
 
 // StreamStat summarises a streaming step. For an LLM API, FirstEvent is
@@ -342,6 +380,7 @@ func Build(in Input) *Report {
 				}
 				sr.Phases[metrics.PhaseNames[p]] = ps
 			}
+			sr.Browser = browserStatOf(st, in.Phases[cs.ID])
 			jr.Steps = append(jr.Steps, sr)
 			for e, n := range st.Errors {
 				r.Errors = append(r.Errors, ErrorRow{Journey: cj.Name, Step: cs.Name, Error: e, Count: n})

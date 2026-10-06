@@ -116,6 +116,65 @@ export function SlowestRequests({ journeys }: { journeys: ReportJourney[] }) {
   );
 }
 
+const vitals = [
+  ['ttfb', 'TTFB'],
+  ['fcp', 'FCP'],
+  ['lcp', 'LCP'],
+  ['cls', 'CLS'],
+  ['inp', 'INP'],
+  ['load', 'Load'],
+] as const;
+
+/** Page timings and Web Vitals of browser steps (mean / p95). */
+export function WebVitals({ journeys }: { journeys: ReportJourney[] }) {
+  const rows = journeys.flatMap((j) =>
+    (j.steps ?? []).filter((s) => s.browser).map((s) => ({ journey: j.name, step: s })),
+  );
+  if (rows.length === 0) return null;
+  const fmt = (key: string, v: number) => (key === 'cls' ? v.toFixed(3) : ms(v));
+  return (
+    <>
+      <SectionTitle>Web vitals</SectionTitle>
+      <Card>
+        <Table>
+          <thead>
+            <tr>
+              <th>Step</th>
+              {vitals.map(([k, label]) => (
+                <th key={k} className="!text-right">
+                  {label}
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map(({ journey, step }) => (
+              <tr key={step.id}>
+                <td>
+                  <span className="text-xs text-muted">{journey} › </span>
+                  <span className="font-mono text-xs">{step.name}</span>
+                </td>
+                {vitals.map(([k]) => {
+                  const v = step.browser?.[k];
+                  return (
+                    <td key={k} className="num text-right text-xs">
+                      {v ? `${fmt(k, v.mean)} / ${fmt(k, v.p95)}` : '–'}
+                    </td>
+                  );
+                })}
+              </tr>
+            ))}
+          </tbody>
+        </Table>
+        <p className="px-3 py-2 text-xs text-muted">
+          Mean / p95. Page loads record TTFB, first and largest contentful paint, cumulative layout
+          shift and the load event; clicks and key presses record interaction to next paint.
+        </p>
+      </Card>
+    </>
+  );
+}
+
 export function ReportView({
   report,
   runId,
@@ -282,6 +341,8 @@ export function ReportView({
           <TargetMetricCharts metrics={report.targetMetrics ?? []} />
         </>
       )}
+
+      <WebVitals journeys={journeys} />
 
       {report.faults && report.faults.length > 0 && (
         <>

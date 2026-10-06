@@ -1,0 +1,1 @@
+import{Wt as e}from"./vendor-ckE5i0bD.js";import{o as t}from"./index-CZ3VWw3O.js";var n=e();function r({target:e}){return e.private?(0,n.jsx)(t,{tone:`info`,children:`private`}):e.verified?(0,n.jsx)(t,{tone:`pass`,children:`verified`}):(0,n.jsx)(t,{tone:`warn`,children:`unverified`})}export{r as t};
