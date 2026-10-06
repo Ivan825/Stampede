@@ -55,8 +55,8 @@ const stats = [
       </div>
       <div class="chips" aria-label="Protocols">
         {protocols.map(([p]) => <span class="chip on">{p}</span>)}
-        <span class="chip">{browserShipped ? 'Browser' : 'Browser · planned'}</span>
-        <span class="chip">{pluginsShipped ? 'MQTT · Kafka · Redis · SQL · UDP' : 'MQTT · Kafka · Redis · SQL · UDP · planned'}</span>
+        <span class={`chip ${browserShipped ? 'on' : ''}`}>{browserShipped ? 'Browser' : 'Browser · planned'}</span>
+        <span class={`chip ${pluginsShipped ? 'on' : ''}`}>{pluginsShipped ? 'MQTT · Kafka · Redis · SQL · UDP' : 'MQTT · Kafka · Redis · SQL · UDP · planned'}</span>
       </div>
     </div>
   </section>
