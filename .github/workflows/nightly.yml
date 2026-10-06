@@ -1,0 +1,26 @@
+name: nightly
+
+on:
+  schedule:
+    - cron: "17 2 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  accuracy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - name: accuracy benchmark (full)
+        run: go run ./bench/accuracy -out accuracy-${{ github.run_number }}.json
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: accuracy-nightly-${{ github.run_number }}
+          path: accuracy-*.json
+          retention-days: 90
