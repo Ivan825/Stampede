@@ -15,7 +15,7 @@ packs:
   - { name: government, title: "Government, results portals", status: planned, signature: "Results-day and deadline-day surges", drivers: [http] }
   - { name: delivery, title: "Food delivery, ride hailing", status: planned, signature: "Location updates; matching; live tracking", drivers: [http, websocket] }
   - { name: gaming, title: "Gaming backends", status: planned, signature: "Matchmaking, leaderboards, session servers", drivers: [websocket, udp] }
-  - { name: iot, title: "IoT platforms", status: planned, signature: "Huge numbers of connected devices; telemetry ingest", drivers: [mqtt] }
+  - { name: iot, title: "IoT platforms", status: shipped, signature: "Huge numbers of connected devices; telemetry ingest", drivers: [mqtt] }
   - { name: public-apis, title: "Public APIs, developer platforms", status: shipped, signature: "Rate limits, API keys, webhook delivery", drivers: [http] }
   - { name: identity, title: "Login and identity", status: shipped, signature: "Login storm; token refresh waves", drivers: [http] }
   - { name: mobile-backends, title: "Mobile app backends", status: planned, signature: "Matching category, driven at the API", drivers: [http, graphql, grpc] }

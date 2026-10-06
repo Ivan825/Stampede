@@ -1,0 +1,26 @@
+apiVersion: stampede.dev/v1
+kind: Pack
+name: iot
+title: IoT platforms
+description: >
+  Devices over MQTT: a fleet that stays connected and reports readings,
+  each acknowledged once the platform has stored it, devices fetching
+  their desired state, operators changing it over HTTP, thousands of
+  connected devices, a telemetry burst and a reconnect storm. Needs the
+  mqtt plugin (stampede plugin install mqtt). Built for platforms shaped
+  like IoTLab (devices/<id>/... topics, an ack per reading); adjust the
+  topics and payloads to match yours.
+status: shipped
+protocols: [mqtt, http]
+referenceApp: examples/packlab/iotlab
+detect:
+  paths: ["/api/devices", "/api/fleet", "/api/things", "/api/telemetry", "/api/ingest", "/api/shadows"]
+  openapiTags: [devices, fleet, telemetry, things, shadows]
+  htmlMeta: []
+  headers: {}
+variables:
+  TARGET_URL: { description: Base URL of the platform's HTTP API }
+  MQTT_BROKER: { description: "The MQTT broker devices connect to: tcp://host:1883, ssl://host:8883, ws://host:8080/mqtt" }
+targets:
+  - device/stored.p95 < 500ms
+  - errors < 1%

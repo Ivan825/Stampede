@@ -1,0 +1,50 @@
+# Every device reports at once: a power cut ends, a schedule fires on the
+# hour, an alarm trips across a site. Ingest has to keep up with the
+# burst; when it cannot, readings queue and the time to "stored" climbs
+# while publishing itself still looks fast.
+apiVersion: stampede.dev/v1
+kind: Scenario
+metadata:
+  name: iot-telemetry-burst
+  tags: [pack:iot, spike]
+vars:
+  password: iotlab-pass
+journeys:
+  - name: burst
+    steps:
+      - name: connect
+        plugin: mqtt.connect
+        with:
+          broker: ${env.MQTT_BROKER}
+          clientId: dev-${vu}
+          username: dev-${vu}
+          password: ${vars.password}
+        timeout: 10s
+      - name: listen
+        plugin: mqtt.subscribe
+        with: { topic: "devices/dev-${vu}/acks", qos: 1 }
+      - name: report
+        plugin: mqtt.publish
+        with:
+          topic: devices/dev-${vu}/telemetry
+          payload: '{"seq": ${iter}, "alarm": true, "temp": ${rand(60, 90)}}'
+          qos: 1
+      - name: stored
+        plugin: mqtt.expect
+        with:
+          topic: devices/dev-${vu}/acks
+          json: { "$.seq": "${iter}" }
+        timeout: 30s
+      - think: 100ms..300ms
+load:
+  mode: vus
+  stages:
+    - { duration: 30s, target: "50" }
+    - { duration: 30s, target: "500" }
+    - { duration: 2m, target: "500" }
+    - { duration: 30s, target: "50" }
+    - { duration: 1m, target: "50" }
+targets:
+  - burst/stored.p95 < 1s
+  - burst/report.p99 < 200ms
+  - errors < 1%
