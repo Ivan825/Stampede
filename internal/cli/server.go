@@ -1,10 +1,12 @@
 package cli
 
 import (
+	"crypto/tls"
 	"errors"
 	"fmt"
 	"io/fs"
 	"log/slog"
+	"net"
 	"net/netip"
 	"os"
 	"strings"
@@ -12,6 +14,9 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"google.golang.org/grpc"
+
+	"github.com/Ivan825/Stampede/internal/coordinator"
 	"github.com/Ivan825/Stampede/internal/keyring"
 	"github.com/Ivan825/Stampede/internal/safety"
 	"github.com/Ivan825/Stampede/internal/server"
@@ -33,6 +38,12 @@ type serverFlags struct {
 	maxVUs        int
 	maxDuration   time.Duration
 	trusted       []string
+	workerAddr    string
+	joinToken     string
+	executor      string
+	dataDir       string
+	tlsCert       string
+	tlsKey        string
 }
 
 func newServerCmd() *cobra.Command {
@@ -61,6 +72,12 @@ Environment:
 	fl.Float64Var(&f.maxRate, "max-rate", 0, "hard cap on arrival rate for every run (0 = none)")
 	fl.IntVar(&f.maxVUs, "max-vus", 0, "hard cap on virtual users for every run (0 = none)")
 	fl.DurationVar(&f.maxDuration, "max-duration", 0, "hard cap on run duration (0 = none)")
+	fl.StringVar(&f.workerAddr, "worker-addr", envOr("STAMPEDE_WORKER_ADDR", ":8081"), "gRPC address workers connect to (empty disables workers)")
+	fl.StringVar(&f.joinToken, "join-token", os.Getenv("STAMPEDE_JOIN_TOKEN"), "secret workers present to join (required for workers)")
+	fl.StringVar(&f.executor, "executor", envOr("STAMPEDE_EXECUTOR", "auto"), "auto (workers when connected, else in-process), workers or local")
+	fl.StringVar(&f.dataDir, "data-dir", os.Getenv("STAMPEDE_DATA_DIR"), "directory holding CSV/JSON feeder files for runs")
+	fl.StringVar(&f.tlsCert, "worker-tls-cert", os.Getenv("STAMPEDE_WORKER_TLS_CERT"), "TLS certificate for the worker port")
+	fl.StringVar(&f.tlsKey, "worker-tls-key", os.Getenv("STAMPEDE_WORKER_TLS_KEY"), "TLS key for the worker port")
 	fl.StringSliceVar(&f.trusted, "trusted-proxy", splitEnv("STAMPEDE_TRUSTED_PROXIES"), "CIDR of a reverse proxy whose X-Forwarded-For is trusted (repeatable)")
 	return cmd
 }
@@ -125,11 +142,56 @@ func runServer(cmd *cobra.Command, f *serverFlags) error {
 		}
 		proxies = append(proxies, pfx)
 	}
-	srv, err := server.New(server.Config{
-		TrustedProxies: proxies,
-		Store:          st, Keyring: kr, Logger: log, UI: UI, SecureCookies: f.secureCookies,
-		HardCaps: safety.Caps{MaxRate: f.maxRate, MaxVUs: f.maxVUs, MaxDuration: f.maxDuration},
-	})
+	cfg := server.Config{DataDir: f.dataDir}
+	local := &server.LocalExecutor{Logger: log}
+	switch f.executor {
+	case "local":
+		cfg.Executor = local
+	case "auto", "workers":
+		if f.workerAddr == "" || f.joinToken == "" {
+			if f.executor == "workers" {
+				return errors.New("--executor workers needs --worker-addr and --join-token")
+			}
+			log.Info("workers disabled (set STAMPEDE_JOIN_TOKEN to enable); running load in-process")
+			cfg.Executor = local
+			break
+		}
+		coord := coordinator.New(coordinator.Config{JoinToken: f.joinToken, Logger: log})
+		var tlsCfg *tls.Config
+		if f.tlsCert != "" {
+			cert, err := tls.LoadX509KeyPair(f.tlsCert, f.tlsKey)
+			if err != nil {
+				return fmt.Errorf("worker TLS: %w", err)
+			}
+			tlsCfg = &tls.Config{Certificates: []tls.Certificate{cert}, MinVersion: tls.VersionTLS12}
+		}
+		gs := grpc.NewServer(coordinator.ServerOptions(tlsCfg)...)
+		coord.Register(gs)
+		ln, err := net.Listen("tcp", f.workerAddr)
+		if err != nil {
+			return fmt.Errorf("worker port: %w", err)
+		}
+		go func() {
+			if err := gs.Serve(ln); err != nil {
+				log.Error("worker gRPC server stopped", "error", err)
+			}
+		}()
+		defer gs.GracefulStop()
+		log.Info("accepting workers", "addr", ln.Addr().String(), "tls", tlsCfg != nil)
+		dist := &server.DistributedExecutor{Coordinator: coord}
+		cfg.Workers = server.CoordinatorWorkers(coord)
+		if f.executor == "workers" {
+			cfg.Executor = dist
+		} else {
+			cfg.Executor = &server.AutoExecutor{Local: local, Distributed: dist}
+		}
+	default:
+		return fmt.Errorf("--executor must be auto, workers or local")
+	}
+	cfg.Store, cfg.Keyring, cfg.Logger, cfg.UI, cfg.SecureCookies = st, kr, log, UI, f.secureCookies
+	cfg.HardCaps = safety.Caps{MaxRate: f.maxRate, MaxVUs: f.maxVUs, MaxDuration: f.maxDuration}
+	cfg.TrustedProxies = proxies
+	srv, err := server.New(cfg)
 	if err != nil {
 		return err
 	}
