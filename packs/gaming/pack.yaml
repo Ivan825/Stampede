@@ -1,0 +1,27 @@
+apiVersion: stampede.dev/v1
+kind: Pack
+name: gaming
+title: Gaming backends
+description: >
+  A match from start to finish: sign in, queue on a WebSocket until
+  matchmaking finds opponents, join the game server over UDP with the
+  ticket it handed out, send inputs answered on the server's tick, then
+  post a score and read the leaderboard; plus a matchmaking rush, a game
+  server full of players and an end-of-tournament leaderboard flood.
+  Needs the udp plugin (stampede plugin install udp). Built for backends
+  shaped like GameLab (JSON over WebSocket, text datagrams); adjust the
+  messages and paths to match yours.
+status: shipped
+protocols: [websocket, udp, http]
+referenceApp: examples/packlab/gamelab
+detect:
+  paths: ["/api/matchmaking", "/api/leaderboard", "/api/leaderboards", "/api/scores", "/api/lobbies", "/api/matches"]
+  openapiTags: [matchmaking, leaderboards, scores, lobbies, matches]
+  htmlMeta: []
+  headers: {}
+variables:
+  TARGET_URL: { description: "Base URL of the game backend's API (HTTP; the matchmaking WebSocket is joined to it, and matchmaking names the game server)" }
+targets:
+  - match/matched.p95 < 5s
+  - match/input.p95 < 100ms
+  - errors < 1%

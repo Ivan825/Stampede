@@ -1,0 +1,8 @@
+# Default targets for game backends. "matched" is the time a player spends
+# in the queue; "input" is the round trip of one input to the game server
+# and its answer on the next tick, so it includes up to one tick.
+targets:
+  - match/matched.p95 < 5s
+  - match/input.p95 < 100ms
+  - match/submit score.p95 < 300ms
+  - errors < 1%
