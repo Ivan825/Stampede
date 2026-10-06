@@ -5,9 +5,11 @@ import (
 	"crypto/tls"
 	"errors"
 	"fmt"
+	"io"
 	"net"
 	"regexp"
 	"strings"
+	"syscall"
 	"time"
 
 	"github.com/redis/go-redis/v9"
@@ -289,7 +291,10 @@ func classify(err error) error {
 			return pluginsdk.Fail("redis "+code, err)
 		}
 		return pluginsdk.Fail("redis error", err)
-	case errors.As(err, &ne):
+	case errors.As(err, &ne), errors.Is(err, io.EOF), errors.Is(err, io.ErrUnexpectedEOF),
+		errors.Is(err, net.ErrClosed), errors.Is(err, syscall.ECONNRESET), errors.Is(err, syscall.EPIPE):
+		// A pooled connection to a server that went away fails with EOF or
+		// a reset rather than a dial error.
 		return pluginsdk.Fail("redis connection error", err)
 	}
 	return pluginsdk.Fail("redis error", err)
