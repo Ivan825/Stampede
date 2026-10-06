@@ -21,6 +21,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/Ivan825/Stampede/examples/packlab/apilab"
 	"github.com/Ivan825/Stampede/examples/packlab/authlab"
 	"github.com/Ivan825/Stampede/examples/packlab/labkit"
 	"github.com/Ivan825/Stampede/examples/packlab/llmlab"
@@ -36,8 +37,9 @@ type product struct {
 }
 
 var products = map[string]product{
-	"llm-apps": {pack: "llm-apps", addr: ":8092", new: llmlab.New},
-	"identity": {pack: "identity", addr: ":8095", new: authlab.New},
+	"llm-apps":    {pack: "llm-apps", addr: ":8092", new: llmlab.New},
+	"identity":    {pack: "identity", addr: ":8095", new: authlab.New},
+	"public-apis": {pack: "public-apis", addr: ":8096", new: apilab.New},
 }
 
 func names() []string {

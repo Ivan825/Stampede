@@ -208,9 +208,18 @@ func checkLoad(t *testing.T, target, name string) {
 				}
 				t.Fatalf("%d of %d requests and %d iterations failed: %s", o.Failed, o.Requests, o.IterationsFailed, strings.Join(errs, "; "))
 			}
-			t.Logf("%d iterations, %d requests, p95 %.1fms", o.Iterations, o.Requests, o.Latency.P95*1000)
+			if code, ok := wantStatus[name+"/"+f]; ok && o.Status[code] == 0 {
+				t.Fatalf("the stress never provoked a %d: %v", code, o.Status)
+			}
+			t.Logf("%d iterations, %d requests, p95 %.1fms, statuses %v", o.Iterations, o.Requests, o.Latency.P95*1000, o.Status)
 		})
 	}
+}
+
+// wantStatus lists stresses whose point is a refusal; under load they must
+// actually provoke it, or they test nothing.
+var wantStatus = map[string]int{
+	"public-apis/stresses/rate-limit-burst.yaml": 429,
 }
 
 func shorten(s *scenario.Scenario) {
