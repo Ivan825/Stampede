@@ -56,6 +56,18 @@ type AiProvider struct {
 	UpdatedAt       time.Time
 }
 
+type AiUsage struct {
+	ID           uuid.UUID
+	OrgID        uuid.UUID
+	ProviderID   *uuid.UUID
+	Purpose      string
+	RunID        *uuid.UUID
+	InputTokens  int64
+	OutputTokens int64
+	CreatedBy    *uuid.UUID
+	CreatedAt    time.Time
+}
+
 type ApiToken struct {
 	ID         uuid.UUID
 	OrgID      uuid.UUID

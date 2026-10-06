@@ -105,14 +105,16 @@ func Narrate(ctx context.Context, r *report.Report, opts NarrateOptions) (*repor
 			usage.Add(resp.Usage)
 		}
 		if err != nil {
-			if best != nil {
+			if best != nil && strings.TrimSpace(best.Summary) != "" {
+				best.KeepCited(facts)
 				return best, usage, nil
 			}
 			return nil, usage, err
 		}
 		var n report.Narrative
 		if err := json.Unmarshal([]byte(resp.Text), &n); err != nil {
-			if best != nil {
+			if best != nil && strings.TrimSpace(best.Summary) != "" {
+				best.KeepCited(facts)
 				return best, usage, nil
 			}
 			return nil, usage, fmt.Errorf("the model's reply is not a narrative: %w", err)
@@ -130,6 +132,7 @@ func Narrate(ctx context.Context, r *report.Report, opts NarrateOptions) (*repor
 			if strings.TrimSpace(best.Summary) == "" {
 				return nil, usage, errors.New("the model returned an empty summary")
 			}
+			best.KeepCited(facts)
 			return best, usage, nil
 		}
 		msgs = append(msgs,

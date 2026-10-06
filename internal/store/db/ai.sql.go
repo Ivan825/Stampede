@@ -14,9 +14,10 @@ import (
 )
 
 const aITokensSince = `-- name: AITokensSince :one
-SELECT COALESCE(SUM(input_tokens + output_tokens), 0)::bigint AS tokens
-FROM ai_jobs
-WHERE org_id = $1 AND created_at >= $2
+SELECT (
+    COALESCE((SELECT SUM(input_tokens + output_tokens) FROM ai_jobs j WHERE j.org_id = $1 AND j.created_at >= $2), 0)
+  + COALESCE((SELECT SUM(input_tokens + output_tokens) FROM ai_usage u WHERE u.org_id = $1 AND u.created_at >= $2), 0)
+)::bigint AS tokens
 `
 
 type AITokensSinceParams struct {
@@ -388,6 +389,36 @@ func (q *Queries) ListAIProviders(ctx context.Context, orgID uuid.UUID) ([]AiPro
 		return nil, err
 	}
 	return items, nil
+}
+
+const recordAIUsage = `-- name: RecordAIUsage :exec
+INSERT INTO ai_usage (id, org_id, provider_id, purpose, run_id, input_tokens, output_tokens, created_by)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+`
+
+type RecordAIUsageParams struct {
+	ID           uuid.UUID
+	OrgID        uuid.UUID
+	ProviderID   *uuid.UUID
+	Purpose      string
+	RunID        *uuid.UUID
+	InputTokens  int64
+	OutputTokens int64
+	CreatedBy    *uuid.UUID
+}
+
+func (q *Queries) RecordAIUsage(ctx context.Context, arg RecordAIUsageParams) error {
+	_, err := q.db.Exec(ctx, recordAIUsage,
+		arg.ID,
+		arg.OrgID,
+		arg.ProviderID,
+		arg.Purpose,
+		arg.RunID,
+		arg.InputTokens,
+		arg.OutputTokens,
+		arg.CreatedBy,
+	)
+	return err
 }
 
 const releaseAIJobApproval = `-- name: ReleaseAIJobApproval :exec

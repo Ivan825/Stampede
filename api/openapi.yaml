@@ -838,6 +838,49 @@ paths:
             application/json:
               schema: { $ref: "#/components/schemas/Error" }
 
+  /runs/{runId}/narrative:
+    parameters:
+      - $ref: "#/components/parameters/runId"
+    post:
+      tags: [ai]
+      operationId: createRunNarrative
+      summary: Write an AI summary of a finished run's report
+      description: |
+        Asks the organisation's AI provider for a summary of the report.
+        Every claim cites the report figures it rests on and is labelled
+        measured or suspected; claims that cite unknown figures, or state
+        numbers the cited figures do not contain, are dropped. Only the
+        report's aggregate figures are sent, with error messages redacted.
+        The narrative is saved into the report, so the HTML and Markdown
+        downloads include it, and replaces any earlier one. Refused with
+        429 when the organisation's AI token use this month has reached
+        the provider's cap.
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/NarrativeCreate" }
+      responses:
+        "200":
+          description: The narrative, now part of the report
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/NarrativeResult" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "422": { $ref: "#/components/responses/Invalid" }
+        "429":
+          description: Monthly AI token cap reached
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "502":
+          description: The AI provider failed or returned nothing usable
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+
   /ai/jobs/{jobId}:
     parameters:
       - name: jobId
@@ -1520,6 +1563,54 @@ components:
       properties:
         inputTokens: { type: integer, format: int64 }
         outputTokens: { type: integer, format: int64 }
+
+    NarrativeCreate:
+      type: object
+      properties:
+        providerId:
+          type: string
+          format: uuid
+          description: Provider to use; default the only one, or the one named "default".
+
+    NarrativeResult:
+      type: object
+      required: [narrative, usage]
+      properties:
+        narrative: { $ref: "#/components/schemas/Narrative" }
+        usage: { $ref: "#/components/schemas/AIUsage" }
+
+    Narrative:
+      type: object
+      required: [summary, claims]
+      properties:
+        summary: { type: string }
+        model: { type: string }
+        claims:
+          type: array
+          items: { $ref: "#/components/schemas/NarrativeClaim" }
+        facts:
+          type: array
+          description: The report figures the claims cite.
+          items: { $ref: "#/components/schemas/NarrativeFact" }
+
+    NarrativeClaim:
+      type: object
+      required: [text, label, refs]
+      properties:
+        text: { type: string }
+        label: { type: string, enum: [measured, suspected] }
+        refs:
+          type: array
+          items: { type: string }
+          description: Ids of the facts the claim rests on.
+
+    NarrativeFact:
+      type: object
+      required: [id, text, where]
+      properties:
+        id: { type: string }
+        text: { type: string }
+        where: { type: string, description: The report section that shows it. }
 
     AIJobStatus:
       type: string

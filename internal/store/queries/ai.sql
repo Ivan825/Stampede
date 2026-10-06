@@ -54,9 +54,14 @@ SET status = 'failed', error = 'interrupted: the server stopped before the job f
 WHERE status IN ('queued', 'running');
 
 -- name: AITokensSince :one
-SELECT COALESCE(SUM(input_tokens + output_tokens), 0)::bigint AS tokens
-FROM ai_jobs
-WHERE org_id = $1 AND created_at >= $2;
+SELECT (
+    COALESCE((SELECT SUM(input_tokens + output_tokens) FROM ai_jobs j WHERE j.org_id = $1 AND j.created_at >= $2), 0)
+  + COALESCE((SELECT SUM(input_tokens + output_tokens) FROM ai_usage u WHERE u.org_id = $1 AND u.created_at >= $2), 0)
+)::bigint AS tokens;
+
+-- name: RecordAIUsage :exec
+INSERT INTO ai_usage (id, org_id, provider_id, purpose, run_id, input_tokens, output_tokens, created_by)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8);
 
 -- name: ClaimAIJobApproval :execrows
 UPDATE ai_jobs SET approved_at = now()

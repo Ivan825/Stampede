@@ -15,6 +15,24 @@ type Narrative struct {
 	Claims  []Claim `json:"claims"`
 	// Model is the model that wrote it, for the record.
 	Model string `json:"model,omitempty"`
+	// Facts are the report figures the claims cite.
+	Facts []Fact `json:"facts,omitempty"`
+}
+
+// KeepCited sets Facts to the facts the claims cite, in report order.
+func (n *Narrative) KeepCited(facts []Fact) {
+	cited := map[string]bool{}
+	for _, c := range n.Claims {
+		for _, r := range c.Refs {
+			cited[r] = true
+		}
+	}
+	n.Facts = n.Facts[:0]
+	for _, f := range facts {
+		if cited[f.ID] {
+			n.Facts = append(n.Facts, f)
+		}
+	}
 }
 
 // Claim is one statement in a narrative.
