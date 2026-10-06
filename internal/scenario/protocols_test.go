@@ -67,6 +67,35 @@ func TestProtocolStepErrors(t *testing.T) {
       - sse: /stream
         check: {bodyContains: "${later}"}
         extract: {later: "$.x"}`, `"later"`},
+		"send outside ws": {`
+      - send: hello`, "send only works inside a ws block"},
+		"expect outside ws": {`
+      - group: g
+        steps: [{expect: hi}]`, "expect only works inside a ws block"},
+		"nested ws": {`
+      - ws: /a
+        steps:
+          - group: inner
+            steps: [{ws: /b, steps: [{send: x}]}]`, "ws blocks cannot be nested"},
+		"ws without steps": {`
+      - ws: /chat`, "ws needs steps"},
+		"empty send": {`
+      - ws: /chat
+        steps: [{send: ""}]`, "send needs a message"},
+		"expect bad regex": {`
+      - ws: /chat
+        steps: [{expect: "("}]`, "invalid regex"},
+		"expect header extractor": {`
+      - ws: /chat
+        steps: [{expect: hi, extract: {h: "header:X-Id"}}]`, "header extractors do not apply here"},
+		"expect unknown key": {`
+      - ws: /chat
+        steps:
+          - expect: {match: hi, timout: 1s}`, `line 10: unknown key "timout" in expect`},
+		"ws request key": {`
+      - ws: /chat
+        json: {}
+        steps: [{send: hi}]`, `"json" does not apply to ws steps`},
 		"allowErrors on http": {`
       - get: /x
         check: {allowErrors: true}`, "only applies to graphql steps"},
@@ -92,9 +121,32 @@ func TestProtocolVariablesFlow(t *testing.T) {
       - graphql: /graphql
         query: "query { me { id } }"
         extract: {userId: "$.data.me.id"}
-      - get: /users/${userId}`)
-	if _, err := Parse([]byte(src)); err != nil {
+      - get: /users/${userId}
+      - ws: /chat/${userId}
+        steps:
+          - expect: {json: {"$.type": welcome}}
+            extract: {room: "$.room"}
+          - send: {join: "${room}"}
+          - loop: 2
+            steps:
+              - send: "ping ${room}"
+              - expect: {match: "^pong", timeout: 2s}
+      - get: /rooms/${room}`)
+	s, err := Parse([]byte(src))
+	if err != nil {
 		t.Fatal(err)
+	}
+	p, err := Compile(s)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var names []string
+	for _, st := range p.Steps {
+		names = append(names, st.Name)
+	}
+	want := []string{"graphql /graphql", "GET /users/${userId}", "WS /chat/${userId}", "expect", "send", "send", "expect ^pong", "GET /rooms/${room}"}
+	if strings.Join(names, "|") != strings.Join(want, "|") {
+		t.Errorf("recorded steps %q, want %q", names, want)
 	}
 }
 

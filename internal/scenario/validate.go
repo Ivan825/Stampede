@@ -135,6 +135,8 @@ func stepURL(st Step) (string, bool) {
 		return st.GraphQL.URL, true
 	case StepSSE:
 		return st.SSE.URL, true
+	case StepWS:
+		return st.WS.URL, true
 	}
 	return "", false
 }
@@ -151,6 +153,8 @@ func walkSteps(steps []Step, fn func(Step)) {
 			walkSteps(st.Loop.Steps, fn)
 		case StepGroup:
 			walkSteps(st.Group.Steps, fn)
+		case StepWS:
+			walkSteps(st.WS.Steps, fn)
 		}
 	}
 }

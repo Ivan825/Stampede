@@ -20,7 +20,7 @@ var httpMethods = map[string]string{
 
 // kindKeys are the step keys that name a step kind, besides HTTP methods,
 // in the order they are listed in error messages.
-var kindKeys = []string{"think", "branch", "loop", "while", "group", "script", "graphql", "sse"}
+var kindKeys = []string{"think", "branch", "loop", "while", "group", "script", "graphql", "sse", "ws", "send", "expect"}
 
 // requestKeys are the HTTP request parts shared by request-like steps.
 var requestKeys = []string{"headers", "query", "json", "body", "form", "check", "extract", "timeout"}
@@ -37,6 +37,9 @@ var stepKeys = map[string][]string{
 	"group":   {"steps"},
 	"graphql": {"query", "variables", "operationName", "persisted", "headers", "check", "extract", "timeout"},
 	"sse":     append([]string{"method", "until"}, requestKeys...),
+	"ws":      {"headers", "subprotocols", "timeout", "steps"},
+	"send":    nil,
+	"expect":  {"extract"},
 }
 
 // UnmarshalYAML reads the compact step syntax, for example
@@ -162,6 +165,45 @@ func (s *Step) UnmarshalYAML(n *yaml.Node) error {
 			return err
 		}
 		out.SSE = e
+	case "ws":
+		out.Kind = StepWS
+		w, err := decodeWS(fields)
+		if err != nil {
+			return err
+		}
+		out.WS = w
+	case "send":
+		out.Kind = StepSend
+		v := fields["send"]
+		out.Send = &Send{}
+		if v.Kind == yaml.ScalarNode {
+			out.Send.Text = v.Value
+		} else {
+			var j any
+			if err := v.Decode(&j); err != nil {
+				return err
+			}
+			out.Send.JSON = normalizeYAML(j)
+		}
+	case "expect":
+		out.Kind = StepExpect
+		v := fields["expect"]
+		out.Expect = &Expect{}
+		switch {
+		case v.Kind == yaml.ScalarNode && v.Tag != "!!null":
+			out.Expect.Match = v.Value
+		case v.Kind == yaml.MappingNode:
+			if err := decodeStrict(v, "expect", out.Expect); err != nil {
+				return err
+			}
+		case v.Tag != "!!null":
+			return fmt.Errorf("line %d: expect takes a regex or {match, json, timeout}", v.Line)
+		}
+		if x, ok := fields["extract"]; ok {
+			if err := x.Decode(&out.Expect.Extract); err != nil {
+				return err
+			}
+		}
 	}
 	*s = out
 	return nil
@@ -323,6 +365,29 @@ func decodeSSE(f map[string]*yaml.Node) (*SSE, error) {
 	return e, nil
 }
 
+func decodeWS(f map[string]*yaml.Node) (*WebSocket, error) {
+	w := &WebSocket{URL: f["ws"].Value}
+	if v, ok := f["headers"]; ok {
+		if err := v.Decode(&w.Headers); err != nil {
+			return nil, err
+		}
+	}
+	if v, ok := f["subprotocols"]; ok {
+		if err := v.Decode(&w.Subprotocols); err != nil {
+			return nil, err
+		}
+	}
+	if v, ok := f["timeout"]; ok {
+		if err := v.Decode(&w.Timeout); err != nil {
+			return nil, err
+		}
+	}
+	if _, ok := f["steps"]; !ok {
+		return nil, fmt.Errorf("line %d: ws needs steps to run on the connection", f["ws"].Line)
+	}
+	return w, decodeSteps(f, &w.Steps)
+}
+
 // decodeStrict decodes a mapping into the struct v, rejecting keys that
 // v does not define. yaml.v3 ignores KnownFields when a node is decoded on
 // its own, so without this a typo such as "stauts" inside a check would be
@@ -445,6 +510,30 @@ func (s Step) toMap() map[string]any {
 		m["method"] = e.Method
 		if e.Until != (SSEUntil{}) {
 			m["until"] = e.Until
+		}
+	case StepWS:
+		w := s.WS
+		m["ws"] = w.URL
+		if len(w.Headers) > 0 {
+			m["headers"] = w.Headers
+		}
+		if len(w.Subprotocols) > 0 {
+			m["subprotocols"] = w.Subprotocols
+		}
+		if w.Timeout > 0 {
+			m["timeout"] = w.Timeout
+		}
+		m["steps"] = w.Steps
+	case StepSend:
+		if s.Send.JSON != nil {
+			m["send"] = s.Send.JSON
+		} else {
+			m["send"] = s.Send.Text
+		}
+	case StepExpect:
+		m["expect"] = s.Expect
+		if len(s.Expect.Extract) > 0 {
+			m["extract"] = s.Expect.Extract
 		}
 	}
 	return m
