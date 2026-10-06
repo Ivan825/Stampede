@@ -43,7 +43,7 @@ groups:
       - { name: AI journey generation with dry-run validation, status: shipped, doc: docs/ai }
       - { name: AI report narratives that cite every figure, status: shipped, doc: docs/ai }
       - { name: Coverage map and drift detection for saved scenarios, status: shipped, doc: docs/guides/coverage }
-      - { name: Scheduled runs, status: planned }
+      - { name: Scheduled runs, status: shipped, doc: docs/guides/schedules }
       - { name: Packaged GitHub Action, status: planned }
   - name: Integrations
     features:

@@ -28,6 +28,8 @@ tags:
   - name: secrets
   - name: scenarios
   - name: runs
+  - name: schedules
+    description: Start runs on a cron schedule. Anyone can read them; editors and above change them.
   - name: workers
   - name: audit
   - name: ai
@@ -698,6 +700,132 @@ paths:
         "404": { $ref: "#/components/responses/NotFound" }
         "409": { $ref: "#/components/responses/Conflict" }
 
+  /projects/{projectId}/schedules:
+    parameters:
+      - $ref: "#/components/parameters/projectId"
+    get:
+      tags: [schedules]
+      operationId: listSchedules
+      responses:
+        "200":
+          description: Schedules, by name
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/Schedule" }
+    post:
+      tags: [schedules]
+      operationId: createSchedule
+      summary: Create a schedule
+      description: |
+        The scenario, target and overrides are checked the same way as
+        `POST /projects/{projectId}/runs`, so a schedule that is accepted
+        would start a run if fired now. Runs start as the caller.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ScheduleCreate" }
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Schedule" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "422": { $ref: "#/components/responses/Invalid" }
+
+  /schedules/preview:
+    get:
+      tags: [schedules]
+      operationId: previewSchedule
+      summary: The next times a cron expression fires
+      parameters:
+        - name: cron
+          in: query
+          required: true
+          schema: { type: string, example: "0 2 * * *" }
+        - name: timezone
+          in: query
+          description: IANA time zone; defaults to UTC
+          schema: { type: string, example: Europe/London }
+        - name: count
+          in: query
+          schema: { type: integer, minimum: 1, maximum: 20, default: 3 }
+      responses:
+        "200":
+          description: Upcoming firings
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SchedulePreview" }
+        "422": { $ref: "#/components/responses/Invalid" }
+
+  /schedules/{scheduleId}:
+    parameters:
+      - $ref: "#/components/parameters/scheduleId"
+    get:
+      tags: [schedules]
+      operationId: getSchedule
+      responses:
+        "200":
+          description: Schedule
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Schedule" }
+        "404": { $ref: "#/components/responses/NotFound" }
+    patch:
+      tags: [schedules]
+      operationId: updateSchedule
+      summary: Change a schedule, or enable or disable it
+      description: |
+        Only the fields sent change. The caller becomes the schedule's
+        owner, so later runs start as them.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ScheduleUpdate" }
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Schedule" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "422": { $ref: "#/components/responses/Invalid" }
+    delete:
+      tags: [schedules]
+      operationId: deleteSchedule
+      responses:
+        "204": { description: Deleted; runs it started are kept }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /schedules/{scheduleId}/run:
+    parameters:
+      - $ref: "#/components/parameters/scheduleId"
+    post:
+      tags: [schedules]
+      operationId: runSchedule
+      summary: Start the schedule's run now
+      description: |
+        Starts a run as the caller without changing when the schedule next
+        fires. Refused while the schedule's previous run is still active.
+      responses:
+        "201":
+          description: Run accepted and scheduled
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Run" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "422": { $ref: "#/components/responses/Invalid" }
+
   /workers:
     get:
       tags: [workers]
@@ -1114,6 +1242,11 @@ components:
       in: path
       required: true
       schema: { type: string, format: uuid }
+    scheduleId:
+      name: scheduleId
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
     channelId:
       name: channelId
       in: path
@@ -1446,6 +1579,81 @@ components:
         startedAt: { type: string, format: date-time, nullable: true }
         endedAt: { type: string, format: date-time, nullable: true }
         summary: { $ref: "#/components/schemas/RunSummary" }
+
+    Schedule:
+      type: object
+      required: [id, projectId, name, scenarioId, targetId, cron, timezone, enabled, workers, createdAt, updatedAt, lastSkipReason]
+      properties:
+        id: { type: string, format: uuid }
+        projectId: { type: string, format: uuid }
+        name: { type: string }
+        scenarioId: { type: string, format: uuid }
+        scenarioName: { type: string }
+        targetId: { type: string, format: uuid }
+        targetName: { type: string }
+        cron: { type: string, example: "0 2 * * *" }
+        timezone: { type: string, example: UTC }
+        overrides: { $ref: "#/components/schemas/RunOverrides" }
+        env:
+          type: object
+          description: Stored as given and shown to anyone who can read the schedule; use project secrets for sensitive values.
+          additionalProperties: { type: string }
+        workers: { type: integer }
+        enabled: { type: boolean }
+        note: { type: string }
+        ownerId: { type: string, format: uuid, nullable: true, description: Runs start as this user }
+        ownerEmail: { type: string, nullable: true }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+        nextRunAt: { type: string, format: date-time, nullable: true, description: Null while disabled }
+        lastFiredAt: { type: string, format: date-time, nullable: true, description: When the schedule last came due or was run by hand }
+        lastRunId: { type: string, format: uuid, nullable: true }
+        lastRunAt: { type: string, format: date-time, nullable: true }
+        lastRunStatus: { $ref: "#/components/schemas/RunStatus" }
+        lastRunVerdict: { type: string, nullable: true, description: "pass, fail, generator-limited or no-targets, once the last run has finished" }
+        lastSkipReason: { type: string, description: Why the last firing started no run; empty when it did }
+
+    ScheduleCreate:
+      type: object
+      required: [name, scenarioId, targetId, cron]
+      properties:
+        name: { type: string, maxLength: 100 }
+        scenarioId: { type: string, format: uuid }
+        targetId: { type: string, format: uuid }
+        cron: { type: string, description: Five fields (minute hour day-of-month month day-of-week) or a macro such as @daily }
+        timezone: { type: string, description: IANA time zone; defaults to UTC }
+        overrides: { $ref: "#/components/schemas/RunOverrides" }
+        env:
+          type: object
+          additionalProperties: { type: string }
+        workers: { type: integer, minimum: 0, description: 0 uses every connected worker }
+        enabled: { type: boolean, default: true }
+        note: { type: string, maxLength: 500 }
+
+    ScheduleUpdate:
+      type: object
+      properties:
+        name: { type: string, maxLength: 100 }
+        scenarioId: { type: string, format: uuid }
+        targetId: { type: string, format: uuid }
+        cron: { type: string }
+        timezone: { type: string }
+        overrides: { $ref: "#/components/schemas/RunOverrides" }
+        env:
+          type: object
+          additionalProperties: { type: string }
+        workers: { type: integer, minimum: 0 }
+        enabled: { type: boolean }
+        note: { type: string, maxLength: 500 }
+
+    SchedulePreview:
+      type: object
+      required: [timezone, next]
+      properties:
+        timezone: { type: string }
+        next:
+          type: array
+          items: { type: string, format: date-time }
 
     RunSummary:
       type: object

@@ -16,7 +16,9 @@ import (
 
 	"github.com/Ivan825/Stampede/internal/api/gen"
 	"github.com/Ivan825/Stampede/internal/auth"
+	"github.com/Ivan825/Stampede/internal/observe"
 	"github.com/Ivan825/Stampede/internal/report"
+	"github.com/Ivan825/Stampede/internal/runner"
 	"github.com/Ivan825/Stampede/internal/safety"
 	"github.com/Ivan825/Stampede/internal/scenario"
 	"github.com/Ivan825/Stampede/internal/store/db"
@@ -65,17 +67,70 @@ func (h *handlers) CreateRun(ctx context.Context, req gen.CreateRunRequestObject
 		return nil, err
 	}
 	b := req.Body
-	sc, err := h.st.GetScenario(ctx, db.GetScenarioParams{ID: b.ScenarioId, OrgID: p.OrgID})
+	in := runInput{scenarioID: b.ScenarioId, targetID: b.TargetId, version: b.Version, overrides: b.Overrides}
+	if b.Env != nil {
+		in.env = *b.Env
+	}
+	if b.Workers != nil {
+		in.workers = *b.Workers
+	}
+	if b.Note != nil {
+		in.note = *b.Note
+	}
+	prep, err := h.prepareRun(ctx, p.OrgID, pr, in)
+	if err != nil {
+		return nil, err
+	}
+	row, err := h.startRun(ctx, p, pr, prep)
+	if err != nil {
+		return nil, err
+	}
+	return gen.CreateRun201JSONResponse(runOf(row)), nil
+}
+
+// runInput is what a run is started from: a request to POST /runs or a
+// schedule.
+type runInput struct {
+	scenarioID uuid.UUID
+	targetID   uuid.UUID
+	version    *int // nil for the latest
+	overrides  *gen.RunOverrides
+	env        map[string]string
+	workers    int
+	note       string
+}
+
+// preparedRun is a validated run, ready to record and launch.
+type preparedRun struct {
+	in      runInput
+	sc      db.Scenario
+	tg      db.Target
+	version int32
+	s       *scenario.Scenario
+	yaml    []byte
+	prog    *scenario.Program
+	plan    *scenario.Plan
+	ov      gen.RunOverrides
+	obs     *observe.Config
+	faults  *runner.FaultPlan
+	secrets map[string]string
+}
+
+// prepareRun loads and checks everything a run needs (scenario, target,
+// overrides, caps, integrations and secrets) without starting it. Both
+// POST /runs and schedules go through it, so they accept the same runs.
+func (h *handlers) prepareRun(ctx context.Context, org uuid.UUID, pr db.Project, in runInput) (*preparedRun, error) {
+	sc, err := h.st.GetScenario(ctx, db.GetScenarioParams{ID: in.scenarioID, OrgID: org})
 	if err != nil || sc.ProjectID != pr.ID {
 		return nil, errInvalid("scenario not found in this project")
 	}
-	tg, err := h.st.GetTarget(ctx, db.GetTargetParams{ID: b.TargetId, OrgID: p.OrgID})
+	tg, err := h.st.GetTarget(ctx, db.GetTargetParams{ID: in.targetID, OrgID: org})
 	if err != nil || tg.ProjectID != pr.ID {
 		return nil, errInvalid("target not found in this project")
 	}
 	var ver db.ScenarioVersion
-	if b.Version != nil {
-		ver, err = h.st.GetScenarioVersion(ctx, db.GetScenarioVersionParams{ScenarioID: sc.ID, Version: int32(*b.Version)}) //nolint:gosec // small
+	if in.version != nil {
+		ver, err = h.st.GetScenarioVersion(ctx, db.GetScenarioVersionParams{ScenarioID: sc.ID, Version: int32(*in.version)}) //nolint:gosec // small
 	} else {
 		ver, err = h.st.GetLatestScenarioVersion(ctx, sc.ID)
 	}
@@ -88,32 +143,10 @@ func (h *handlers) CreateRun(ctx context.Context, req gen.CreateRunRequestObject
 		return nil, errInvalid(err.Error())
 	}
 	var ov gen.RunOverrides
-	if b.Overrides != nil {
-		ov = *b.Overrides
-		o := scenario.Overrides{}
-		if ov.Shape != nil {
-			o.Shape = *ov.Shape
-		}
-		if ov.Mode != nil {
-			o.Mode = string(*ov.Mode)
-		}
-		if ov.Vus != nil {
-			o.VUs = *ov.Vus
-		}
-		if ov.Rate != nil {
-			o.Rate = *ov.Rate
-		}
-		if ov.Duration != nil {
-			o.Duration = *ov.Duration
-		}
-		if ov.Start != nil {
-			o.Start = *ov.Start
-		}
-		if ov.Max != nil {
-			o.Max = *ov.Max
-		}
-		if err := o.Apply(s); err != nil {
-			return nil, errInvalid("overrides: " + err.Error())
+	if in.overrides != nil {
+		ov = *in.overrides
+		if err := applyOverrides(s, ov); err != nil {
+			return nil, err
 		}
 	}
 	if err := confineDataFiles(s, h.cfg.DataDir); err != nil {
@@ -142,14 +175,14 @@ func (h *handlers) CreateRun(ctx context.Context, req gen.CreateRunRequestObject
 	if err := h.checkCaps(tg, plan); err != nil {
 		return nil, err
 	}
-	obs, err := h.observeFor(ctx, p.OrgID, s.Observe)
+	obs, err := h.observeFor(ctx, org, s.Observe)
 	if err != nil {
 		return nil, err
 	}
 	// Workers never need the observe block: the server queries and links
 	// after the run, so it is not sent to them.
 	s.Observe = nil
-	faults, err := h.faultsFor(ctx, p.OrgID, s.Faults)
+	faults, err := h.faultsFor(ctx, org, s.Faults)
 	if err != nil {
 		return nil, err
 	}
@@ -160,48 +193,73 @@ func (h *handlers) CreateRun(ctx context.Context, req gen.CreateRunRequestObject
 	if err != nil {
 		return nil, err
 	}
-	env := map[string]string{}
-	if b.Env != nil {
-		env = *b.Env
+	if in.env == nil {
+		in.env = map[string]string{}
 	}
 	yamlOut, err := s.Marshal()
 	if err != nil {
 		return nil, err
 	}
-	workers := 0
-	if b.Workers != nil {
-		workers = *b.Workers
+	return &preparedRun{
+		in: in, sc: sc, tg: tg, version: ver.Version, s: s, yaml: yamlOut, prog: prog, plan: plan,
+		ov: ov, obs: obs, faults: faults, secrets: secrets,
+	}, nil
+}
+
+func applyOverrides(s *scenario.Scenario, ov gen.RunOverrides) error {
+	o := scenario.Overrides{}
+	if ov.Shape != nil {
+		o.Shape = *ov.Shape
 	}
-	note := ""
-	if b.Note != nil {
-		note = *b.Note
+	if ov.Mode != nil {
+		o.Mode = string(*ov.Mode)
 	}
-	ovJSON, _ := json.Marshal(ov)
-	planJSON, _ := json.Marshal(planSummary(s))
-	envJSON, _ := json.Marshal(redactedEnv(env))
+	if ov.Vus != nil {
+		o.VUs = *ov.Vus
+	}
+	if ov.Rate != nil {
+		o.Rate = *ov.Rate
+	}
+	if ov.Duration != nil {
+		o.Duration = *ov.Duration
+	}
+	if ov.Start != nil {
+		o.Start = *ov.Start
+	}
+	if ov.Max != nil {
+		o.Max = *ov.Max
+	}
+	if err := o.Apply(s); err != nil {
+		return errInvalid("overrides: " + err.Error())
+	}
+	return nil
+}
+
+// startRun records a prepared run as started by p, audits it and launches
+// it in the background.
+func (h *handlers) startRun(ctx context.Context, p *auth.Principal, pr db.Project, r *preparedRun) (db.GetRunRow, error) {
+	ovJSON, _ := json.Marshal(r.ov)
+	planJSON, _ := json.Marshal(planSummary(r.s))
+	envJSON, _ := json.Marshal(redactedEnv(r.in.env))
 	id, uid := uuid.New(), p.UserID
-	err = h.st.CreateRun(ctx, db.CreateRunParams{
-		ID: id, ProjectID: pr.ID, ScenarioID: sc.ID, ScenarioVersion: ver.Version, TargetID: tg.ID,
-		Overrides: ovJSON, Plan: planJSON, Env: envJSON, Workers: int32(workers), Note: note, CreatedBy: &uid, //nolint:gosec // small
+	err := h.st.CreateRun(ctx, db.CreateRunParams{
+		ID: id, ProjectID: pr.ID, ScenarioID: r.sc.ID, ScenarioVersion: r.version, TargetID: r.tg.ID,
+		Overrides: ovJSON, Plan: planJSON, Env: envJSON, Workers: int32(r.in.workers), Note: r.in.note, CreatedBy: &uid, //nolint:gosec // small
 	})
 	if err != nil {
-		return nil, err
+		return db.GetRunRow{}, err
 	}
-	h.audit(ctx, "run.start", sc.Name+" → "+tg.BaseUrl, map[string]any{
-		"run": id, "version": ver.Version, "peak": plan.Peak(), "mode": plan.Mode, "duration": plan.TotalDuration().String(),
+	h.audit(ctx, "run.start", r.sc.Name+" → "+r.tg.BaseUrl, map[string]any{
+		"run": id, "version": r.version, "peak": r.plan.Peak(), "mode": r.plan.Mode, "duration": r.plan.TotalDuration().String(),
 	})
 
-	h.runs.launch(&activeRun{id: id, org: p.OrgID, project: pr.ID, target: tg.ID, scenario: sc.ID, obs: obs, faults: faults, link: trace.LinkFromContext(ctx)},
+	h.runs.launch(&activeRun{id: id, org: p.OrgID, project: pr.ID, target: r.tg.ID, scenario: r.sc.ID, obs: r.obs, faults: r.faults, link: trace.LinkFromContext(ctx)},
 		ExecSpec{
-			RunID: id.String(), Scenario: s, YAML: yamlOut, Env: env, Secrets: secrets,
-			AllowHosts: tg.AllowHosts, TargetHost: tg.Host, Workers: workers,
-		}, prog, plan)
+			RunID: id.String(), Scenario: r.s, YAML: r.yaml, Env: r.in.env, Secrets: r.secrets,
+			AllowHosts: r.tg.AllowHosts, TargetHost: r.tg.Host, Workers: r.in.workers,
+		}, r.prog, r.plan)
 
-	row, err := h.st.GetRun(ctx, db.GetRunParams{ID: id, OrgID: p.OrgID})
-	if err != nil {
-		return nil, err
-	}
-	return gen.CreateRun201JSONResponse(runOf(row)), nil
+	return h.st.GetRun(ctx, db.GetRunParams{ID: id, OrgID: p.OrgID})
 }
 
 // redactedEnv keeps env names for the record but not values, which may be

@@ -136,27 +136,14 @@ func startRemote(cmd *cobra.Command, f *remoteRunFlags) error {
 		return err
 	}
 	body := map[string]any{"scenarioId": sc.Id, "targetId": tgt.Id, "workers": f.workers}
-	ov := map[string]any{}
-	for k, v := range map[string]string{"shape": f.shape, "rate": f.rate, "duration": f.duration, "start": f.start, "max": f.max} {
-		if v != "" {
-			ov[k] = v
-		}
-	}
-	if f.vus > 0 {
-		ov["vus"] = f.vus
-	}
-	if len(ov) > 0 {
+	if ov := overridesFrom(f.shape, f.rate, f.duration, f.start, f.max, f.vus); len(ov) > 0 {
 		body["overrides"] = ov
 	}
-	if len(f.env) > 0 {
-		env := map[string]string{}
-		for _, kv := range f.env {
-			k, v, ok := strings.Cut(kv, "=")
-			if !ok {
-				return fmt.Errorf("--env %q: use KEY=VALUE", kv)
-			}
-			env[k] = v
-		}
+	env, err := envFrom(f.env)
+	if err != nil {
+		return err
+	}
+	if len(env) > 0 {
 		body["env"] = env
 	}
 	if f.note != "" {

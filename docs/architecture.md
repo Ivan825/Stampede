@@ -55,7 +55,9 @@ One Go binary in several roles.
    the verdict and notifies the organisation's channels.
 
 Server replicas are active-passive through a Postgres advisory lock: one
-serves, the others wait as standbys and take over if it goes away.
+serves, the others wait as standbys and take over if it goes away. Only
+the serving replica fires [scheduled runs](guides/schedules.md); it claims
+each due schedule with one conditional update, so a firing starts one run.
 
 ## Worker security
 

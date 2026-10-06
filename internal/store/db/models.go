@@ -237,6 +237,28 @@ type ScenarioVersion struct {
 	CreatedAt  time.Time
 }
 
+type Schedule struct {
+	ID             uuid.UUID
+	ProjectID      uuid.UUID
+	Name           string
+	ScenarioID     uuid.UUID
+	TargetID       uuid.UUID
+	Cron           string
+	Timezone       string
+	Overrides      json.RawMessage
+	Env            json.RawMessage
+	Workers        int32
+	Enabled        bool
+	Note           string
+	OwnerID        *uuid.UUID
+	CreatedAt      time.Time
+	UpdatedAt      time.Time
+	NextRunAt      *time.Time
+	LastFiredAt    *time.Time
+	LastRunID      *uuid.UUID
+	LastSkipReason string
+}
+
 type Secret struct {
 	ProjectID  uuid.UUID
 	Name       string

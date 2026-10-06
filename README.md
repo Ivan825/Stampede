@@ -116,6 +116,13 @@ runs a scenario, writes the job summary, uploads the reports and fails the
 step on a failed target; CI exercises it by building from source (release
 downloads are untested until a release is published).
 
+**Scheduled runs.** Schedules, managed from the web UI, `stampede schedules`
+or the API, start a saved scenario against a target on a cron expression in
+UTC or any IANA time zone. Each firing gets the same checks as a run
+started by hand, never overlaps the previous run, and fires at most once
+however many replicas or restarts are involved
+([scheduled runs](docs/guides/schedules.md)).
+
 **Integrations.** An `observe` block charts your own Prometheus queries
 (CPU, memory, connections) over the run in the report, and every step lists
 its slowest requests with the W3C trace IDs they carried, as links to
@@ -160,7 +167,7 @@ per server and per target; audit log ([safety](docs/safety.md)).
 Browser (Playwright) workers, the other 19 product packs (including the
 IoT, event-pipeline, database and gaming packs that use the plugins), AI
 generation from browser crawls, several
-active server replicas (today extra replicas are hot standbys), scheduled runs, side-by-side benchmarks with k6 and
+active server replicas (today extra replicas are hot standbys), side-by-side benchmarks with k6 and
 wrk2, and the website.
 
 ## Deploy

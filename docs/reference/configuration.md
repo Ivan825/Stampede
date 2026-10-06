@@ -19,6 +19,7 @@
 | `--trusted-proxy` | `STAMPEDE_TRUSTED_PROXIES` (comma separated) | none | reverse proxies whose `X-Forwarded-For` is believed |
 | `--secure-cookies` | `STAMPEDE_SECURE_COOKIES=true` | `false` | mark the session cookie Secure (behind HTTPS) |
 | `--public-url` | `STAMPEDE_PUBLIC_URL` | — | external URL of the web UI; notifications link to `<url>/runs/<id>` when set |
+| `--scheduler-interval` | `STAMPEDE_SCHEDULER_INTERVAL` | `15s` | how often the active replica looks for due [schedules](../guides/schedules.md); `0` disables scheduled runs |
 | `--log-level`, `--log-format` | `STAMPEDE_LOG_LEVEL`, `STAMPEDE_LOG_FORMAT` | `info`, `json` | logging |
 | `--migrate-only`, `--migrate-dry-run` | — | — | apply or report migrations, then exit |
 
