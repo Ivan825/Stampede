@@ -62,3 +62,6 @@ ON CONFLICT (run_id) DO UPDATE SET report = EXCLUDED.report, created_at = now();
 
 -- name: GetReport :one
 SELECT report FROM reports WHERE run_id = $1;
+
+-- name: SetRunWorkers :exec
+UPDATE runs SET workers = $2 WHERE id = $1;

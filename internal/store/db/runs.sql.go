@@ -515,3 +515,17 @@ func (q *Queries) SetRunStatus(ctx context.Context, arg SetRunStatusParams) erro
 	_, err := q.db.Exec(ctx, setRunStatus, arg.ID, arg.Status)
 	return err
 }
+
+const setRunWorkers = `-- name: SetRunWorkers :exec
+UPDATE runs SET workers = $2 WHERE id = $1
+`
+
+type SetRunWorkersParams struct {
+	ID      uuid.UUID
+	Workers int32
+}
+
+func (q *Queries) SetRunWorkers(ctx context.Context, arg SetRunWorkersParams) error {
+	_, err := q.db.Exec(ctx, setRunWorkers, arg.ID, arg.Workers)
+	return err
+}
