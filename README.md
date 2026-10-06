@@ -115,7 +115,7 @@ per server and per target; audit log ([safety](docs/safety.md)).
 Browser (Playwright) workers, the plugin interface with MQTT, Kafka, Redis,
 SQL and UDP plugins, the other 19 product packs, AI generation from GraphQL
 introspection and browser crawls, AI report narratives, the fault-injection
-agent and network emulation, mutual TLS between server and workers, several
+agent, packet loss and jitter emulation, mutual TLS between server and workers, several
 active server replicas (today extra replicas are hot standbys), scheduled runs, side-by-side benchmarks with k6 and
 wrk2, a packaged GitHub Action, and the website.
 

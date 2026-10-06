@@ -20,6 +20,7 @@ The authoritative definition is the [JSON Schema](../../schema/scenario.schema.j
 | `target.http.disableKeepAlive`, `insecureSkipVerify` | bool | |
 | `target.http.maxRedirects` | int | 0 = 10, -1 = do not follow |
 | `target.http.dnsCacheTTL` | duration | default 30s, `0s` disables |
+| `target.network` | `{profile, rtt, down, up}` | emulate a slower network per user; profiles `slow-3g 3g 4g slow-wifi` |
 | `vars` | map | static variables |
 | `data.<name>` | feeder | `csv` \| `json` \| `list` \| `range`, `mode`, `onExhausted` |
 | `journeys[]` | | `name`, `weight` (default 1), `tags`, `target` (p50/p90/p95/p99/errors), `steps` |

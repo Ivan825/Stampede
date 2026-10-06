@@ -55,6 +55,32 @@ pack](packs.md) and ShopLab's scenarios include:
 | Login soak | memory growth in the session store | `examples/shoplab/scenarios/login-soak.yaml` |
 | Data growth | the same test against more rows | `examples/shoplab/scenarios/order-history.yaml` after reseeding |
 
-**Planned:** connection floods, slow clients, large payloads, network
-emulation (latency, bandwidth, loss per user), and failing a dependency
+## Slower networks
+
+`target.network` makes every virtual user's connections behave like a
+slower network, inside the generator, with no special privileges:
+
+```yaml
+target:
+  baseURL: https://staging.example.com
+  network: { profile: 3g }                 # or slow-3g, 4g, slow-wifi
+  # or explicit values, which override the profile:
+  # network: { rtt: 250ms, down: 1.6mbps, up: 768kbps }
+```
+
+| Profile | Round trip | Down | Up |
+|---|---|---|---|
+| `slow-3g` | 400 ms | 400 kbit/s | 400 kbit/s |
+| `3g` | 300 ms | 1.6 Mbit/s | 768 kbit/s |
+| `4g` | 70 ms | 12 Mbit/s | 6 Mbit/s |
+| `slow-wifi` | 30 ms | 2 Mbit/s | 1 Mbit/s |
+
+The round trip is added once per connection set-up and once per
+request/response exchange; bandwidth is limited per connection. Measured
+latency includes the emulated network, which is the point: it shows what
+those users experience. It applies to HTTP, GraphQL, SSE and WebSocket
+steps; gRPC steps are not shaped.
+
+**Planned:** packet loss and jitter (Linux netem in the worker container),
+connection floods, slow clients, large payloads, and failing a dependency
 mid-run through an in-environment agent.
