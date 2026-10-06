@@ -55,18 +55,18 @@ func Run(ctx context.Context, o Options) (*report.Report, error) {
 	var (
 		mu    sync.Mutex
 		snaps []*metrics.Snapshot
-		bp    *breakpointTracker
+		bp    *BreakpointTracker
 		eng   *engine.Engine
 	)
 	if plan.StopOnFail {
-		bp = newBreakpointTracker(prog, plan)
+		bp = NewBreakpointTracker(prog, plan)
 	}
 	start := time.Now()
 	onSnap := func(s *metrics.Snapshot) {
 		mu.Lock()
 		snaps = append(snaps, s)
 		mu.Unlock()
-		if bp != nil && bp.observe(s) && eng != nil {
+		if bp != nil && bp.Observe(s) && eng != nil {
 			eng.Stop("breakpoint reached")
 		}
 		if o.Progress != nil {
@@ -98,14 +98,15 @@ func Run(ctx context.Context, o Options) (*report.Report, error) {
 		PeakVUs: res.PeakVUs, Workers: 1, Snapshots: snaps, Phases: res.Phases,
 	}
 	if bp != nil {
-		in.Breakpoint = bp.result()
+		in.Breakpoint = bp.Result()
 	}
 	return report.Build(in), nil
 }
 
-// breakpointTracker evaluates targets at the end of each hold stage of a
-// breakpoint plan and reports when a level fails.
-type breakpointTracker struct {
+// BreakpointTracker evaluates targets at the end of each hold stage of a
+// breakpoint plan and reports when a level fails. Feed it merged
+// snapshots in interval order.
+type BreakpointTracker struct {
 	prog   *scenario.Program
 	plan   *scenario.Plan
 	levels []level
@@ -121,8 +122,9 @@ type level struct {
 	value    float64
 }
 
-func newBreakpointTracker(prog *scenario.Program, plan *scenario.Plan) *breakpointTracker {
-	b := &breakpointTracker{prog: prog, plan: plan}
+// NewBreakpointTracker builds a tracker for a breakpoint plan.
+func NewBreakpointTracker(prog *scenario.Program, plan *scenario.Plan) *BreakpointTracker {
+	b := &BreakpointTracker{prog: prog, plan: plan}
 	var at time.Duration
 	// Breakpoint stages come in pairs: a short ramp then a hold.
 	for i, s := range plan.Stages {
@@ -135,8 +137,8 @@ func newBreakpointTracker(prog *scenario.Program, plan *scenario.Plan) *breakpoi
 	return b
 }
 
-// observe adds an interval and returns true when a level has failed.
-func (b *breakpointTracker) observe(s *metrics.Snapshot) bool {
+// Observe adds an interval and returns true once a level has failed.
+func (b *BreakpointTracker) Observe(s *metrics.Snapshot) bool {
 	if b.fail != nil || b.cur >= len(b.levels) {
 		return b.fail != nil
 	}
@@ -169,7 +171,8 @@ func (b *breakpointTracker) observe(s *metrics.Snapshot) bool {
 	return false
 }
 
-func (b *breakpointTracker) result() *report.Breakpoint {
+// Result summarises the search so far.
+func (b *BreakpointTracker) Result() *report.Breakpoint {
 	unit := report.Unit(b.plan.Mode)
 	r := &report.Breakpoint{LastPass: b.last, Unit: unit}
 	if b.fail != nil {
