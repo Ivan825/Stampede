@@ -1,0 +1,72 @@
+#!/bin/bash
+# Installs a Stampede release and runs it as a worker under systemd.
+# Rendered by Terraform; the join token is fetched at boot by
+# fetch_token (defined per cloud), never written into instance metadata.
+set -euo pipefail
+
+VERSION="${stampede_version}"
+SERVER="${server_address}"
+REGION="${region}"
+
+arch=$(uname -m)
+case $arch in
+  x86_64) arch=amd64 ;;
+  aarch64 | arm64) arch=arm64 ;;
+  *) echo "unsupported architecture $arch" >&2; exit 1 ;;
+esac
+
+base="https://github.com/Ivan825/Stampede/releases/download/v$VERSION"
+archive="stampede_$${VERSION}_linux_$${arch}.tar.gz"
+tmp=$(mktemp -d)
+curl -fsSL --retry 5 -o "$tmp/$archive" "$base/$archive"
+curl -fsSL --retry 5 -o "$tmp/checksums.txt" "$base/stampede_$${VERSION}_checksums.txt"
+(cd "$tmp" && grep " $archive\$" checksums.txt | sha256sum -c -)
+tar -xzf "$tmp/$archive" -C "$tmp" stampede
+install -m 0755 "$tmp/stampede" /usr/local/bin/stampede
+rm -rf "$tmp"
+
+id -u stampede >/dev/null 2>&1 || useradd --system --no-create-home --shell /usr/sbin/nologin stampede
+install -d -m 0750 -o root -g stampede /etc/stampede
+
+${fetch_token}
+token=$(fetch_token)
+[ -n "$token" ] || { echo "empty join token" >&2; exit 1; }
+umask 077
+printf 'STAMPEDE_JOIN_TOKEN=%s\n' "$token" > /etc/stampede/worker.env
+chgrp stampede /etc/stampede/worker.env
+chmod 0640 /etc/stampede/worker.env
+%{ if ca_pem != "" ~}
+cat > /etc/stampede/ca.pem <<'PEM'
+${ca_pem}
+PEM
+chmod 0644 /etc/stampede/ca.pem
+%{ endif ~}
+
+cat > /etc/systemd/system/stampede-worker.service <<'UNIT'
+[Unit]
+Description=Stampede load-generating worker
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+User=stampede
+Group=stampede
+EnvironmentFile=/etc/stampede/worker.env
+ExecStart=/usr/local/bin/stampede worker --server ${server_address} --region ${region} --name %H ${tls_flag}${label_flags}${max_vus_flag}
+Restart=always
+RestartSec=5
+LimitNOFILE=1048576
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target
+UNIT
+
+# Many concurrent connections: widen the ephemeral port range.
+sysctl -w net.ipv4.ip_local_port_range="1024 65000" || true
+
+systemctl daemon-reload
+systemctl enable --now stampede-worker.service
