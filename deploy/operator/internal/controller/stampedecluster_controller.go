@@ -266,6 +266,9 @@ func (r *StampedeClusterReconciler) ensureServer(ctx context.Context, sc *stampe
 				secretEnv("STAMPEDE_DATABASE_URL", sc.Spec.Database.URLSecretRef),
 				secretEnv("STAMPEDE_MASTER_KEY", master),
 				secretEnv("STAMPEDE_JOIN_TOKEN", join),
+				// Workers enroll for certificates from a CA derived from the
+				// master key; the join token never crosses the network.
+				{Name: "STAMPEDE_WORKER_MTLS", Value: "true"},
 			},
 			Ports: []corev1.ContainerPort{
 				{Name: "http", ContainerPort: httpPort, Protocol: corev1.ProtocolTCP},
@@ -300,7 +303,7 @@ func (r *StampedeClusterReconciler) ensureWorkers(ctx context.Context, sc *stamp
 		args := []string{
 			"worker",
 			fmt.Sprintf("--server=%s:%d", sc.Name, workerPort),
-			"--insecure",
+			"--mtls",
 			"--name=$(POD_NAME)",
 			"--region=" + sc.Spec.Workers.Region,
 		}

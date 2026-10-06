@@ -61,7 +61,7 @@ The operator creates:
 | Secret | `<name>-stampede-keys` | generated `master-key` (32 random bytes, base64) and `join-token`, created once and never changed; **not** owned by the StampedeCluster, so deleting the cluster keeps the key the database depends on |
 | Deployment | `<name>-server` | one replica, `Recreate` strategy, probes on `/healthz` and `/readyz` |
 | Service | `<name>` | `http` 8080, `workers` 8081 |
-| Deployment | `<name>-worker` | `stampede worker --server <name>:8081 --insecure --region ... --label ...` |
+| Deployment | `<name>-worker` | `stampede worker --server <name>:8081 --mtls --region ... --label ...` (the server runs with `--worker-mtls`) |
 
 Use your own key or token with `masterKeySecretRef` / `joinTokenSecretRef`.
 Everything is nonroot, read-only root filesystem, all capabilities dropped.

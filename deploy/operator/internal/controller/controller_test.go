@@ -84,7 +84,7 @@ func TestClusterCreatesServerWorkersAndKeys(t *testing.T) {
 		t.Fatalf("server owner refs: %+v", server.OwnerReferences)
 	}
 	args := workers.Spec.Template.Spec.Containers[0].Args
-	for _, want := range []string{"worker", "--server=lab:8081", "--region=eu", "--label=pool=spot", "--max-vus=500", "--insecure"} {
+	for _, want := range []string{"worker", "--server=lab:8081", "--region=eu", "--label=pool=spot", "--max-vus=500", "--mtls"} {
 		if !slices.Contains(args, want) {
 			t.Fatalf("worker args %v lack %s", args, want)
 		}
