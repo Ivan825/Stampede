@@ -42,7 +42,7 @@ groups:
       - { name: Release comparison with confidence intervals, status: shipped, doc: docs/guides/comparing }
       - { name: AI journey generation with dry-run validation, status: shipped, doc: docs/ai }
       - { name: AI report narratives that cite every figure, status: shipped, doc: docs/ai }
-      - { name: Scheduled runs, status: planned }
+      - { name: Scheduled runs, status: shipped, doc: docs/guides/schedules }
       - { name: Packaged GitHub Action, status: planned }
   - name: Integrations
     features:

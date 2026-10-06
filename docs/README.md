@@ -23,6 +23,7 @@ not built yet are marked **planned**.
 - [Reading a report](guides/reports.md)
 - [Comparing releases](guides/comparing.md)
 - [CI integration](guides/ci.md): exit codes, JUnit, the GitHub Action
+- [Scheduled runs](guides/schedules.md): cron schedules, time zones, skips and who can change them
 - [Integrations](guides/integrations.md): Prometheus target metrics, trace links, notifications
 - [Fault injection](guides/faults.md): break dependencies on purpose during a run
 - [AI journey generation](ai.md)
