@@ -8,7 +8,6 @@ import { defineConfig, type Plugin } from 'vite';
 
 const require = createRequire(import.meta.url);
 const src = fileURLToPath(new URL('./src', import.meta.url));
-const monacoESM = fileURLToPath(new URL('./node_modules/monaco-editor/esm/vs', import.meta.url));
 
 /**
  * In mock mode (`pnpm dev:mock`) MSW intercepts API calls in the browser.
@@ -33,12 +32,7 @@ function mockServiceWorker(): Plugin {
 export default defineConfig(({ mode }) => ({
   plugins: [react(), tailwindcss(), ...(mode === 'mock' ? [mockServiceWorker()] : [])],
   resolve: {
-    alias: {
-      '@': src,
-      // Deep imports into monaco's ESM tree (contributions, CSS) that its
-      // package exports map does not expose.
-      '@monaco-esm': monacoESM,
-    },
+    alias: [{ find: /^@\//, replacement: `${src}/` }],
   },
   define: {
     __MOCK__: JSON.stringify(mode === 'mock'),
@@ -63,6 +57,28 @@ export default defineConfig(({ mode }) => ({
     sourcemap: false,
     target: 'es2022',
     chunkSizeWarningLimit: 4096,
+    rolldownOptions: {
+      output: {
+        // Vendor code in stable, content-hashed chunks: editing app code
+        // does not change them, which keeps the committed dist/ small to
+        // diff and lets browsers cache them across releases.
+        codeSplitting: {
+          // Only the matched modules; do not drag shared deps (React, the
+          // preload helper) into whichever group happens to import them.
+          includeDependenciesRecursively: false,
+          groups: [
+            { name: 'monaco', test: /node_modules[\\/].*(monaco-|vscode-|jsonc-parser)/ },
+            { name: 'echarts', test: /node_modules[\\/].*(echarts|zrender)/ },
+            { name: 'flow', test: /node_modules[\\/].*(@xyflow|d3-|classcat|zustand)/ },
+            { name: 'yaml', test: /node_modules[\\/].*[\\/]yaml[\\/]/ },
+            {
+              name: 'vendor',
+              test: /node_modules[\\/].*(react|scheduler|@tanstack|@radix-ui|@floating-ui|lucide|clsx|openapi-fetch|aria-hidden|tslib|use-sync)/,
+            },
+          ],
+        },
+      },
+    },
   },
   worker: { format: 'es' },
   test: {
