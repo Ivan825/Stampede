@@ -66,6 +66,43 @@
       "type": "array",
       "description": "Pass/fail targets such as 'http.p95 < 500ms', 'errors < 1%', 'checkout.p99 < 1s', 'shop/GET /cart.p95 < 300ms'.",
       "items": { "type": "string", "pattern": "^\\s*[^<>=\\s][^<>=]*(<=|>=|==|<|>)\\s*\\S+\\s*$" }
+    },
+    "observe": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Link the run to the target's own telemetry: Prometheus metrics charted in the report, and trace links for the slowest requests.",
+      "properties": {
+        "prometheus": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["queries"],
+          "description": "After the run, each query is evaluated over the run's time range (query_range) and charted in the report.",
+          "properties": {
+            "url": { "type": "string", "description": "Prometheus base URL, for stampede run. May be templated, e.g. ${env.PROM_URL}." },
+            "bearerToken": { "type": "string", "description": "Sent as Authorization: Bearer, for stampede run. May be templated, e.g. ${secret.PROM_TOKEN}." },
+            "integration": { "type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9_.-]{0,99}$", "description": "Name of a Prometheus integration configured on the server, for server runs." },
+            "queries": {
+              "type": "object",
+              "minProperties": 1,
+              "maxProperties": 20,
+              "propertyNames": { "pattern": "^[A-Za-z_][A-Za-z0-9_.-]{0,63}$" },
+              "additionalProperties": { "type": "string", "minLength": 1, "maxLength": 4096 },
+              "description": "Name to PromQL expression, e.g. cpu: 'rate(process_cpu_seconds_total{job=\"shop\"}[30s])'."
+            }
+          },
+          "oneOf": [{ "required": ["url"] }, { "required": ["integration"] }]
+        },
+        "traces": {
+          "type": "object",
+          "additionalProperties": false,
+          "description": "Turn the trace IDs of the slowest requests into links. Nothing is fetched.",
+          "properties": {
+            "url": { "type": "string", "pattern": "\\{traceId\\}", "description": "Link template, e.g. https://jaeger.example.com/trace/{traceId}." },
+            "integration": { "type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9_.-]{0,99}$", "description": "Name of a traces integration configured on the server." }
+          },
+          "oneOf": [{ "required": ["url"] }, { "required": ["integration"] }]
+        }
+      }
     }
   },
   "$defs": {

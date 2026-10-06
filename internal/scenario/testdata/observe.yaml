@@ -1,0 +1,20 @@
+apiVersion: stampede.dev/v1
+kind: Scenario
+metadata:
+  name: shop-observed
+target:
+  baseURL: http://localhost:8090
+journeys:
+  - name: browse
+    steps:
+      - get: /products
+load: { vus: 10, duration: 1m }
+targets: ["http.p95 < 500ms"]
+observe:
+  prometheus:
+    url: ${env.PROM_URL}
+    queries:
+      cpu: 'rate(process_cpu_seconds_total{job="shop"}[30s])'
+      memory: 'process_resident_memory_bytes{job="shop"}'
+  traces:
+    url: https://jaeger.example.com/trace/{traceId}
