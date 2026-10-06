@@ -54,6 +54,7 @@ type serverFlags struct {
 	tlsKey        string
 	workerMTLS    bool
 	publicURL     string
+	schedInterval time.Duration
 }
 
 func newServerCmd() *cobra.Command {
@@ -96,6 +97,7 @@ Environment:
 	fl.StringVar(&f.abortErrors, "abort-errors", envOr("STAMPEDE_ABORT_ERRORS", "90%"), "stop any run whose error rate stays at or above this (0 disables)")
 	fl.DurationVar(&f.abortFor, "abort-for", 30*time.Second, "how long --abort-errors must hold before a run is stopped")
 	fl.StringVar(&f.publicURL, "public-url", os.Getenv("STAMPEDE_PUBLIC_URL"), "external URL of the web UI, for links in notifications (e.g. https://stampede.example.com)")
+	fl.DurationVar(&f.schedInterval, "scheduler-interval", durationEnv("STAMPEDE_SCHEDULER_INTERVAL", server.DefaultSchedulerInterval), "how often to look for due schedules (0 disables scheduled runs)")
 	fl.StringSliceVar(&f.trusted, "trusted-proxy", splitEnv("STAMPEDE_TRUSTED_PROXIES"), "CIDR of a reverse proxy whose X-Forwarded-For is trusted (repeatable)")
 	return cmd
 }
@@ -106,6 +108,15 @@ func splitEnv(k string) []string {
 		return nil
 	}
 	return strings.Split(v, ",")
+}
+
+// durationEnv reads a duration from the environment, falling back to def
+// when it is unset or malformed.
+func durationEnv(k string, def time.Duration) time.Duration {
+	if d, err := time.ParseDuration(os.Getenv(k)); err == nil {
+		return d
+	}
+	return def
 }
 
 func envOr(k, def string) string {
@@ -247,6 +258,7 @@ func runServer(cmd *cobra.Command, f *serverFlags) error {
 	cfg.HardCaps = safety.Caps{MaxRate: f.maxRate, MaxVUs: f.maxVUs, MaxDuration: f.maxDuration}
 	cfg.TrustedProxies = proxies
 	cfg.Notify.PublicURL = f.publicURL
+	cfg.SchedulerInterval = f.schedInterval
 	if f.abortErrors != "" && f.abortErrors != "0" && f.abortErrors != "0%" {
 		p, err := scenario.ParsePercent(f.abortErrors)
 		if err != nil {
@@ -271,6 +283,12 @@ func runServer(cmd *cobra.Command, f *serverFlags) error {
 	go watchLeadership(ctx, cancel, log, lock)
 	if err := srv.Recover(ctx); err != nil {
 		return err
+	}
+	// Only the leader fires schedules, so a standby never starts a run.
+	if f.schedInterval > 0 {
+		srv.StartScheduler(ctx)
+	} else {
+		log.Info("scheduled runs disabled (--scheduler-interval 0)")
 	}
 	if err := srv.ListenAndServe(ctx, f.addr); err != nil {
 		return err

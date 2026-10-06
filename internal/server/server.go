@@ -60,6 +60,9 @@ type Config struct {
 	AI AIConfig
 	// Notify configures run notifications (see notifications.go).
 	Notify NotifyConfig
+	// SchedulerInterval is how often StartScheduler looks for due
+	// schedules (default 15s).
+	SchedulerInterval time.Duration
 }
 
 // Server is the control plane.
@@ -70,6 +73,7 @@ type Server struct {
 	runs      *runManager
 	ai        *aiManager
 	notify    *notifier
+	sched     *scheduler
 	limiter   *auth.Limiter // per email
 	ipLimiter *auth.Limiter // per client address, looser for shared NATs
 	reg       *prometheus.Registry
@@ -91,6 +95,9 @@ func New(cfg Config) (*Server, error) {
 	}
 	if cfg.Now == nil {
 		cfg.Now = time.Now
+	}
+	if cfg.SchedulerInterval <= 0 {
+		cfg.SchedulerInterval = DefaultSchedulerInterval
 	}
 	if cfg.Executor == nil {
 		cfg.Executor = &LocalExecutor{Logger: cfg.Logger}
@@ -125,8 +132,10 @@ func (s *Server) Recover(ctx context.Context) error {
 	return s.runs.recover(ctx)
 }
 
-// Shutdown stops every active run and waits for reports to be written.
+// Shutdown stops the scheduler and every active run, and waits for
+// reports to be written.
 func (s *Server) Shutdown(ctx context.Context) {
+	s.stopScheduler()
 	s.ai.shutdown(ctx)
 	s.runs.shutdown(ctx)
 	s.notify.shutdown(ctx)
