@@ -44,6 +44,9 @@ type Config struct {
 	SessionTTL time.Duration
 	// HardCaps bound every run regardless of target settings.
 	HardCaps safety.Caps
+	// DataDir is where CSV and JSON feeder files for server runs live.
+	// Empty disables file feeders on the server.
+	DataDir string
 	// TrustedProxies are the reverse proxies whose X-Forwarded-For header
 	// is believed. Empty means the connection's address is the client.
 	TrustedProxies []netip.Prefix

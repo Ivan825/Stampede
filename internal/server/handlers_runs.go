@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"net/url"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -113,6 +114,9 @@ func (h *handlers) CreateRun(ctx context.Context, req gen.CreateRunRequestObject
 		if err := o.Apply(s); err != nil {
 			return nil, errInvalid("overrides: " + err.Error())
 		}
+	}
+	if err := confineDataFiles(s, h.cfg.DataDir); err != nil {
+		return nil, err
 	}
 	// The run's target always wins over the file's base URL.
 	s.Target.BaseURL = tg.BaseUrl
@@ -405,4 +409,31 @@ func (h *handlers) ListWorkers(ctx context.Context, _ gen.ListWorkersRequestObje
 		out = append(out, gw)
 	}
 	return out, nil
+}
+
+// confineDataFiles stops a scenario run by the server from reading
+// arbitrary server files through CSV or JSON feeders (and sending their
+// contents to the target). File feeders must name files inside the
+// configured data directory; paths are rewritten to absolute ones there.
+// Workers must have the same directory at the same path.
+func confineDataFiles(s *scenario.Scenario, dataDir string) error {
+	for name, f := range s.Data {
+		for _, p := range []*string{&f.CSV, &f.JSON} {
+			if *p == "" {
+				continue
+			}
+			if dataDir == "" {
+				return errInvalid(fmt.Sprintf("data.%s reads a file, which needs the server to be started with --data-dir; use list or range feeders instead", name))
+			}
+			clean := filepath.Clean("/" + *p)
+			full := filepath.Join(dataDir, clean)
+			rel, err := filepath.Rel(dataDir, full)
+			if err != nil || strings.HasPrefix(rel, "..") {
+				return errInvalid(fmt.Sprintf("data.%s: %q is outside the data directory", name, *p))
+			}
+			*p = full
+		}
+		s.Data[name] = f
+	}
+	return nil
 }
