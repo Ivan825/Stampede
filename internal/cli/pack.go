@@ -166,6 +166,9 @@ its journeys once against the target.`,
 			if ev.OpenAPI {
 				fmt.Fprintf(out, "Found an OpenAPI document with %d paths.\n", len(ev.Paths))
 			}
+			if ev.OIDC {
+				fmt.Fprintln(out, "Found an OpenID Connect discovery document.")
+			}
 			shipped, err := pack.Shipped()
 			if err != nil {
 				return err

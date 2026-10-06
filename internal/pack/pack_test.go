@@ -7,6 +7,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/Ivan825/Stampede/internal/scenario"
@@ -66,6 +67,38 @@ func TestShippedPacksAreValid(t *testing.T) {
 				}
 			}
 		}
+	}
+}
+
+func TestProbeOIDCDiscovery(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/.well-known/openid-configuration" {
+			w.Write([]byte(`{"issuer":"http://idp","token_endpoint":"http://idp/oauth/token","userinfo_endpoint":"http://idp/userinfo","jwks_uri":"http://idp/.well-known/jwks.json"}`))
+			return
+		}
+		w.WriteHeader(404)
+	}))
+	defer srv.Close()
+	u, _ := url.Parse(srv.URL)
+	ev, err := Probe(context.Background(), u, nil)
+	if err != nil || !ev.OIDC || ev.OpenAPI {
+		t.Fatalf("probe: %v %+v", err, ev)
+	}
+	want := "/.well-known/jwks.json /.well-known/openid-configuration /oauth/token /userinfo"
+	if got := strings.Join(ev.Paths, " "); got != want {
+		t.Fatalf("paths %q, want %q", got, want)
+	}
+}
+
+func TestScoreHeaderPresence(t *testing.T) {
+	p := &Pack{Name: "x", Detect: Detect{Headers: map[string]string{"X-RateLimit-Limit": ""}}}
+	if m := Score(&Evidence{Headers: http.Header{}}, []*Pack{p}); len(m) != 0 {
+		t.Fatalf("an absent header matched: %+v", m)
+	}
+	h := http.Header{}
+	h.Set("X-RateLimit-Limit", "60")
+	if m := Score(&Evidence{Headers: h}, []*Pack{p}); len(m) != 1 || m[0].Score != 2 {
+		t.Fatalf("a present header did not match: %+v", m)
 	}
 }
 
