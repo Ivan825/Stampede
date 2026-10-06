@@ -1,0 +1,25 @@
+# Find the highest browsing rate ShopLab holds with p95 under 250ms.
+# With every bottleneck active, the small DB pool and the N+1 listing give
+# out first; with SHOPLAB_FIX_ALL=1 the breakpoint moves far higher.
+apiVersion: stampede.dev/v1
+kind: Scenario
+metadata:
+  name: shoplab-breakpoint
+  tags: [shoplab, breakpoint]
+target:
+  baseURL: ${env.TARGET_URL}
+journeys:
+  - name: browse
+    steps:
+      - get: /api/products?page=${rand(1, 50)}&per_page=20
+        check: { status: 200 }
+load:
+  shape: breakpoint
+  mode: rate
+  start: 50/s
+  max: 2000/s
+  steps: 10
+  stepDuration: 30s
+targets:
+  - http.p95 < 250ms
+  - errors < 1%
