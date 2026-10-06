@@ -20,6 +20,8 @@ stampede server [flags]
 ### Options
 
 ```
+      --abort-errors string      stop any run whose error rate stays at or above this (0 disables) (default "90%")
+      --abort-for duration       how long --abort-errors must hold before a run is stopped (default 30s)
       --addr string              listen address (default ":8080")
       --data-dir string          directory holding CSV/JSON feeder files for runs
       --database-url string      PostgreSQL URL
