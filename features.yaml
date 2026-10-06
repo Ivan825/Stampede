@@ -27,7 +27,7 @@ groups:
       - { name: Server-sent events with time to first event, status: shipped, doc: docs/protocols }
       - { name: gRPC unary and server streaming, status: shipped, doc: docs/protocols }
       - { name: Browser (Playwright) workers, status: planned }
-      - { name: "Plugins: MQTT, Kafka, Redis, SQL, UDP", status: planned }
+      - { name: "Plugins: MQTT, Kafka, Redis, SQL, UDP, and an SDK to write your own", status: shipped, doc: docs/plugins }
   - name: Scale
     features:
       - { name: Distributed workers over gRPC, synchronised start, lossless merge, status: shipped, doc: how-it-works }
