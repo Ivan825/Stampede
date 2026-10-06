@@ -40,5 +40,6 @@ func fdUsage() (open, limit uint64, ok bool) {
 		return 0, 0, false
 	}
 	// The directory handle itself is one of the entries.
-	return uint64(max(len(names)-1, 0)), rl.Cur, true
+	// Rlimit.Cur is int64 on the BSDs.
+	return uint64(max(len(names)-1, 0)), uint64(rl.Cur), true //nolint:unconvert // width differs by GOOS
 }
