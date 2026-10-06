@@ -534,8 +534,7 @@ func (e *Engine) runOpen(loadCtx, iterCtx context.Context) {
 
 	sched := newArrivalSchedule(e.plan)
 	lo, hi := e.opts.ShareLo, e.opts.ShareHi
-	timer := time.NewTimer(time.Hour)
-	defer timer.Stop()
+	waiter := newPreciseWaiter()
 	for k := uint64(0); ; k++ {
 		at, ok := sched.next()
 		if !ok {
@@ -550,14 +549,7 @@ func (e *Engine) runOpen(loadCtx, iterCtx context.Context) {
 			}
 		}
 		intended := e.t0.Add(at)
-		if d := time.Until(intended); d > 0 {
-			timer.Reset(d)
-			select {
-			case <-timer.C:
-			case <-loadCtx.Done():
-				return
-			}
-		} else if loadCtx.Err() != nil {
+		if !waiter.wait(intended, loadCtx.Done()) || loadCtx.Err() != nil {
 			return
 		}
 		var w *worker
