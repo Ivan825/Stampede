@@ -112,7 +112,8 @@
         "bodyContains": { "type": "string" },
         "json": { "type": "object", "description": "JSONPath -> expected value, or \"exists\"." },
         "maxLatency": { "$ref": "#/$defs/duration" },
-        "expr": { "type": "string", "description": "Boolean expression over status, headers, body, json, latencyMs." }
+        "expr": { "type": "string", "description": "Boolean expression over status, headers, body, json, latencyMs." },
+        "allowErrors": { "type": "boolean", "description": "GraphQL only: accept a response whose errors array is not empty." }
       }
     },
     "request": {
@@ -132,14 +133,14 @@
     },
     "step": {
       "type": "object",
-      "description": "Exactly one action: an HTTP method, think, branch, loop, while or group.",
+      "description": "Exactly one action: an HTTP method, graphql, think, branch, loop, while or group.",
       "properties": {
         "name": { "type": "string" },
         "if": { "type": "string" },
         "get": { "type": "string" }, "post": { "type": "string" }, "put": { "type": "string" },
         "patch": { "type": "string" }, "delete": { "type": "string" }, "head": { "type": "string" }, "options": { "type": "string" },
         "headers": { "$ref": "#/$defs/stringMap" },
-        "query": { "$ref": "#/$defs/stringMap" },
+        "query": { "description": "HTTP: query parameters. graphql: the query document.", "anyOf": [{ "$ref": "#/$defs/stringMap" }, { "type": "string" }] },
         "json": {},
         "body": { "type": "string" },
         "form": { "$ref": "#/$defs/stringMap" },
@@ -160,12 +161,26 @@
         "while": { "type": "string" },
         "max": { "type": "integer", "minimum": 1 },
         "group": { "type": "string" },
-        "steps": { "$ref": "#/$defs/steps" }
+        "steps": { "$ref": "#/$defs/steps" },
+        "graphql": { "type": "string", "description": "GraphQL endpoint; the operation is POSTed as JSON." },
+        "variables": { "type": "object", "description": "GraphQL variables; strings may contain ${} expressions." },
+        "operationName": { "type": "string" },
+        "persisted": {
+          "description": "Automatic persisted query: true hashes the query; {sha256} sends a known hash.",
+          "anyOf": [
+            { "type": "boolean" },
+            { "type": "object", "additionalProperties": false, "properties": { "sha256": { "type": "string", "pattern": "^[0-9a-fA-F]{64}$" } } }
+          ]
+        }
       },
       "additionalProperties": false,
+      "allOf": [
+        { "if": { "required": ["graphql"] }, "then": { "properties": { "query": { "type": "string" } } } }
+      ],
       "oneOf": [
         { "required": ["get"] }, { "required": ["post"] }, { "required": ["put"] }, { "required": ["patch"] },
         { "required": ["delete"] }, { "required": ["head"] }, { "required": ["options"] },
+        { "required": ["graphql"] },
         { "required": ["think"] }, { "required": ["branch"] }, { "required": ["loop", "steps"] },
         { "required": ["while", "steps"] }, { "required": ["group", "steps"] }
       ]

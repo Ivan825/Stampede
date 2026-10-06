@@ -95,7 +95,7 @@ func (s *Scenario) Validate() error {
 			add(p+".steps", "a journey needs at least one step")
 		}
 		walkSteps(j.Steps, func(st Step) {
-			if st.Kind == StepRequest && !strings.HasPrefix(st.Request.URL, "http://") && !strings.HasPrefix(st.Request.URL, "https://") && !strings.HasPrefix(st.Request.URL, "${") {
+			if u, ok := stepURL(st); ok && !IsAbsoluteURL(u) && !strings.HasPrefix(u, "${") {
 				hasRelative = true
 			}
 		})
@@ -113,6 +113,28 @@ func (s *Scenario) Validate() error {
 	}
 	_, err := Compile(s)
 	return err
+}
+
+// IsAbsoluteURL reports whether a step URL names its own scheme and host,
+// rather than a path joined to target.baseURL.
+func IsAbsoluteURL(s string) bool {
+	for _, p := range []string{"http://", "https://", "ws://", "wss://"} {
+		if strings.HasPrefix(s, p) {
+			return true
+		}
+	}
+	return false
+}
+
+// stepURL returns the URL of a step that makes an HTTP exchange.
+func stepURL(st Step) (string, bool) {
+	switch st.Kind {
+	case StepRequest:
+		return st.Request.URL, true
+	case StepGraphQL:
+		return st.GraphQL.URL, true
+	}
+	return "", false
 }
 
 func walkSteps(steps []Step, fn func(Step)) {

@@ -1,6 +1,8 @@
 package scenario
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"fmt"
 	"regexp"
 	"sort"
@@ -54,6 +56,22 @@ type CStep struct {
 	Loop        *CLoop
 	Group       string
 	Steps       []*CStep
+
+	// GraphQL is set for graphql steps, whose HTTP parts are in Req.
+	GraphQL *CGraphQL
+}
+
+// CGraphQL is a compiled GraphQL operation.
+type CGraphQL struct {
+	// Query is nil when only a persisted query hash is sent.
+	Query         *Template
+	Variables     *JSONTemplate
+	OperationName string
+	Persisted     bool
+	// Hash is the persisted query's SHA-256 in hex when it is known at
+	// compile time; empty means hash the rendered query.
+	Hash        string
+	AllowErrors bool
 }
 
 // CBranch is one weighted alternative.
@@ -261,9 +279,12 @@ func (c *compiler) step(path, journey string, st Step, vars []string) (*CStep, [
 		if cs.Name == "" {
 			cs.Name = r.Method + " " + r.URL
 		}
-		cs.Req, vars = c.request(path, scope, r, vars)
-		cs.ID = len(c.prog.Steps)
-		c.prog.Steps = append(c.prog.Steps, cs)
+		c.noAllowErrors(path, r.Check)
+		cs.Req, vars = c.request(path, strings.ToLower(r.Method), scope, r, vars)
+		c.record(cs)
+	case StepGraphQL:
+		vars = c.graphql(path, scope, cs, st.GraphQL, vars)
+		c.record(cs)
 	case StepThink:
 		cs.Think = st.Think
 	case StepBranch:
@@ -302,6 +323,60 @@ func (c *compiler) step(path, journey string, st Step, vars []string) (*CStep, [
 	return cs, vars
 }
 
+// record gives a step that talks to the target an ID for metrics.
+func (c *compiler) record(cs *CStep) {
+	cs.ID = len(c.prog.Steps)
+	c.prog.Steps = append(c.prog.Steps, cs)
+}
+
+func (c *compiler) noAllowErrors(path string, ch *Check) {
+	if ch != nil && ch.AllowErrors {
+		c.errf(path+".check.allowErrors", "only applies to graphql steps")
+	}
+}
+
+var sha256Re = regexp.MustCompile(`^[0-9a-f]{64}$`)
+
+func (c *compiler) graphql(path string, scope *Scope, cs *CStep, g *GraphQL, vars []string) []string {
+	if cs.Name == "" {
+		cs.Name = "graphql " + g.URL
+		if g.OperationName != "" {
+			cs.Name = "graphql " + g.OperationName
+		}
+	}
+	cs.Req, vars = c.request(path, "graphql", scope, &g.Request, vars)
+	cg := &CGraphQL{OperationName: g.OperationName, Persisted: g.Persisted != nil}
+	if g.Check != nil {
+		cg.AllowErrors = g.Check.AllowErrors
+	}
+	if g.Persisted != nil && g.Persisted.SHA256 != "" {
+		h := strings.ToLower(g.Persisted.SHA256)
+		if !sha256Re.MatchString(h) {
+			c.errf(path+".persisted.sha256", "must be 64 hex digits")
+		}
+		cg.Hash = h
+	}
+	switch {
+	case strings.TrimSpace(g.Query) != "":
+		cg.Query = c.template(scope, path+".query", g.Query)
+		if cg.Persisted && cg.Hash == "" && cg.Query != nil && cg.Query.IsLiteral() {
+			sum := sha256.Sum256([]byte(g.Query))
+			cg.Hash = hex.EncodeToString(sum[:])
+		}
+	case cg.Hash == "":
+		c.errf(path, "graphql needs a query (or persisted: {sha256: ...} to send only a known hash)")
+	}
+	if g.Variables != nil {
+		if _, ok := g.Variables.(map[string]any); !ok {
+			c.errf(path+".variables", "must be a mapping of variable names to values")
+		} else {
+			cg.Variables = c.jsonTemplate(scope, path+".variables", g.Variables)
+		}
+	}
+	cs.GraphQL = cg
+	return vars
+}
+
 func (c *compiler) condition(scope *Scope, path, src string) *Expr {
 	src = strings.TrimSpace(src)
 	if strings.HasPrefix(src, "${") && strings.HasSuffix(src, "}") {
@@ -336,10 +411,12 @@ func (c *compiler) kvs(scope *Scope, path string, m map[string]string) []KV {
 	return out
 }
 
-func (c *compiler) request(path string, scope *Scope, r *Request, vars []string) (*CRequest, []string) {
+// request compiles the HTTP parts of a request-like step; kind names the
+// step key in error messages.
+func (c *compiler) request(path, kind string, scope *Scope, r *Request, vars []string) (*CRequest, []string) {
 	cr := &CRequest{Method: r.Method, Timeout: r.Timeout}
 	if strings.TrimSpace(r.URL) == "" {
-		c.errf(path, "%s needs a path or URL", strings.ToLower(r.Method))
+		c.errf(path, "%s needs a path or URL", kind)
 	}
 	cr.URL = c.template(scope, path+".url", r.URL)
 	cr.Headers = c.kvs(scope, path+".headers", r.Headers)

@@ -118,6 +118,7 @@ const (
 	StepWhile   StepKind = "while"
 	StepGroup   StepKind = "group"
 	StepScript  StepKind = "script"
+	StepGraphQL StepKind = "graphql"
 )
 
 // Step is one action within a journey. Exactly one kind-specific field is
@@ -134,9 +135,10 @@ type Step struct {
 	Branch  []Branch
 	// Loop runs Steps Count times; While runs them while Cond holds, at
 	// most Max times.
-	Loop   *Loop
-	Group  *Group
-	Script string
+	Loop    *Loop
+	Group   *Group
+	Script  string
+	GraphQL *GraphQL
 }
 
 // Request is an HTTP call.
@@ -153,6 +155,24 @@ type Request struct {
 	Check   *Check
 	Extract map[string]string
 	Timeout Duration
+}
+
+// GraphQL is a GraphQL operation sent as an HTTP POST. Request holds the
+// endpoint, headers, check, extract and timeout.
+type GraphQL struct {
+	Request
+	Query         string
+	Variables     any
+	OperationName string
+	// Persisted sends an automatic persisted query (APQ): the query's
+	// SHA-256 first, and the full query only if the server does not know it.
+	Persisted *Persisted
+}
+
+// Persisted configures an automatic persisted query. An empty SHA256 is
+// computed from the query.
+type Persisted struct {
+	SHA256 string `yaml:"sha256,omitempty" json:"sha256,omitempty"`
 }
 
 // Branch is one weighted alternative inside a branch step.
@@ -187,6 +207,9 @@ type Check struct {
 	MaxLatency Duration       `yaml:"maxLatency,omitempty" json:"maxLatency,omitempty"`
 	// Expr is a boolean expression over status, headers, body and json.
 	Expr string `yaml:"expr,omitempty" json:"expr,omitempty"`
+	// AllowErrors (GraphQL only) accepts a response whose errors array is
+	// not empty; by default that fails the step.
+	AllowErrors bool `yaml:"allowErrors,omitempty" json:"allowErrors,omitempty"`
 }
 
 // Load describes how much traffic to generate and its shape over time.

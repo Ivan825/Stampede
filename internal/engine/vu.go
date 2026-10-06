@@ -150,6 +150,8 @@ func (v *VU) runStep(ctx context.Context, st *scenario.CStep, intended time.Time
 	switch st.Kind {
 	case scenario.StepRequest:
 		return v.request(ctx, st, intended)
+	case scenario.StepGraphQL:
+		return v.graphql(ctx, st, intended)
 	case scenario.StepThink:
 		return sleepCtx(ctx, v.think(st.Think))
 	case scenario.StepBranch:
@@ -207,98 +209,176 @@ func sleepCtx(ctx context.Context, d time.Duration) error {
 	}
 }
 
+// stepRun records the outcome of one step as a single sample. Every step
+// kind that talks to the target goes through it, so failures are
+// recorded, labelled and logged the same way.
+type stepRun struct {
+	v  *VU
+	st *scenario.CStep
+	s  metrics.Sample
+}
+
+func (v *VU) begin(st *scenario.CStep, intended time.Time) stepRun {
+	return stepRun{v: v, st: st, s: metrics.Sample{Step: st.ID, Intended: intended}}
+}
+
+// fail records the step as failed with a bounded error class, logs err
+// (rate-limited) when given, and aborts the iteration: a real user would
+// not carry on after an error.
+func (r *stepRun) fail(class string, err error) error {
+	now := time.Now()
+	if r.s.Start.IsZero() {
+		r.s.Start = now
+	}
+	if r.s.End.IsZero() {
+		r.s.End = now
+	}
+	r.s.Err, r.s.Failed = class, true
+	r.v.e.collector.Record(r.v.ID, &r.s)
+	if err != nil {
+		r.v.e.logStepError(r.st, err)
+	}
+	return errAbortIteration
+}
+
+// done records the step as successful.
+func (r *stepRun) done() error {
+	r.v.e.collector.Record(r.v.ID, &r.s)
+	return nil
+}
+
+// fromHTTP copies an exchange's timings and sizes into the sample.
+func (r *stepRun) fromHTTP(res *httpx.Result) {
+	r.s.Start, r.s.End, r.s.Phases = res.Start, res.End, res.Phases
+	r.s.Status, r.s.BytesIn, r.s.BytesOut = res.Status, res.BytesIn, res.BytesOut
+	r.s.Proto = res.Proto
+}
+
+// blocked reports a target outside the safety policy as a failure.
+func (r *stepRun) blocked(u *url.URL) error {
+	if r.v.e.allowHost != nil && !r.v.e.allowHost(u) {
+		return r.fail("blocked by safety", fmt.Errorf("host %s is not an allowed target", u.Host))
+	}
+	return nil
+}
+
+// stepTimeout is a step's own timeout or the target default.
+func (v *VU) stepTimeout(d scenario.Duration) time.Duration {
+	if d > 0 {
+		return d.D()
+	}
+	return v.e.prog.Scenario.Target.Timeout.D()
+}
+
 // request performs one HTTP step and records its sample. A failed step
 // aborts the iteration, as a real user would not carry on after an error.
 func (v *VU) request(ctx context.Context, st *scenario.CStep, intended time.Time) error {
 	r := st.Req
-	sample := metrics.Sample{Step: st.ID, Intended: intended}
-	fail := func(class string, err error) error {
-		now := time.Now()
-		if sample.Start.IsZero() {
-			sample.Start = now
-		}
-		if sample.End.IsZero() {
-			sample.End = now
-		}
-		sample.Err, sample.Failed = class, true
-		v.e.collector.Record(v.ID, &sample)
-		if err != nil {
-			v.e.logStepError(st, err)
-		}
-		return errAbortIteration
-	}
+	run := v.begin(st, intended)
 
 	req, bodyLen, err := v.buildRequest(ctx, r)
 	if err != nil {
-		return fail("template error", err)
+		return run.fail("template error", err)
 	}
-	if v.e.allowHost != nil && !v.e.allowHost(req.URL) {
-		return fail("blocked by safety", fmt.Errorf("host %s is not an allowed target", req.URL.Host))
+	if err := run.blocked(req.URL); err != nil {
+		return err
 	}
-
-	timeout := r.Timeout.D()
-	if timeout == 0 {
-		timeout = v.e.prog.Scenario.Target.Timeout.D()
-	}
-	rctx, cancel := context.WithTimeout(ctx, timeout)
+	rctx, cancel := context.WithTimeout(ctx, v.stepTimeout(r.Timeout))
 	defer cancel()
 	req = req.WithContext(rctx)
 
 	keepBody := len(r.Extract) > 0 || r.Check != nil && (r.Check.BodyContains != nil || r.Check.NeedsJSON || r.Check.Expr != nil)
 	res := httpx.Do(v.client, req, bodyLen, keepBody, v.e.maxBody)
-	sample.Start, sample.End, sample.Phases = res.Start, res.End, res.Phases
-	sample.Status, sample.BytesIn, sample.BytesOut = res.Status, res.BytesIn, res.BytesOut
-	sample.Proto = res.Proto
-
+	run.fromHTTP(res)
 	if res.Err != nil {
 		if ctx.Err() != nil {
 			// The run is stopping; do not count an aborted request.
 			return ctx.Err()
 		}
-		return fail(httpx.ClassifyError(res.Err), nil)
+		return run.fail(httpx.ClassifyError(res.Err), nil)
 	}
+	return v.verify(&run, r, res)
+}
 
+// verify applies a step's checks (or the default status rule) and
+// extractors to a response, then records the sample.
+func (v *VU) verify(run *stepRun, r *scenario.CRequest, res *httpx.Result) error {
 	if r.Check != nil {
-		if label := v.check(r.Check, res, &sample); label != "" {
-			return fail(label, nil)
+		if label := v.check(r.Check, res, &run.s); label != "" {
+			return run.fail(label, nil)
 		}
 	} else if res.Status >= 400 {
-		return fail(httpx.StatusError(res.Status), nil)
+		return run.fail(httpx.StatusError(res.Status), nil)
 	}
+	if err := v.extractAll(run, r.Extract, res); err != nil {
+		return err
+	}
+	return run.done()
+}
 
-	for _, ex := range r.Extract {
+// extractAll stores every extracted variable, failing the step on the
+// first that is missing.
+func (v *VU) extractAll(run *stepRun, exs []scenario.Extractor, res *httpx.Result) error {
+	for _, ex := range exs {
 		val, ok := extract(ex, res)
 		if !ok {
-			return fail("extract "+ex.Var, nil)
+			return run.fail("extract "+ex.Var, nil)
 		}
 		v.vars.local[ex.Var] = val
 	}
-	v.e.collector.Record(v.ID, &sample)
 	return nil
 }
 
-func (v *VU) buildRequest(ctx context.Context, r *scenario.CRequest) (*http.Request, int64, error) {
-	raw, err := r.URL.Render(v.vars)
+// resolveURL renders a step URL, joins relative paths to the base URL
+// and adds templated query parameters.
+func (v *VU) resolveURL(tmpl *scenario.Template, query []scenario.KV) (*url.URL, error) {
+	raw, err := tmpl.Render(v.vars)
 	if err != nil {
-		return nil, 0, err
+		return nil, err
 	}
-	if !strings.HasPrefix(raw, "http://") && !strings.HasPrefix(raw, "https://") {
+	if !scenario.IsAbsoluteURL(raw) {
 		raw = strings.TrimRight(v.e.baseURL, "/") + "/" + strings.TrimLeft(raw, "/")
 	}
 	u, err := url.Parse(raw)
 	if err != nil {
-		return nil, 0, fmt.Errorf("invalid URL %q: %w", raw, err)
+		return nil, fmt.Errorf("invalid URL %q: %w", raw, err)
 	}
-	if len(r.Query) > 0 {
+	if len(query) > 0 {
 		q := u.Query()
-		for _, kv := range r.Query {
+		for _, kv := range query {
 			s, err := kv.Value.Render(v.vars)
 			if err != nil {
-				return nil, 0, err
+				return nil, err
 			}
 			q.Add(kv.Name, s)
 		}
 		u.RawQuery = q.Encode()
+	}
+	return u, nil
+}
+
+// renderHeaders sets the engine, target and step headers on h, in that
+// order so the most specific wins.
+func (v *VU) renderHeaders(h http.Header, step []scenario.KV) error {
+	for _, kv := range v.e.headers {
+		h.Set(kv.Name, kv.Value)
+	}
+	for _, kvs := range [][]scenario.KV{v.e.prog.Headers, step} {
+		for _, kv := range kvs {
+			s, err := kv.Value.Render(v.vars)
+			if err != nil {
+				return err
+			}
+			h.Set(kv.Name, s)
+		}
+	}
+	return nil
+}
+
+func (v *VU) buildRequest(ctx context.Context, r *scenario.CRequest) (*http.Request, int64, error) {
+	u, err := v.resolveURL(r.URL, r.Query)
+	if err != nil {
+		return nil, 0, err
 	}
 
 	var body io.Reader
@@ -333,43 +413,51 @@ func (v *VU) buildRequest(ctx context.Context, r *scenario.CRequest) (*http.Requ
 		}
 		body, bodyLen = strings.NewReader(s), int64(len(s))
 	}
+	req, err := v.newRequest(ctx, r.Method, u, body, contentType, r.Headers)
+	return req, bodyLen, err
+}
 
-	req, err := http.NewRequestWithContext(ctx, r.Method, u.String(), body)
+// newRequest builds a request with Stampede's user agent, the scenario's
+// headers and trace context.
+func (v *VU) newRequest(ctx context.Context, method string, u *url.URL, body io.Reader, contentType string, headers []scenario.KV) (*http.Request, error) {
+	req, err := http.NewRequestWithContext(ctx, method, u.String(), body)
 	if err != nil {
-		return nil, 0, err
+		return nil, err
 	}
 	req.Header.Set("User-Agent", v.e.userAgent)
 	if contentType != "" {
 		req.Header.Set("Content-Type", contentType)
 	}
-	for _, kv := range v.e.headers {
-		req.Header.Set(kv.Name, kv.Value)
+	if err := v.renderHeaders(req.Header, headers); err != nil {
+		return nil, err
 	}
-	for _, kvs := range [][]scenario.KV{v.e.prog.Headers, r.Headers} {
-		for _, kv := range kvs {
-			s, err := kv.Value.Render(v.vars)
-			if err != nil {
-				return nil, 0, err
-			}
-			req.Header.Set(kv.Name, s)
-		}
-	}
-	v.addTraceHeaders(req)
-	return req, bodyLen, nil
+	v.addTraceHeaders(req.Header)
+	return req, nil
 }
 
 // addTraceHeaders propagates W3C trace context and tags each request with
 // the run, journey and step so any OpenTelemetry backend can filter by run.
-func (v *VU) addTraceHeaders(req *http.Request) {
-	if req.Header.Get("traceparent") != "" {
+func (v *VU) addTraceHeaders(h http.Header) {
+	if h.Get("traceparent") != "" {
 		return
 	}
+	tp, baggage := v.traceContext()
+	h.Set("traceparent", tp)
+	if baggage != "" {
+		h.Set("baggage", baggage)
+	}
+}
+
+// traceContext returns a W3C traceparent for a new span in the
+// iteration's trace, and the run baggage. gRPC sends them as metadata.
+func (v *VU) traceContext() (traceparent, baggage string) {
 	var span [8]byte
 	fillRandom(v.rng, span[:])
-	req.Header.Set("traceparent", "00-"+hex.EncodeToString(v.traceID[:])+"-"+hex.EncodeToString(span[:])+"-01")
+	traceparent = "00-" + hex.EncodeToString(v.traceID[:]) + "-" + hex.EncodeToString(span[:]) + "-01"
 	if v.e.opts.RunID != "" {
-		req.Header.Set("baggage", "stampede.run_id="+url.QueryEscape(v.e.opts.RunID)+",stampede.vu="+strconv.Itoa(v.ID))
+		baggage = "stampede.run_id=" + url.QueryEscape(v.e.opts.RunID) + ",stampede.vu=" + strconv.Itoa(v.ID)
 	}
+	return traceparent, baggage
 }
 
 // check evaluates a response check and returns a failure label or "".
