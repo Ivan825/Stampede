@@ -156,8 +156,17 @@ func runScenario(ctx context.Context, stdout, stderr io.Writer, path string, f *
 	if err != nil {
 		return err
 	}
-	policy, err := checkTarget(ctx, stderr, base, plan, f.allowHosts)
-	if err != nil {
+	var policy func(*url.URL) bool
+	if base == "" {
+		// Nothing needs a base URL (validation checked that): plugin
+		// steps or absolute URLs only. Without a target to verify, only
+		// private hosts and hosts allowed explicitly can be reached.
+		policy = safety.NewHostPolicy("", f.allowHosts).Allow
+		base = "private hosts"
+		if len(f.allowHosts) > 0 {
+			base += " and " + strings.Join(f.allowHosts, ", ")
+		}
+	} else if policy, err = checkTarget(ctx, stderr, base, plan, f.allowHosts); err != nil {
 		return err
 	}
 	obs, err := observeConfig(s, env, secrets)
@@ -227,7 +236,7 @@ func renderBaseURL(s *scenario.Scenario, env, secrets map[string]string) (string
 	if err != nil {
 		return "", fmt.Errorf("target.baseURL: %w (set it with -e or --base-url)", err)
 	}
-	if out == "" {
+	if out == "" && s.Target.BaseURL != "" {
 		return "", errors.New("target.baseURL is empty (set it in the scenario, with -e, or with --base-url)")
 	}
 	return out, nil

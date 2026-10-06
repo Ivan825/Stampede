@@ -1,0 +1,33 @@
+apiVersion: stampede.dev/v1
+kind: Scenario
+metadata:
+  name: sql-catalog
+  description: Shoppers read products and reserve stock directly against the database.
+# Expects a table such as
+#   CREATE TABLE products (id INTEGER PRIMARY KEY, name TEXT, stock INTEGER);
+# with ids 1..50. $1 placeholders work for PostgreSQL and SQLite; use ? for MySQL.
+journeys:
+  - name: shopper
+    steps:
+      - name: product page
+        plugin: sql.query
+        with:
+          driver: ${env.SQL_DRIVER}      # postgres, mysql or sqlite
+          dsn: ${env.SQL_DSN}            # the target policy applies to its host
+          sql: SELECT id, name, stock FROM products WHERE id = $1
+          args: ["${rand(1, 50)}"]
+        check: { json: { "$.rowCount": 1 }, maxLatency: 50ms }
+        extract: { productId: "$.first.id" }
+      - think: 100ms..500ms
+      - name: reserve stock
+        plugin: sql.exec
+        with:
+          driver: ${env.SQL_DRIVER}
+          dsn: ${env.SQL_DSN}
+          sql: UPDATE products SET stock = stock - 1 WHERE id = $1 AND stock > 0
+          args: ["${productId}"]
+        check: { json: { "$.rowsAffected": 1 } }
+load: { vus: 20, duration: 1m }
+targets:
+  - shopper/product page.p95 < 20ms
+  - shopper/reserve stock.p95 < 50ms

@@ -16,7 +16,12 @@ func newValidateCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "validate <scenario.yaml>...",
 		Short: "Check scenario files without running them",
-		Args:  cobra.MinimumNArgs(1),
+		Long: `Checks scenario files against the scenario format: structure, templates,
+expressions, extractors and that variables are defined before use. Plugin
+steps are also checked against the schemas of the plugins installed on this
+machine; a plugin that is not installed here is reported, and its steps'
+settings are checked when a run starts on a worker that has it.`,
+		Args: cobra.MinimumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			failed := 0
 			for _, path := range args {
@@ -25,6 +30,15 @@ func newValidateCmd() *cobra.Command {
 					failed++
 					fmt.Fprintf(cmd.ErrOrStderr(), "✗ %v\n", err)
 					continue
+				}
+				skipped, err := checkPluginSteps(cmd.Context(), s)
+				if err != nil {
+					failed++
+					fmt.Fprintf(cmd.ErrOrStderr(), "✗ %s: %v\n", path, err)
+					continue
+				}
+				for _, name := range skipped {
+					fmt.Fprintf(cmd.ErrOrStderr(), "! %s: plugin %s is not installed here, so its steps' settings were not checked (stampede plugin install %s)\n", path, name, name)
 				}
 				plan, _ := s.Load.Plan()
 				load := fmt.Sprintf("peak %.0f VUs, %s", plan.Peak(), plan.TotalDuration())

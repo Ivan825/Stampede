@@ -71,6 +71,34 @@ type CStep struct {
 	// GRPC is set for grpc steps; Req holds their check (without status),
 	// extractors and timeout.
 	GRPC *CGRPC
+	// Plugin is set for plugin steps; Req holds their check, extractors
+	// and timeout.
+	Plugin *CPlugin
+}
+
+// CPlugin is a compiled plugin step.
+type CPlugin struct {
+	// Plugin and Step split "mqtt.publish".
+	Plugin, Step string
+	// With renders the step's config.
+	With *JSONTemplate
+	// Config is the config as written, for checking it against the
+	// plugin's schema; Templated lists the JSON pointers of its strings
+	// that contain ${} expressions, whose type is only known at run time.
+	Config    map[string]any
+	Templated []string
+}
+
+// PluginNames returns the plugins a program uses, sorted.
+func (p *Program) PluginNames() []string {
+	var out []string
+	for _, st := range p.Steps {
+		if st.Plugin != nil && !slices.Contains(out, st.Plugin.Plugin) {
+			out = append(out, st.Plugin.Plugin)
+		}
+	}
+	sort.Strings(out)
+	return out
 }
 
 // CGRPC is a compiled gRPC call.
@@ -387,6 +415,9 @@ func (c *compiler) step(path, journey string, st Step, vars []string) (*CStep, [
 	case StepGRPC:
 		vars = c.grpc(path, scope, cs, st.GRPC, vars)
 		c.record(cs)
+	case StepPlugin:
+		vars = c.plugin(path, scope, cs, st.Plugin, vars)
+		c.record(cs)
 	case StepExpect:
 		if !c.inWS {
 			c.errf(path, "expect only works inside a ws block")
@@ -593,6 +624,64 @@ func (c *compiler) grpc(path string, scope *Scope, cs *CStep, g *GRPC, vars []st
 	cs.Req.Extract, vars = c.extractors(path, g.Extract, vars, ExtractJSON, ExtractRegex, ExtractBody, ExtractHeader)
 	cs.GRPC = cg
 	return vars
+}
+
+var (
+	pluginUseRe = regexp.MustCompile(`^([a-z][a-z0-9-]{0,62})\.([A-Za-z][A-Za-z0-9_-]{0,62})$`)
+)
+
+func (c *compiler) plugin(path string, scope *Scope, cs *CStep, p *PluginStep, vars []string) []string {
+	if cs.Name == "" {
+		cs.Name = p.Use
+	}
+	cp := &CPlugin{Config: p.With}
+	if m := pluginUseRe.FindStringSubmatch(p.Use); m != nil {
+		cp.Plugin, cp.Step = m[1], m[2]
+	} else {
+		c.errf(path, "plugin %q must look like <plugin>.<step>, such as mqtt.publish", p.Use)
+	}
+	if cp.Config == nil {
+		cp.Config = map[string]any{}
+	}
+	cp.With = c.jsonTemplate(scope, path+".with", cp.Config)
+	cp.Templated = templatedPointers("", cp.Config, nil)
+	cs.Req = &CRequest{Timeout: p.Timeout}
+	if ch := p.Check; ch != nil {
+		if !ch.Status.Empty() {
+			c.errf(path+".check.status", "does not apply to plugin steps; check the returned values with json or expr")
+		}
+		c.noAllowErrors(path, ch)
+		cs.Req.Check = c.check(path+".check", ch, vars)
+	}
+	cs.Req.Extract, vars = c.extractors(path, p.Extract, vars, ExtractJSON, ExtractRegex, ExtractBody)
+	cs.Plugin = cp
+	return vars
+}
+
+// templatedPointers lists the JSON pointers (RFC 6901) of the strings in v
+// that contain ${} expressions.
+func templatedPointers(ptr string, v any, out []string) []string {
+	switch x := v.(type) {
+	case string:
+		if strings.Contains(x, "${") {
+			out = append(out, ptr)
+		}
+	case map[string]any:
+		keys := make([]string, 0, len(x))
+		for k := range x {
+			keys = append(keys, k)
+		}
+		sort.Strings(keys)
+		for _, k := range keys {
+			esc := strings.ReplaceAll(strings.ReplaceAll(k, "~", "~0"), "/", "~1")
+			out = templatedPointers(ptr+"/"+esc, x[k], out)
+		}
+	case []any:
+		for i, e := range x {
+			out = templatedPointers(fmt.Sprintf("%s/%d", ptr, i), e, out)
+		}
+	}
+	return out
 }
 
 func (c *compiler) expect(path string, e *Expect, vars []string) (*CExpect, []string) {

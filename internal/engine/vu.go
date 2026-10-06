@@ -22,6 +22,7 @@ import (
 	"golang.org/x/net/html"
 
 	"github.com/Ivan825/Stampede/internal/metrics"
+	"github.com/Ivan825/Stampede/internal/pluginhost"
 	"github.com/Ivan825/Stampede/internal/protocol/httpx"
 	"github.com/Ivan825/Stampede/internal/scenario"
 )
@@ -41,6 +42,8 @@ type VU struct {
 	traceID [16]byte
 	// ws is the connection of the ws block being run, if any.
 	ws *wsConn
+	// plugins holds the user's session in each plugin it has used.
+	plugins map[string]*pluginhost.Session
 }
 
 func newVU(e *Engine, id int) *VU {
@@ -54,8 +57,10 @@ func newVU(e *Engine, id int) *VU {
 	return v
 }
 
-// close releases idle connections held by a per-VU transport.
+// close ends the user's plugin sessions and releases idle connections
+// held by a per-VU transport.
 func (v *VU) close() {
+	v.closePluginSessions()
 	if v.e.sharedTransport == nil {
 		v.client.CloseIdleConnections()
 	}
@@ -164,6 +169,8 @@ func (v *VU) runStep(ctx context.Context, st *scenario.CStep, intended time.Time
 		return v.wsExpect(ctx, st)
 	case scenario.StepGRPC:
 		return v.grpcCall(ctx, st, intended)
+	case scenario.StepPlugin:
+		return v.pluginStep(ctx, st, intended)
 	case scenario.StepThink:
 		return sleepCtx(ctx, v.think(st.Think))
 	case scenario.StepBranch:

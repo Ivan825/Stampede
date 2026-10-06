@@ -1,0 +1,35 @@
+apiVersion: stampede.dev/v1
+kind: Scenario
+metadata:
+  name: mqtt-telemetry
+  description: Devices stay connected, publish readings and measure how long the broker takes to deliver them.
+journeys:
+  - name: device
+    steps:
+      - name: connect                # skipped while the device is still connected
+        plugin: mqtt.connect
+        with:
+          broker: ${env.MQTT_BROKER} # tcp://host:1883, ssl://host:8883, ws://host:8080/mqtt
+          clientId: "device-${vu}"
+          cleanSession: true
+          keepAlive: 30s
+      - name: listen
+        plugin: mqtt.subscribe
+        with: { topic: "devices/${vu}/#", qos: 1 }
+      - name: publish telemetry
+        plugin: mqtt.publish
+        with:
+          topic: "devices/${vu}/telemetry"
+          payload: '{"device": ${vu}, "seq": ${iter}, "temp": ${rand(15, 30)}}'
+          qos: 1                     # latency includes the broker's PUBACK
+      - name: delivered              # broker round trip: publish -> delivery back to us
+        plugin: mqtt.expect
+        with:
+          topic: "devices/${vu}/telemetry"
+          json: { "$.seq": "${iter}" }
+        timeout: 5s
+      - think: 500ms..1500ms
+load: { vus: 200, duration: 2m }
+targets:
+  - device/publish telemetry.p95 < 50ms
+  - device/delivered.p95 < 100ms

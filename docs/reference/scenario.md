@@ -50,5 +50,6 @@ Units: durations `500ms 2s 1m30s 4h 2d` (a bare number is seconds); rates
 ## Steps
 
 See [scenarios](../concepts/scenarios.md) for HTTP, think, branch, loop,
-while, group, `if`, checks and extractors, and [protocols](../protocols.md)
-for `graphql`, `ws`, `sse` and `grpc`.
+while, group, `if`, checks and extractors, [protocols](../protocols.md)
+for `graphql`, `ws`, `sse` and `grpc`, and [plugins](../plugins.md) for
+`plugin` steps (`plugin: mqtt.publish` with its settings under `with`).

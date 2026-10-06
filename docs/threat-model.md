@@ -33,6 +33,7 @@ the files it runs. This page lists what is defended today and what is not.
 | Notification webhooks aimed at internal services | destinations on loopback, private, link-local (cloud metadata), CGNAT, multicast and reserved addresses refused unless an admin allows private destinations per channel; checked at creation and on every dialled address (no DNS rebinding), environment proxies ignored, redirects not followed | built |
 | Webhook URLs and signing secrets leaking | encrypted with the master key, never returned (only scheme and host); webhook bodies signed with HMAC-SHA256 | built |
 | Code execution from a scenario | expressions are CEL (no I/O, no loops beyond the language); JavaScript script steps are not built | built |
+| A plugin that misbehaves | plugins run as separate processes over gRPC: a crash or panic fails its steps and the process is restarted; configs are validated against the plugin's schema; the target policy applies to the address setting a plugin marks | partial: a plugin is trusted code with the worker's privileges, and connections it makes on its own are not vetted |
 | Password guessing | argon2id hashing, per-email and per-address throttling, constant-time comparison, same timing for unknown users | built |
 | Address spoofing to dodge throttling | forwarded headers trusted only from configured proxies | built |
 | Cross-site request forgery | cookie-authenticated writes need a custom header that browsers cannot send cross-site without a preflight the server never grants; SameSite=Lax cookies | built |
@@ -61,6 +62,9 @@ the files it runs. This page lists what is defended today and what is not.
   enrollment. Only a holder of the join token can answer that enrollment,
   so an attacker would need the token. Pin the fingerprint to remove even
   that.
+- Plugins run with the privileges of the worker or CLI that starts them.
+  Install only plugins you trust; `stampede plugin install` builds from
+  source you choose, but does not verify signatures.
 - AI dry runs send real requests to the target (for example a checkout
   creates a real order); use a test environment.
 

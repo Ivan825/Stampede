@@ -96,6 +96,17 @@ Grafana (Dashboards → New → Import) and pick your Prometheus data source; th
 A worker that loses the server for 10 seconds during a run stops its load
 on its own.
 
+## Plugins
+
+| Variable | Meaning |
+|---|---|
+| `STAMPEDE_PLUGIN_DIR` | where plugins are installed and looked for first (default `plugins/` under the user config folder); then `PATH` is searched for `stampede-plugin-<name>` |
+| `STAMPEDE_SOURCE` | a Stampede checkout that `stampede plugin install <first-party name>` builds from |
+| `STAMPEDE_PLUGIN_REPO` | the repository cloned when there is no checkout (default `https://github.com/Ivan825/Stampede`) |
+
+The CLI, workers and the server (for runs it executes in-process) each look
+for plugins this way. See [plugins](../plugins.md).
+
 ## CLI
 
 `stampede login` stores the server URL and an API token in the user config

@@ -197,6 +197,70 @@ jobs:
       - run: go vet ./...
       - run: go test -race ./...
 
+  plugins:
+    # Each first-party plugin is its own module: build it, lint it, and
+    # run its tests, which include the conformance suite and its example
+    # scenario through the engine, against in-process fakes.
+    strategy:
+      fail-fast: false
+      matrix:
+        plugin: [udp, redis, mqtt, kafka, sql]
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: plugins/${{ matrix.plugin }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: plugins/${{ matrix.plugin }}/go.mod
+          cache-dependency-path: plugins/${{ matrix.plugin }}/go.sum
+      - name: gofmt
+        run: |
+          out=$(gofmt -s -l .)
+          if [ -n "$out" ]; then echo "needs gofmt -s:"; echo "$out"; exit 1; fi
+      - run: go vet ./...
+      - run: go build -o /dev/null .
+      - uses: golangci/golangci-lint-action@v8
+        with:
+          version: latest
+          working-directory: plugins/${{ matrix.plugin }}
+      - run: go test -race -count=1 ./...
+
+  plugin-sql-databases:
+    # The SQL plugin's checks against real PostgreSQL and MySQL servers.
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: stampede
+          POSTGRES_PASSWORD: stampede
+          POSTGRES_DB: stampede
+        ports: ["5432:5432"]
+        options: --health-cmd "pg_isready -U stampede" --health-interval 2s --health-timeout 5s --health-retries 30
+      mysql:
+        image: mysql:8.4
+        env:
+          MYSQL_ROOT_PASSWORD: stampede
+          MYSQL_DATABASE: stampede
+        ports: ["3306:3306"]
+        options: --health-cmd "mysqladmin ping -h 127.0.0.1 -pstampede" --health-interval 2s --health-timeout 5s --health-retries 60
+    defaults:
+      run:
+        working-directory: plugins/sql
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: plugins/sql/go.mod
+          cache-dependency-path: plugins/sql/go.sum
+      - name: test against PostgreSQL and MySQL
+        env:
+          STAMPEDE_TEST_POSTGRES_DSN: postgres://stampede:stampede@127.0.0.1:5432/stampede?sslmode=disable
+          STAMPEDE_TEST_MYSQL_DSN: root:stampede@tcp(127.0.0.1:3306)/stampede
+        run: go test -race -count=1 -run 'TestPostgres|TestMySQL' -v ./...
+
   packs:
     # A pack is only "shipped" when its journeys work against its reference
     # app; this job proves it on every push.

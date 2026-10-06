@@ -13,7 +13,9 @@ scenario file cannot turn them off.
 - **Requests can only reach** the target host, private hosts and hosts you
   allow explicitly (`--allow-host`, or a target's allowed hosts). A scenario
   cannot send load to someone else's site; blocked requests appear in the
-  report as `blocked by safety`.
+  report as `blocked by safety`. Plugin steps go through the same check for
+  the address setting the plugin marks (a broker, a DSN); see
+  [plugins](plugins.md#in-a-scenario).
 - **AI-generated scenarios** are rejected when they call known payment, SMS,
   email or CAPTCHA services (see [AI generation](ai.md)).
 

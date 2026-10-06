@@ -29,6 +29,7 @@ import (
 	"google.golang.org/grpc/status"
 
 	workerv1 "github.com/Ivan825/Stampede/gen/stampede/worker/v1"
+	"github.com/Ivan825/Stampede/internal/pluginhost"
 	"github.com/Ivan825/Stampede/internal/protocol/httpx"
 	"github.com/Ivan825/Stampede/internal/version"
 	"github.com/Ivan825/Stampede/internal/wire"
@@ -75,6 +76,9 @@ type Config struct {
 	Thresholds *Thresholds
 	// HTTP overrides engine HTTP options (tests, network emulation).
 	HTTP httpx.Options
+	// PluginDir is where plugins are looked for before PATH (default
+	// $STAMPEDE_PLUGIN_DIR or the user config directory).
+	PluginDir string
 	// Clock is the worker's wall clock (default time.Now). Tests use it to
 	// simulate workers whose clocks disagree with the server's.
 	Clock  func() time.Time
@@ -106,6 +110,22 @@ type Worker struct {
 	id   string
 	sess *session
 	run  *activeRun
+}
+
+// protocols lists what this worker can drive: the built-in protocols and
+// "plugin:<name>" for every plugin installed when it connects. A run
+// re-checks its plugins when it starts, so a plugin installed later is
+// still found.
+func (w *Worker) protocols() []string {
+	out := []string{"http", "graphql", "sse", "ws", "grpc"}
+	list, err := pluginhost.List(w.cfg.PluginDir)
+	if err != nil {
+		return out
+	}
+	for _, p := range list {
+		out = append(out, "plugin:"+p.Name)
+	}
+	return out
 }
 
 // New returns a worker; call Run to connect.
@@ -289,7 +309,7 @@ func (w *Worker) session(ctx context.Context) error {
 		Version: version.Version, Region: w.cfg.Region, Labels: w.cfg.Labels,
 		Capacity: &workerv1.Capacity{
 			Cpus: uint32(w.cfg.CPUs), MemoryBytes: totalMemory(),
-			MaxVus: uint32(max(w.cfg.MaxVUs, 0)), Protocols: []string{"http"},
+			MaxVus: uint32(max(w.cfg.MaxVUs, 0)), Protocols: w.protocols(),
 		},
 		ResumeWorkerId: w.id,
 	}

@@ -72,6 +72,18 @@ persisted queries), WebSocket, server-sent events with time to first event
 (for LLM apps), and gRPC unary and server streaming via reflection or proto
 files ([protocols](docs/protocols.md)).
 
+**Plugins** add step types for other protocols, each running as its own
+process so a crash cannot take a worker down: `stampede plugin install
+mqtt` (or `kafka`, `redis`, `sql`, `udp`), then steps such as `plugin:
+mqtt.publish`. Their settings are checked against the plugin's schema,
+their timings land in the same per-step histograms, and the target policy
+applies to the addresses they connect to. A public SDK and conformance
+suite let you write your own ([plugins](docs/plugins.md)). The first-party
+plugins are tested against in-process fakes (Mochi MQTT, kfake, miniredis,
+SQLite, a UDP echo listener), and a CI job runs the SQL plugin against
+PostgreSQL and MySQL containers; none has been run against a production
+cluster here.
+
 **Distributed.** `stampede worker` connects out to the server over gRPC.
 Load is split by capacity with no arrival lost or duplicated, start times are
 synchronised to within a millisecond, results merge losslessly, a lost
@@ -134,10 +146,10 @@ per server and per target; audit log ([safety](docs/safety.md)).
 
 ## Planned for v1.0
 
-Browser (Playwright) workers, the plugin interface with MQTT, Kafka, Redis,
-SQL and UDP plugins, the other 19 product packs, AI generation from browser
-crawls, the fault-injection
-agent, several
+Browser (Playwright) workers, the other 19 product packs (including the
+IoT, event-pipeline, database and gaming packs that use the plugins), AI
+generation from browser crawls, fault injection driven from scenarios (the
+agent itself works today), several
 active server replicas (today extra replicas are hot standbys), scheduled runs, side-by-side benchmarks with k6 and
 wrk2, and the website.
 

@@ -196,7 +196,7 @@
     },
     "step": {
       "type": "object",
-      "description": "Exactly one action: an HTTP method, graphql, sse, ws (with send and expect inside), grpc, think, branch, loop, while or group.",
+      "description": "Exactly one action: an HTTP method, graphql, sse, ws (with send and expect inside), grpc, plugin, think, branch, loop, while or group.",
       "properties": {
         "name": { "type": "string" },
         "if": { "type": "string" },
@@ -272,7 +272,9 @@
         "metadata": { "$ref": "#/$defs/stringMap" },
         "protoset": { "type": "string", "description": "grpc: FileDescriptorSet file instead of server reflection." },
         "proto": { "description": "grpc: .proto source file(s) instead of server reflection.", "anyOf": [{ "type": "string" }, { "type": "array", "items": { "type": "string" } }] },
-        "importPaths": { "type": "array", "items": { "type": "string" }, "description": "grpc: where proto files and their imports are found (default: the scenario's directory)." }
+        "importPaths": { "type": "array", "items": { "type": "string" }, "description": "grpc: where proto files and their imports are found (default: the scenario's directory)." },
+        "plugin": { "type": "string", "pattern": "^[a-z][a-z0-9-]{0,62}\\.[A-Za-z][A-Za-z0-9_-]{0,62}$", "description": "A step implemented by a plugin: <plugin>.<step>, such as mqtt.publish. Install plugins with `stampede plugin install`." },
+        "with": { "type": "object", "description": "plugin: the step's settings; strings may contain ${} expressions. Checked against the schema the plugin describes when it is installed." }
       },
       "additionalProperties": false,
       "allOf": [
@@ -284,6 +286,7 @@
         { "required": ["delete"] }, { "required": ["head"] }, { "required": ["options"] },
         { "required": ["graphql"] }, { "required": ["sse"] },
         { "required": ["ws", "steps"] }, { "required": ["send"] }, { "required": ["expect"] }, { "required": ["grpc"] },
+        { "required": ["plugin"] },
         { "required": ["think"] }, { "required": ["branch"] }, { "required": ["loop", "steps"] },
         { "required": ["while", "steps"] }, { "required": ["group", "steps"] }
       ]
