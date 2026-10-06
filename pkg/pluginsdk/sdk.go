@@ -26,9 +26,10 @@
 // Built as stampede-plugin-echo and installed with `stampede plugin
 // install`, its step is used in a scenario as
 //
-//	- plugin: echo.say
-//	  with: { text: "hello ${vu}" }
-//	  extract: { said: "$.text" }
+//	steps:
+//	  - plugin: echo.say
+//	    with: { text: "hello ${vu}" }
+//	    extract: { said: "$.text" }
 //
 // Stampede starts the plugin as a child process and talks to it over gRPC
 // (hashicorp/go-plugin), so a crash in a plugin fails its steps but never
