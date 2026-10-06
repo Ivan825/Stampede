@@ -2,6 +2,7 @@ package runner
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"log/slog"
@@ -59,7 +60,7 @@ metadata: {name: bp}
 target: {baseURL: "http://127.0.0.1:1"}
 journeys: [{name: a, steps: [{get: /}]}]
 load: {shape: breakpoint, max: '10'}`))
-	if _, err := Run(context.Background(), Options{Scenario: s}); err != ErrNoTargets {
+	if _, err := Run(context.Background(), Options{Scenario: s}); !errors.Is(err, ErrNoTargets) {
 		t.Errorf("got %v", err)
 	}
 }

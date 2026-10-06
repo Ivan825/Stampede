@@ -386,9 +386,10 @@ func matchBrace(s string, from int) (int, bool) {
 	for i := from; i < len(s); i++ {
 		c := s[i]
 		if quote != 0 {
-			if c == '\\' {
+			switch c {
+			case '\\':
 				i++
-			} else if c == quote {
+			case quote:
 				quote = 0
 			}
 			continue
@@ -427,9 +428,9 @@ func ToNative(v ref.Val) any {
 	case types.Bytes:
 		return []byte(x)
 	case types.Duration:
-		return x.Duration.String()
+		return x.String()
 	case types.Timestamp:
-		return x.Time.Format(time.RFC3339Nano)
+		return x.Format(time.RFC3339Nano)
 	case traits.Mapper:
 		out := map[string]any{}
 		it := x.Iterator()
