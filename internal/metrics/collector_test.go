@@ -67,3 +67,39 @@ func TestSnapshotJSONRoundTrip(t *testing.T) {
 		t.Fatalf("round trip lost data: %s", b)
 	}
 }
+
+func TestStreamStats(t *testing.T) {
+	now := time.Now()
+	samples := []Sample{
+		// A stream of 11 events whose last 10 arrived over 2s: 5 events/s.
+		{Start: now, End: now.Add(3 * time.Second), Events: 11, StreamTime: 2 * time.Second, Proto: "HTTP/1.1"},
+		// A stream that ended before any event counts no stream.
+		{Start: now, End: now.Add(time.Second), Proto: "HTTP/1.1"},
+		{Start: now, End: now.Add(time.Second), Events: 1, Proto: "HTTP/2.0"},
+	}
+	a, b := NewSnapshot(0), NewSnapshot(0)
+	for i := range samples {
+		dst := a
+		if i == 2 {
+			dst = b
+		}
+		dst.Step(0).Add(&samples[i])
+	}
+	a.Merge(b)
+	st := a.Steps[0]
+	tests := []struct {
+		name      string
+		got, want uint64
+	}{
+		{"streams", st.Streams, 2},
+		{"events", st.Events, 12},
+		{"stream µs", st.StreamUs, 2_000_000},
+		{"HTTP/1.1", st.Protocols["HTTP/1.1"], 2},
+		{"HTTP/2.0", st.Protocols["HTTP/2.0"], 1},
+	}
+	for _, tc := range tests {
+		if tc.got != tc.want {
+			t.Errorf("%s = %d, want %d", tc.name, tc.got, tc.want)
+		}
+	}
+}

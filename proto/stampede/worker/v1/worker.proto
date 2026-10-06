@@ -154,8 +154,18 @@ message StepStats {
   bytes latency = 9;
   bytes service = 10;
   // phase_sum holds per-phase totals in microseconds (dns, connect, tls,
-  // wait, download).
+  // wait, download, first_event). Phases are only ever appended.
   repeated uint64 phase_sum = 11;
+  // Streaming steps (server-sent events, gRPC server streaming): streams
+  // that received at least one event, the events they received and the
+  // microseconds from each stream's first event to its end. Added in
+  // protocol v1.1.
+  uint64 streams = 12;
+  uint64 events = 13;
+  uint64 stream_us = 14;
+  // protocols counts requests by negotiated protocol, such as "HTTP/1.1"
+  // or "HTTP/2.0". Added in protocol v1.1.
+  map<string, uint64> protocols = 15;
 }
 
 // JourneyStats aggregates whole iterations of a journey.
@@ -167,7 +177,7 @@ message JourneyStats {
 }
 
 // PhaseHistograms holds one histogram per request phase (dns, connect,
-// tls, wait, download) for a step over the whole run.
+// tls, wait, download, first_event) for a step over the whole run.
 message PhaseHistograms {
   repeated bytes phases = 1;
 }
