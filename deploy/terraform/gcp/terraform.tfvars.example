@@ -1,0 +1,22 @@
+# cp terraform.tfvars.example terraform.tfvars, then edit.
+# Pass the token through the environment instead of this file:
+#   export TF_VAR_join_token=$(kubectl -n stampede get secret stampede -o jsonpath='{.data.join-token}' | base64 -d)
+project_id       = "my-project"
+server_address   = "stampede.example.com:8081"
+stampede_version = "0.1.0"
+
+workers_per_region = {
+  "europe-west1" = 2
+  "asia-south1"  = 2
+  "us-central1"  = 1
+}
+
+subnetworks = {
+  "europe-west1" = "default"
+  "asia-south1"  = "default"
+  "us-central1"  = "default"
+}
+
+worker_labels = {
+  pool = "gcp"
+}
