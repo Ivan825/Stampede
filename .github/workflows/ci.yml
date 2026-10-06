@@ -85,6 +85,59 @@ jobs:
           name: accuracy-quick
           path: accuracy.json
 
+  action:
+    # The packaged GitHub Action (./action), built from this commit, against
+    # a tiny local server: a passing run sets its outputs and a failing
+    # target fails the step.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - name: start the echo server
+        run: |
+          go build -o "$RUNNER_TEMP/echoserver" ./bench/echoserver
+          nohup "$RUNNER_TEMP/echoserver" -addr 127.0.0.1:9099 >"$RUNNER_TEMP/echo.log" 2>&1 &
+          for _ in $(seq 1 50); do curl -fs http://127.0.0.1:9099/ >/dev/null && exit 0; sleep 0.2; done
+          cat "$RUNNER_TEMP/echo.log"; exit 1
+      - id: smoke
+        uses: ./action
+        with:
+          scenario: action/testdata/smoke.yaml
+          target-url: http://127.0.0.1:9099
+          extra-args: -e TARGET_URL=http://127.0.0.1:9099
+          version: local
+          artifact-name: stampede-action-smoke
+      - name: the passing run sets its outputs
+        env:
+          VERDICT: ${{ steps.smoke.outputs.verdict }}
+          P95: ${{ steps.smoke.outputs.p95 }}
+          ERRORS: ${{ steps.smoke.outputs.error-rate }}
+          DIR: ${{ steps.smoke.outputs.report-dir }}
+        run: |
+          echo "verdict=$VERDICT p95=$P95 error-rate=$ERRORS"
+          test "$VERDICT" = pass
+          test -n "$P95" && test "$ERRORS" = 0
+          for f in report.html report.json junit.xml summary.md; do test -s "$DIR/$f"; done
+      - id: failing
+        uses: ./action
+        continue-on-error: true
+        with:
+          scenario: action/testdata/failing.yaml
+          extra-args: -e TARGET_URL=http://127.0.0.1:9099
+          version: local
+          output-dir: stampede-failing
+          artifact-name: ""
+      - name: a failed target fails the step
+        env:
+          OUTCOME: ${{ steps.failing.outcome }}
+          CODE: ${{ steps.failing.outputs.exit-code }}
+          VERDICT: ${{ steps.failing.outputs.verdict }}
+        run: |
+          echo "outcome=$OUTCOME exit-code=$CODE verdict=$VERDICT"
+          test "$OUTCOME" = failure && test "$CODE" = 3 && test "$VERDICT" = fail
+
   web:
     runs-on: ubuntu-latest
     defaults:

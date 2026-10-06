@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"go.opentelemetry.io/otel/trace"
 
 	"github.com/Ivan825/Stampede/internal/api/gen"
 	"github.com/Ivan825/Stampede/internal/auth"
@@ -141,6 +142,13 @@ func (h *handlers) CreateRun(ctx context.Context, req gen.CreateRunRequestObject
 	if err := h.checkCaps(tg, plan); err != nil {
 		return nil, err
 	}
+	obs, err := h.observeFor(ctx, p.OrgID, s.Observe)
+	if err != nil {
+		return nil, err
+	}
+	// Workers never need the observe block: the server queries and links
+	// after the run, so it is not sent to them.
+	s.Observe = nil
 
 	secrets, err := h.projectSecrets(ctx, pr.ID)
 	if err != nil {
@@ -177,7 +185,7 @@ func (h *handlers) CreateRun(ctx context.Context, req gen.CreateRunRequestObject
 		"run": id, "version": ver.Version, "peak": plan.Peak(), "mode": plan.Mode, "duration": plan.TotalDuration().String(),
 	})
 
-	h.runs.launch(&activeRun{id: id, org: p.OrgID, project: pr.ID, target: tg.ID, scenario: sc.ID},
+	h.runs.launch(&activeRun{id: id, org: p.OrgID, project: pr.ID, target: tg.ID, scenario: sc.ID, obs: obs, link: trace.LinkFromContext(ctx)},
 		ExecSpec{
 			RunID: id.String(), Scenario: s, YAML: yamlOut, Env: env, Secrets: secrets,
 			AllowHosts: tg.AllowHosts, TargetHost: tg.Host, Workers: workers,
@@ -290,7 +298,7 @@ func (h *handlers) KillRun(ctx context.Context, req gen.KillRunRequestObject) (g
 	if err != nil {
 		return nil, err
 	}
-	h.runs.kill(r.ID)
+	h.runs.kill(r.ID, auth.FromContext(ctx).Actor())
 	h.audit(ctx, "run.kill", r.ID.String(), nil)
 	return gen.KillRun202Response{}, nil
 }
@@ -306,7 +314,7 @@ func (h *handlers) KillAllRuns(ctx context.Context, _ gen.KillAllRunsRequestObje
 	}
 	killed := []uuid.UUID{}
 	for _, id := range ids {
-		if h.runs.kill(id) {
+		if h.runs.kill(id, p.Actor()) {
 			killed = append(killed, id)
 		}
 	}

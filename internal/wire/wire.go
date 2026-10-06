@@ -5,6 +5,7 @@
 package wire
 
 import (
+	"encoding/hex"
 	"fmt"
 	"sort"
 	"time"
@@ -17,7 +18,7 @@ import (
 // so any minor of the same major interoperates.
 const (
 	ProtocolMajor = 1
-	ProtocolMinor = 1
+	ProtocolMinor = 2
 )
 
 // Version is the protocol version as a message.
@@ -122,6 +123,9 @@ func SnapshotToProto(runID string, s *metrics.Snapshot, h *Health) (*workerv1.Sn
 				ps.Protocols[k] = v
 			}
 		}
+		for _, r := range st.Slowest {
+			ps.Slowest = append(ps.Slowest, slowToProto(r))
+		}
 		if len(st.Errors) > 0 {
 			ps.Errors = make(map[string]uint64, len(st.Errors))
 			for k, v := range st.Errors {
@@ -194,6 +198,16 @@ func SnapshotFromProto(worker string, p *workerv1.Snapshot) (*metrics.Snapshot, 
 				st.Status = map[int]uint64{}
 			}
 			st.Status[int(k)] = v
+		}
+		if len(ps.GetSlowest()) > metrics.MaxSlowest {
+			return nil, nil, fmt.Errorf("step %d: %d slow requests, want at most %d", id, len(ps.GetSlowest()), metrics.MaxSlowest)
+		}
+		for _, r := range ps.GetSlowest() {
+			sr, err := slowFromProto(r)
+			if err != nil {
+				return nil, nil, fmt.Errorf("step %d: %w", id, err)
+			}
+			st.Slowest = append(st.Slowest, sr)
 		}
 		if err := st.Latency.UnmarshalBinary(ps.GetLatency()); err != nil {
 			return nil, nil, fmt.Errorf("step %d latency: %w", id, err)
@@ -273,6 +287,32 @@ func MergePhases(dst, src map[int]*[metrics.NumPhases]*metrics.Histogram) {
 			d[i].Merge(h)
 		}
 	}
+}
+
+func slowToProto(r metrics.SlowRequest) *workerv1.SlowRequest {
+	p := &workerv1.SlowRequest{
+		LatencyNs: int64(r.Latency), StartUnixNano: r.Start.UnixNano(),
+		Status: int32(r.Status), Error: r.Err, //nolint:gosec // HTTP status codes fit
+	}
+	if id, err := hex.DecodeString(r.TraceID); err == nil && len(id) == 16 {
+		p.TraceId = id
+	}
+	return p
+}
+
+func slowFromProto(p *workerv1.SlowRequest) (metrics.SlowRequest, error) {
+	r := metrics.SlowRequest{
+		Latency: time.Duration(p.GetLatencyNs()), Start: time.Unix(0, p.GetStartUnixNano()),
+		Status: int(p.GetStatus()), Err: p.GetError(),
+	}
+	switch id := p.GetTraceId(); len(id) {
+	case 0:
+	case 16:
+		r.TraceID = metrics.TraceIDString([16]byte(id))
+	default:
+		return r, fmt.Errorf("slow request trace id has %d bytes, want 16", len(id))
+	}
+	return r, nil
 }
 
 // histBytes encodes h; a nil histogram encodes as empty, which decodes

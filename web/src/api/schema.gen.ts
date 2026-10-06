@@ -571,6 +571,245 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/ai/providers": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** AI providers configured for the organisation (keys are never returned) */
+        get: operations["listAIProviders"];
+        put?: never;
+        /**
+         * Create or replace an AI provider by name
+         * @description AI journey generation is optional and bring-your-own-key. The key is
+         *     encrypted with the server's master key and never returned. Omit
+         *     `apiKey` when replacing a provider to keep its stored key. Needs the
+         *     admin role.
+         */
+        post: operations["putAIProvider"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/ai/providers/{providerId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                providerId: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete: operations["deleteAIProvider"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/projects/{projectId}/ai/jobs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+            };
+            cookie?: never;
+        };
+        get: operations["listAIJobs"];
+        put?: never;
+        /**
+         * Generate a scenario with an AI model (asynchronous)
+         * @description Starts a generation job: understand the inputs, draft a scenario,
+         *     check it statically, dry-run each journey once with one user against
+         *     the target, and repair failures (up to `maxRepairs` rounds). Recorded
+         *     traffic is redacted before it reaches the provider. The result is a
+         *     proposal; nothing is saved until `POST /ai/jobs/{jobId}/approve`.
+         *     Refused with 429 when the organisation's AI token use this month
+         *     has reached the provider's cap.
+         */
+        post: operations["createAIJob"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/ai/jobs/{jobId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                jobId: string;
+            };
+            cookie?: never;
+        };
+        /** Job status, stage, token usage, proposal, dry-run traces, problems and diff */
+        get: operations["getAIJob"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/ai/jobs/{jobId}/approve": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                jobId: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Save the proposal as a new scenario or a new scenario version
+         * @description A person approves a finished job by saving its proposal: as a new
+         *     version of `scenarioId` (default: the scenario the job compared
+         *     against), otherwise as a new scenario. Jobs with flagged journeys
+         *     need `allowUnvalidated`. Needs the editor role and is audited.
+         */
+        post: operations["approveAIJob"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/integrations": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Integrations configured for the organisation (tokens are never returned) */
+        get: operations["listIntegrations"];
+        put?: never;
+        /**
+         * Add a named Prometheus or traces integration
+         * @description Scenarios run on the server refer to integrations by name
+         *     (`observe: { prometheus: { integration: <name>, queries: ... } }`),
+         *     so the server only ever contacts URLs an admin configured here.
+         *     A Prometheus bearer token is encrypted with the server's master key
+         *     and never returned. Needs the admin role and is audited.
+         */
+        post: operations["createIntegration"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/integrations/{integrationId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                integrationId: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete: operations["deleteIntegration"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/notifications/channels": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Notification channels of the organisation (URLs and secrets are never returned) */
+        get: operations["listNotificationChannels"];
+        put?: never;
+        /**
+         * Add a webhook, Slack or Discord channel
+         * @description The destination URL is encrypted with the server's master key. A
+         *     generic webhook signs each body with HMAC-SHA256 in the
+         *     `X-Stampede-Signature` header; its secret is generated when not
+         *     given and returned only in this response. Destinations on private,
+         *     loopback or link-local addresses are refused unless
+         *     `allowPrivate` is set. Needs the admin role and is audited.
+         */
+        post: operations["createNotificationChannel"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/notifications/channels/{channelId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                channelId: components["parameters"]["channelId"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete: operations["deleteNotificationChannel"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/notifications/channels/{channelId}/test": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                channelId: components["parameters"]["channelId"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Send a test notification now (one attempt, no retries) */
+        post: operations["testNotificationChannel"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/notifications/channels/{channelId}/deliveries": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                channelId: components["parameters"]["channelId"];
+            };
+            cookie?: never;
+        };
+        /** The most recent delivery attempts of a channel, newest first */
+        get: operations["listNotificationDeliveries"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -672,7 +911,10 @@ export interface components {
             description?: string;
         };
         Caps: {
-            /** @description Iterations per second */
+            /**
+             * Format: double
+             * @description Iterations per second
+             */
             maxRate?: number;
             maxVUs?: number;
             maxDurationSeconds?: number;
@@ -721,7 +963,9 @@ export interface components {
             executor: string;
             mode: string;
             shape?: string;
+            /** Format: double */
             peak: number;
+            /** Format: double */
             durationSeconds: number;
             journeys: number;
             steps: number;
@@ -816,25 +1060,43 @@ export interface components {
         };
         RunSummary: {
             requests?: number;
+            /** Format: double */
             errorRate?: number;
+            /** Format: double */
             rps?: number;
-            /** @description seconds */
+            /**
+             * Format: double
+             * @description seconds
+             */
             p95?: number;
-            /** @description seconds */
+            /**
+             * Format: double
+             * @description seconds
+             */
             p99?: number;
         } | null;
         Point: {
-            /** @description Seconds since start */
+            /**
+             * Format: double
+             * @description Seconds since start
+             */
             t: number;
+            /** Format: double */
             rps: number;
+            /** Format: double */
             errorRate: number;
+            /** Format: double */
             p50: number;
+            /** Format: double */
             p95: number;
+            /** Format: double */
             p99: number;
             vus: number;
+            /** Format: double */
             planned: number;
             dropped: number;
             iterations?: number;
+            /** Format: double */
             schedLagP99?: number;
         };
         /** @description The full report; same format as `stampede run --json`. */
@@ -873,6 +1135,277 @@ export interface components {
                 [key: string]: unknown;
             };
             ip?: string;
+        };
+        /** @enum {string} */
+        AIProviderKind: "anthropic" | "openai" | "gemini" | "ollama" | "openai-compatible";
+        AIProvider: {
+            /** Format: uuid */
+            id: string;
+            name: string;
+            kind: components["schemas"]["AIProviderKind"];
+            model: string;
+            baseURL?: string;
+            /** @description Whether an API key is stored. The key itself is never returned. */
+            hasKey: boolean;
+            /**
+             * Format: int64
+             * @description Jobs are refused once the organisation's AI token use this calendar month (UTC) reaches this cap.
+             */
+            monthlyTokenCap: number;
+            /** Format: int64 */
+            usedTokensThisMonth: number;
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: date-time */
+            updatedAt: string;
+        };
+        AIProviderPut: {
+            /** @default default */
+            name: string;
+            kind: components["schemas"]["AIProviderKind"];
+            /** @description Required except for anthropic (default claude-sonnet-5-5). */
+            model?: string;
+            /** @description API base URL; required for openai-compatible. */
+            baseURL?: string;
+            /** @description Stored encrypted; omit to keep the current key. */
+            apiKey?: string;
+            /**
+             * Format: int64
+             * @description Default 2000000.
+             */
+            monthlyTokenCap?: number;
+        };
+        AIJobCreate: {
+            /**
+             * Format: uuid
+             * @description Defaults to the organisation's only provider
+             */
+            providerId?: string;
+            description?: string;
+            /** @description OpenAPI 3.x document (YAML or JSON) */
+            openapi?: string;
+            /** @description HAR recording (JSON) */
+            har?: string;
+            /** @description Web server access log */
+            accessLog?: string;
+            /**
+             * Format: uuid
+             * @description Required for the dry run.
+             */
+            targetId?: string;
+            /**
+             * Format: uuid
+             * @description Existing scenario to compare the proposal with.
+             */
+            scenarioId?: string;
+            /** @default true */
+            dryRun: boolean;
+            /** @default 3 */
+            maxRepairs: number;
+        };
+        AIUsage: {
+            /** Format: int64 */
+            inputTokens: number;
+            /** Format: int64 */
+            outputTokens: number;
+        };
+        /**
+         * @description succeeded means every journey passed its dry run; needs_review means some journeys are flagged.
+         * @enum {string}
+         */
+        AIJobStatus: "queued" | "running" | "succeeded" | "needs_review" | "failed";
+        AIProblem: {
+            journey?: string;
+            message: string;
+            /** @description The proposal cannot be used while this problem remains. */
+            fatal?: boolean;
+        };
+        AICheck: {
+            name: string;
+            ok: boolean;
+            detail?: string;
+        };
+        /** @description One request of a dry run. Bodies are truncated; secrets and personal data are redacted. */
+        AIStepTrace: {
+            step: string;
+            method?: string;
+            url?: string;
+            requestHeaders?: {
+                [key: string]: string;
+            };
+            requestBody?: string;
+            status?: number;
+            responseHeaders?: {
+                [key: string]: string;
+            };
+            responseBody?: string;
+            /** Format: double */
+            durationMs: number;
+            extracted?: {
+                [key: string]: string;
+            };
+            checks?: components["schemas"]["AICheck"][];
+            ok: boolean;
+            error?: string;
+            note?: string;
+        };
+        AITrace: {
+            pass: number;
+            branches?: string[];
+            ok: boolean;
+            error?: string;
+            steps: components["schemas"]["AIStepTrace"][];
+        };
+        AIJourney: {
+            name: string;
+            /** @enum {string} */
+            status: "passed" | "flagged" | "not-run";
+            /** @description Dry runs of this journey across repair rounds */
+            attempts: number;
+            problems?: string[];
+            traces: components["schemas"]["AITrace"][];
+        };
+        AIJobSummary: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            projectId: string;
+            status: components["schemas"]["AIJobStatus"];
+            /** @description understand, draft, static-check, dry-run, repair or done */
+            stage: string;
+            providerKind: string;
+            model: string;
+            usage: components["schemas"]["AIUsage"];
+            dryRun: boolean;
+            error?: string;
+            createdBy?: string | null;
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: date-time */
+            finishedAt?: string | null;
+            /** Format: date-time */
+            approvedAt?: string | null;
+        };
+        AIJob: components["schemas"]["AIJobSummary"] & {
+            /** @description Repair round (0 is the first draft) */
+            round: number;
+            /** Format: uuid */
+            targetId?: string | null;
+            /** Format: uuid */
+            scenarioId?: string | null;
+            /** @description The proposed scenario */
+            yaml?: string;
+            /** @description Unified diff against scenarioId's latest version */
+            diff?: string;
+            problems: components["schemas"]["AIProblem"][];
+            journeys: components["schemas"]["AIJourney"][];
+            /** Format: date-time */
+            startedAt?: string | null;
+            /** Format: uuid */
+            approvedScenarioId?: string | null;
+            approvedVersion?: number | null;
+        };
+        AIJobApprove: {
+            /**
+             * Format: uuid
+             * @description Save as a new version of this scenario
+             */
+            scenarioId?: string;
+            message?: string;
+            /**
+             * @description Approve even though some journeys are flagged
+             * @default false
+             */
+            allowUnvalidated: boolean;
+        };
+        AIJobApproval: {
+            scenario: components["schemas"]["Scenario"];
+            version: number;
+        };
+        /** @enum {string} */
+        IntegrationKind: "prometheus" | "traces";
+        Integration: {
+            /** Format: uuid */
+            id: string;
+            name: string;
+            kind: components["schemas"]["IntegrationKind"];
+            /** @description Prometheus base URL, or for traces a link template containing {traceId}. */
+            url: string;
+            /** @description Whether a bearer token is stored. The token itself is never returned. */
+            hasToken: boolean;
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: date-time */
+            updatedAt: string;
+        };
+        IntegrationCreate: {
+            name: string;
+            kind: components["schemas"]["IntegrationKind"];
+            /**
+             * @description prometheus: the base URL, e.g. http://prometheus:9090. traces: a link
+             *     template containing {traceId}, e.g. https://jaeger.example.com/trace/{traceId}.
+             */
+            url: string;
+            /** @description Prometheus only. Stored encrypted. */
+            bearerToken?: string;
+        };
+        /** @enum {string} */
+        NotificationKind: "webhook" | "slack" | "discord";
+        /** @enum {string} */
+        NotificationEvent: "run.finished" | "run.target_failed" | "run.killed";
+        NotificationChannel: {
+            /** Format: uuid */
+            id: string;
+            name: string;
+            kind: components["schemas"]["NotificationKind"];
+            events: components["schemas"]["NotificationEvent"][];
+            /** @description Deliveries may reach private, loopback and link-local addresses. */
+            allowPrivate: boolean;
+            /** @description The destination's scheme and host only, e.g. https://hooks.slack.com */
+            urlHint: string;
+            /** @description Whether bodies are signed (generic webhooks). */
+            hasSecret: boolean;
+            /** Format: date-time */
+            createdAt: string;
+            lastDelivery?: components["schemas"]["NotificationDelivery"];
+        };
+        NotificationChannelCreate: {
+            name: string;
+            kind: components["schemas"]["NotificationKind"];
+            /** @description Webhook URL. Stored encrypted and never returned. */
+            url: string;
+            /** @description Default all events. */
+            events?: components["schemas"]["NotificationEvent"][];
+            /** @default false */
+            allowPrivate: boolean;
+            /** @description Webhook signing secret. Generated when omitted; ignored for Slack and Discord. */
+            secret?: string;
+        };
+        NotificationChannelCreated: {
+            channel: components["schemas"]["NotificationChannel"];
+            /** @description The webhook signing secret. Shown only once. */
+            secret?: string;
+        };
+        NotificationDelivery: {
+            /** Format: int64 */
+            id: number;
+            /**
+             * Format: uuid
+             * @description Same for every attempt of one delivery (X-Stampede-Delivery).
+             */
+            deliveryId: string;
+            /** @example run.finished */
+            event: string;
+            /** Format: uuid */
+            runId?: string | null;
+            attempt: number;
+            ok: boolean;
+            /** @description HTTP status; 0 when no response was received. */
+            statusCode: number;
+            error: string;
+            durationMs: number;
+            /** Format: date-time */
+            at: string;
         };
     };
     responses: {
@@ -938,6 +1471,7 @@ export interface components {
         targetId: string;
         scenarioId: string;
         runId: string;
+        channelId: string;
     };
     requestBodies: never;
     headers: never;
@@ -2036,6 +2570,389 @@ export interface operations {
                 };
             };
             403: components["responses"]["Forbidden"];
+        };
+    };
+    listAIProviders: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Providers */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AIProvider"][];
+                };
+            };
+        };
+    };
+    putAIProvider: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AIProviderPut"];
+            };
+        };
+        responses: {
+            /** @description Replaced */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AIProvider"];
+                };
+            };
+            /** @description Created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AIProvider"];
+                };
+            };
+            403: components["responses"]["Forbidden"];
+            409: components["responses"]["Conflict"];
+            422: components["responses"]["Invalid"];
+        };
+    };
+    deleteAIProvider: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                providerId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Deleted */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    listAIJobs: {
+        parameters: {
+            query?: {
+                limit?: number;
+            };
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Generation jobs, newest first */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AIJobSummary"][];
+                };
+            };
+        };
+    };
+    createAIJob: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AIJobCreate"];
+            };
+        };
+        responses: {
+            /** @description Job accepted */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AIJob"];
+                };
+            };
+            403: components["responses"]["Forbidden"];
+            409: components["responses"]["Conflict"];
+            422: components["responses"]["Invalid"];
+            /** @description Monthly AI token cap reached, or too many jobs queued */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    getAIJob: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                jobId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The job */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AIJob"];
+                };
+            };
+            404: components["responses"]["NotFound"];
+        };
+    };
+    approveAIJob: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                jobId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AIJobApprove"];
+            };
+        };
+        responses: {
+            /** @description Saved */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AIJobApproval"];
+                };
+            };
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            422: components["responses"]["Invalid"];
+        };
+    };
+    listIntegrations: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Integrations */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Integration"][];
+                };
+            };
+        };
+    };
+    createIntegration: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["IntegrationCreate"];
+            };
+        };
+        responses: {
+            /** @description Created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Integration"];
+                };
+            };
+            403: components["responses"]["Forbidden"];
+            409: components["responses"]["Conflict"];
+            422: components["responses"]["Invalid"];
+        };
+    };
+    deleteIntegration: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                integrationId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Deleted */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    listNotificationChannels: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Channels */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NotificationChannel"][];
+                };
+            };
+            403: components["responses"]["Forbidden"];
+        };
+    };
+    createNotificationChannel: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["NotificationChannelCreate"];
+            };
+        };
+        responses: {
+            /** @description Created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NotificationChannelCreated"];
+                };
+            };
+            403: components["responses"]["Forbidden"];
+            409: components["responses"]["Conflict"];
+            422: components["responses"]["Invalid"];
+        };
+    };
+    deleteNotificationChannel: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                channelId: components["parameters"]["channelId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Deleted */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    testNotificationChannel: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                channelId: components["parameters"]["channelId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The attempt, also recorded in the delivery log */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NotificationDelivery"];
+                };
+            };
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+        };
+    };
+    listNotificationDeliveries: {
+        parameters: {
+            query?: {
+                limit?: number;
+            };
+            header?: never;
+            path: {
+                channelId: components["parameters"]["channelId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Attempts */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NotificationDelivery"][];
+                };
+            };
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
         };
     };
 }

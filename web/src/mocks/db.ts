@@ -4,7 +4,10 @@
  */
 import type {
   AuditEntry,
+  Integration,
   Me,
+  NotificationChannel,
+  NotificationDelivery,
   Project,
   Report,
   Role,
@@ -76,6 +79,9 @@ export interface Db {
   events: Record<string, RunEvent[]>;
   workers: Worker[];
   audit: AuditEntry[];
+  integrations: Integration[];
+  channels: (NotificationChannel & { url: string })[];
+  deliveries: Record<string, NotificationDelivery[]>;
 }
 
 function scenarioFrom(
@@ -338,7 +344,57 @@ export function createDb(options: MockOptions): Db {
     events: {},
     workers: [],
     audit: [],
+    integrations: [
+      {
+        id: uuid(),
+        name: 'prod-prometheus',
+        kind: 'prometheus',
+        url: 'http://prometheus.monitoring:9090',
+        hasToken: true,
+        createdAt: ago(20 * DAY),
+        updatedAt: ago(20 * DAY),
+      },
+      {
+        id: uuid(),
+        name: 'jaeger',
+        kind: 'traces',
+        url: 'https://jaeger.example.com/trace/{traceId}',
+        hasToken: false,
+        createdAt: ago(19 * DAY),
+        updatedAt: ago(19 * DAY),
+      },
+    ],
+    channels: [],
+    deliveries: {},
   };
+  {
+    const id = uuid();
+    const delivery: NotificationDelivery = {
+      id: 1,
+      deliveryId: uuid(),
+      event: 'run.finished',
+      runId: null,
+      attempt: 1,
+      ok: true,
+      statusCode: 200,
+      error: '',
+      durationMs: 182,
+      at: ago(2 * DAY),
+    };
+    db.channels.push({
+      id,
+      name: 'perf-alerts',
+      kind: 'slack',
+      events: ['run.finished', 'run.target_failed', 'run.killed'],
+      allowPrivate: false,
+      urlHint: 'https://hooks.slack.com',
+      hasSecret: false,
+      createdAt: ago(15 * DAY),
+      lastDelivery: delivery,
+      url: 'https://hooks.slack.com/services/T000/B000/XXXX',
+    });
+    db.deliveries[id] = [delivery];
+  }
   if (options.setupRequired) {
     db.users = [];
     db.projects = [];

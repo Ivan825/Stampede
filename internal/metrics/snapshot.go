@@ -2,6 +2,8 @@ package metrics
 
 import (
 	"encoding/base64"
+	"encoding/hex"
+	"sort"
 	"time"
 )
 
@@ -51,6 +53,9 @@ type Sample struct {
 	// StreamTime is the time from the first of them to the end of the step.
 	Events     int
 	StreamTime time.Duration
+	// TraceID is the W3C trace ID sent with the request (all zero when
+	// none was sent).
+	TraceID [16]byte
 }
 
 // Snapshot holds everything recorded during one interval (normally one
@@ -100,6 +105,48 @@ type StepStats struct {
 	StreamUs uint64 `json:"streamUs,omitempty"`
 	// Protocols counts requests by negotiated protocol (HTTP/1.1, HTTP/2.0).
 	Protocols map[string]uint64 `json:"protocols,omitempty"`
+	// Slowest holds up to MaxSlowest of the slowest requests, slowest
+	// first, with their trace IDs.
+	Slowest []SlowRequest `json:"slowest,omitempty"`
+}
+
+// MaxSlowest is how many of the slowest requests a step keeps per
+// interval and for the whole run.
+const MaxSlowest = 5
+
+// SlowRequest is one of the slowest requests of a step.
+type SlowRequest struct {
+	// Latency is measured from the intended send time, like StepStats.Latency.
+	Latency time.Duration `json:"latency"`
+	// Start is when the request was sent.
+	Start time.Time `json:"start"`
+	// TraceID is the 32-hex-digit W3C trace ID, empty when none was sent.
+	TraceID string `json:"traceId,omitempty"`
+	Status  int    `json:"status,omitempty"`
+	Err     string `json:"error,omitempty"`
+}
+
+// addSlow keeps r if it is among the MaxSlowest slowest, slowest first.
+// Ties keep the earlier entry, so merging is deterministic.
+func (st *StepStats) addSlow(r SlowRequest) {
+	n := len(st.Slowest)
+	if n == MaxSlowest && r.Latency <= st.Slowest[n-1].Latency {
+		return
+	}
+	i := sort.Search(n, func(i int) bool { return st.Slowest[i].Latency < r.Latency })
+	if n < MaxSlowest {
+		st.Slowest = append(st.Slowest, SlowRequest{})
+	}
+	copy(st.Slowest[i+1:], st.Slowest[i:])
+	st.Slowest[i] = r
+}
+
+// TraceIDString returns the trace ID as 32 hex digits, or "" when unset.
+func TraceIDString(id [16]byte) string {
+	if id == ([16]byte{}) {
+		return ""
+	}
+	return hex.EncodeToString(id[:])
 }
 
 // JourneyStats aggregates whole iterations of a journey.
@@ -166,7 +213,11 @@ func (st *StepStats) Add(s *Sample) {
 	if intended.IsZero() || intended.After(s.Start) {
 		intended = s.Start
 	}
-	st.Latency.RecordDuration(s.End.Sub(intended))
+	lat := s.End.Sub(intended)
+	st.Latency.RecordDuration(lat)
+	if n := len(st.Slowest); n < MaxSlowest || lat > st.Slowest[n-1].Latency {
+		st.addSlow(SlowRequest{Latency: lat, Start: s.Start, TraceID: TraceIDString(s.TraceID), Status: s.Status, Err: s.Err})
+	}
 	st.Service.RecordDuration(s.End.Sub(s.Start))
 	for i, d := range s.Phases {
 		if d > 0 {
@@ -219,6 +270,9 @@ func (st *StepStats) Merge(o *StepStats) {
 			st.Protocols = map[string]uint64{}
 		}
 		st.Protocols[k] += v
+	}
+	for _, r := range o.Slowest {
+		st.addSlow(r)
 	}
 }
 

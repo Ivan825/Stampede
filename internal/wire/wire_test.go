@@ -31,6 +31,9 @@ func sampleSnapshot() *metrics.Snapshot {
 		if i%5 == 0 {
 			smp.Failed, smp.Err, smp.ChecksFailed = true, "timeout", 1
 		}
+		if i%2 == 0 {
+			smp.TraceID[0], smp.TraceID[15] = byte(i+1), 0xab
+		}
 		s.Step(smp.Step).Add(smp)
 	}
 	j := s.Journey(1)
@@ -101,6 +104,33 @@ func TestSnapshotRoundTrip(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+func TestSnapshotCarriesSlowest(t *testing.T) {
+	s := sampleSnapshot()
+	p, err := SnapshotToProto("run-1", s, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got, _, err := SnapshotFromProto("w", p)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for id, st := range s.Steps {
+		if len(st.Slowest) != metrics.MaxSlowest || len(got.Steps[id].Slowest) != len(st.Slowest) {
+			t.Fatalf("step %d: %d slow requests sent, %d received", id, len(st.Slowest), len(got.Steps[id].Slowest))
+		}
+		for i, r := range st.Slowest {
+			g := got.Steps[id].Slowest[i]
+			if g.TraceID != r.TraceID || g.Latency != r.Latency || !g.Start.Equal(r.Start) || g.Status != r.Status || g.Err != r.Err {
+				t.Errorf("step %d slow %d: sent %+v, received %+v", id, i, r, g)
+			}
+		}
+	}
+	p.Steps[0].Slowest[0].TraceId = []byte{1, 2, 3}
+	if _, _, err := SnapshotFromProto("w", p); err == nil || !strings.Contains(err.Error(), "trace id") {
+		t.Errorf("a malformed trace id should be rejected, got %v", err)
 	}
 }
 

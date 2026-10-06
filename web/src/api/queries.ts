@@ -8,7 +8,9 @@ import {
 } from '@tanstack/react-query';
 import { api, ApiError, unwrap } from './client';
 import type {
+  IntegrationCreate,
   LoginRequest,
+  NotificationChannelCreate,
   Me,
   ProjectCreate,
   Report,
@@ -48,6 +50,9 @@ export const keys = {
   users: ['users'] as const,
   tokens: ['tokens'] as const,
   audit: ['audit'] as const,
+  integrations: ['integrations'] as const,
+  channels: ['notification-channels'] as const,
+  deliveries: (channelId: string) => ['notification-channels', channelId, 'deliveries'] as const,
 };
 
 // ---------------------------------------------------------------- system/auth
@@ -185,6 +190,92 @@ export function useAudit(enabled: boolean) {
   return useQuery({
     queryKey: keys.audit,
     queryFn: () => unwrap(api.GET('/audit', { params: { query: { limit: 200 } } })),
+    enabled,
+  });
+}
+
+// ---------------------------------------------------------------- integrations
+
+export function useIntegrations() {
+  return useQuery({
+    queryKey: keys.integrations,
+    queryFn: () => unwrap(api.GET('/integrations')),
+  });
+}
+
+export function useCreateIntegration() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (body: IntegrationCreate) => unwrap(api.POST('/integrations', { body })),
+    onSuccess: () => qc.invalidateQueries({ queryKey: keys.integrations }),
+  });
+}
+
+export function useDeleteIntegration() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) =>
+      unwrap(
+        api.DELETE('/integrations/{integrationId}', { params: { path: { integrationId: id } } }),
+      ),
+    onSuccess: () => qc.invalidateQueries({ queryKey: keys.integrations }),
+  });
+}
+
+export function useNotificationChannels() {
+  return useQuery({
+    queryKey: keys.channels,
+    queryFn: () => unwrap(api.GET('/notifications/channels')),
+  });
+}
+
+export function useCreateNotificationChannel() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (body: NotificationChannelCreate) =>
+      unwrap(api.POST('/notifications/channels', { body })),
+    onSuccess: () => qc.invalidateQueries({ queryKey: keys.channels }),
+  });
+}
+
+export function useDeleteNotificationChannel() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) =>
+      unwrap(
+        api.DELETE('/notifications/channels/{channelId}', {
+          params: { path: { channelId: id } },
+        }),
+      ),
+    onSuccess: () => qc.invalidateQueries({ queryKey: keys.channels }),
+  });
+}
+
+export function useTestNotificationChannel() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) =>
+      unwrap(
+        api.POST('/notifications/channels/{channelId}/test', {
+          params: { path: { channelId: id } },
+        }),
+      ),
+    onSuccess: (_d, id) => {
+      void qc.invalidateQueries({ queryKey: keys.channels });
+      void qc.invalidateQueries({ queryKey: keys.deliveries(id) });
+    },
+  });
+}
+
+export function useNotificationDeliveries(channelId: string, enabled = true) {
+  return useQuery({
+    queryKey: keys.deliveries(channelId),
+    queryFn: () =>
+      unwrap(
+        api.GET('/notifications/channels/{channelId}/deliveries', {
+          params: { path: { channelId }, query: { limit: 50 } },
+        }),
+      ),
     enabled,
   });
 }

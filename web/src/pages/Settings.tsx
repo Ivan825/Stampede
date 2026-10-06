@@ -16,6 +16,8 @@ import {
 } from '@/api/queries';
 import type { Role, TokenCreated } from '@/api/types';
 import { RoleChip } from '@/components/chips';
+import { IntegrationsTab } from '@/features/settings/IntegrationsTab';
+import { NotificationsTab } from '@/features/settings/NotificationsTab';
 import { Confirm, Modal } from '@/components/dialog';
 import { CopyButton } from '@/components/misc';
 import { useToast } from '@/components/toast';
@@ -610,6 +612,9 @@ export function SettingsPage() {
   const navigate = useNavigate({ from: '/settings' });
   let tab: SettingsTab = search.tab ?? 'account';
   if (tab === 'audit' && !can.viewAudit) tab = 'account';
+  if ((tab === 'integrations' || tab === 'notifications') && !can.manageIntegrations) {
+    tab = 'account';
+  }
 
   return (
     <div className="mx-auto max-w-6xl px-6 py-6">
@@ -628,6 +633,16 @@ export function SettingsPage() {
           <Tabs.Trigger value="users" className={tabTrigger}>
             Users
           </Tabs.Trigger>
+          {can.manageIntegrations && (
+            <Tabs.Trigger value="integrations" className={tabTrigger}>
+              Integrations
+            </Tabs.Trigger>
+          )}
+          {can.manageIntegrations && (
+            <Tabs.Trigger value="notifications" className={tabTrigger}>
+              Notifications
+            </Tabs.Trigger>
+          )}
           {can.viewAudit && (
             <Tabs.Trigger value="audit" className={tabTrigger}>
               Audit log
@@ -643,6 +658,16 @@ export function SettingsPage() {
         <Tabs.Content value="users">
           <UsersTab />
         </Tabs.Content>
+        {can.manageIntegrations && (
+          <Tabs.Content value="integrations">
+            <IntegrationsTab />
+          </Tabs.Content>
+        )}
+        {can.manageIntegrations && (
+          <Tabs.Content value="notifications">
+            <NotificationsTab />
+          </Tabs.Content>
+        )}
         {can.viewAudit && (
           <Tabs.Content value="audit">
             <AuditTab />

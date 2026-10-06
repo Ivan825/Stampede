@@ -27,6 +27,12 @@ requests, light and dark), JSON, JUnit XML or Markdown.
 - **Journeys and steps**: per step requests, errors, percentiles, mean wait
   (time to first byte) and connect time; for streams, time to first event and
   events per second; the HTTP protocol versions used.
+- **Target metrics**: with `observe.prometheus`, one chart per PromQL query
+  over the run, with its minimum, maximum and last value
+  ([integrations](integrations.md)).
+- **Slowest requests**: the five slowest requests of each step with their
+  latency, when they were sent, their status and the W3C trace ID they
+  carried; a link when `observe.traces` gives a link template.
 - **Errors**: each kind of failure at each step with counts, for example
   `HTTP 503`, `timeout`, `connection refused`, `check status (got 302)`,
   `extract token`.

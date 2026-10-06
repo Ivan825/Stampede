@@ -34,6 +34,21 @@ export type RunSummary = S['RunSummary'];
 export type Point = S['Point'];
 export type Worker = S['Worker'];
 export type AuditEntry = S['AuditEntry'];
+export type Integration = S['Integration'];
+export type IntegrationKind = S['IntegrationKind'];
+export type IntegrationCreate = S['IntegrationCreate'];
+export type NotificationKind = S['NotificationKind'];
+export type NotificationEvent = S['NotificationEvent'];
+export type NotificationChannel = S['NotificationChannel'];
+export type NotificationChannelCreate = S['NotificationChannelCreate'];
+export type NotificationChannelCreated = S['NotificationChannelCreated'];
+export type NotificationDelivery = S['NotificationDelivery'];
+
+export const notificationEvents: readonly NotificationEvent[] = [
+  'run.finished',
+  'run.target_failed',
+  'run.killed',
+];
 
 export type Verdict = NonNullable<Run['verdict']>;
 
@@ -101,11 +116,33 @@ export interface PhaseStat {
   p95: number;
 }
 
+/** One of a step's slowest requests, with the trace it was sent in. */
+export interface SlowRequest {
+  /** Seconds, measured from the intended send time. */
+  latency: number;
+  at: string;
+  /** Seconds since the run started. */
+  t: number;
+  traceId?: string;
+  traceUrl?: string;
+  status?: number;
+  error?: string;
+}
+
 export interface ReportStep {
   id: number;
   name: string;
   stats: Stats;
   phases: Record<string, PhaseStat>;
+  slowest?: SlowRequest[];
+}
+
+/** One Prometheus query evaluated over the run (observe.prometheus). */
+export interface TargetMetric {
+  name: string;
+  query: string;
+  points: { t: number; value: number }[];
+  error?: string;
 }
 
 export interface ReportJourney {
@@ -169,6 +206,7 @@ export interface Report {
   timeline: Point[] | null;
   breakpoint?: Breakpoint;
   notes?: string[];
+  targetMetrics?: TargetMetric[];
 }
 
 export const shapes = [

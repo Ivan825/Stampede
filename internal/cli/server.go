@@ -25,6 +25,8 @@ import (
 	"github.com/Ivan825/Stampede/internal/scenario"
 	"github.com/Ivan825/Stampede/internal/server"
 	"github.com/Ivan825/Stampede/internal/store"
+	"github.com/Ivan825/Stampede/internal/telemetry"
+	"github.com/Ivan825/Stampede/internal/version"
 )
 
 // UI is the embedded web app, set by the main package when it is built in.
@@ -51,6 +53,7 @@ type serverFlags struct {
 	tlsCert       string
 	tlsKey        string
 	workerMTLS    bool
+	publicURL     string
 }
 
 func newServerCmd() *cobra.Command {
@@ -65,7 +68,11 @@ Environment:
   STAMPEDE_DATABASE_URL     postgres://user:pass@host:5432/stampede
   STAMPEDE_MASTER_KEY       32 random bytes, base64, for encrypting secrets
                             (generate one with: stampede keygen)
-  STAMPEDE_MASTER_KEY_FILE  or read the key from a file`,
+  STAMPEDE_MASTER_KEY_FILE  or read the key from a file
+  STAMPEDE_PUBLIC_URL       external URL of the web UI, for links in notifications
+  OTEL_EXPORTER_OTLP_ENDPOINT
+                            export traces of the API and of each run over OTLP
+                            (OTEL_EXPORTER_OTLP_PROTOCOL=grpc for gRPC)`,
 		RunE: func(cmd *cobra.Command, _ []string) error { return runServer(cmd, f) },
 	}
 	fl := cmd.Flags()
@@ -88,6 +95,7 @@ Environment:
 	fl.BoolVar(&f.workerMTLS, "worker-mtls", os.Getenv("STAMPEDE_WORKER_MTLS") == "true", "mutual TLS with a CA built from the master key: workers enroll with stampede worker --mtls and the join token is never sent")
 	fl.StringVar(&f.abortErrors, "abort-errors", envOr("STAMPEDE_ABORT_ERRORS", "90%"), "stop any run whose error rate stays at or above this (0 disables)")
 	fl.DurationVar(&f.abortFor, "abort-for", 30*time.Second, "how long --abort-errors must hold before a run is stopped")
+	fl.StringVar(&f.publicURL, "public-url", os.Getenv("STAMPEDE_PUBLIC_URL"), "external URL of the web UI, for links in notifications (e.g. https://stampede.example.com)")
 	fl.StringSliceVar(&f.trusted, "trusted-proxy", splitEnv("STAMPEDE_TRUSTED_PROXIES"), "CIDR of a reverse proxy whose X-Forwarded-For is trusted (repeatable)")
 	return cmd
 }
@@ -134,6 +142,21 @@ func runServer(cmd *cobra.Command, f *serverFlags) error {
 	}
 	if f.migrateOnly || f.migrateDryRun {
 		return nil
+	}
+
+	shutdownTracing, err := telemetry.Setup(ctx, "stampede-server", version.Version)
+	if err != nil {
+		return err
+	}
+	defer func() {
+		sctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		if err := shutdownTracing(sctx); err != nil {
+			log.Warn("flush traces", "error", err)
+		}
+	}()
+	if telemetry.Enabled() {
+		log.Info("exporting traces over OTLP", "protocol", telemetry.Protocol())
 	}
 
 	kr, err := keyring.FromEnv()
@@ -223,6 +246,7 @@ func runServer(cmd *cobra.Command, f *serverFlags) error {
 	cfg.Store, cfg.Keyring, cfg.Logger, cfg.UI, cfg.SecureCookies = st, kr, log, UI, f.secureCookies
 	cfg.HardCaps = safety.Caps{MaxRate: f.maxRate, MaxVUs: f.maxVUs, MaxDuration: f.maxDuration}
 	cfg.TrustedProxies = proxies
+	cfg.Notify.PublicURL = f.publicURL
 	if f.abortErrors != "" && f.abortErrors != "0" && f.abortErrors != "0%" {
 		p, err := scenario.ParsePercent(f.abortErrors)
 		if err != nil {

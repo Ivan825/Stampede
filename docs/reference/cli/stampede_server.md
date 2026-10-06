@@ -12,6 +12,10 @@ Environment:
   STAMPEDE_MASTER_KEY       32 random bytes, base64, for encrypting secrets
                             (generate one with: stampede keygen)
   STAMPEDE_MASTER_KEY_FILE  or read the key from a file
+  STAMPEDE_PUBLIC_URL       external URL of the web UI, for links in notifications
+  OTEL_EXPORTER_OTLP_ENDPOINT
+                            export traces of the API and of each run over OTLP
+                            (OTEL_EXPORTER_OTLP_PROTOCOL=grpc for gRPC)
 
 ```
 stampede server [flags]
@@ -35,6 +39,7 @@ stampede server [flags]
       --max-vus int              hard cap on virtual users for every run (0 = none)
       --migrate-dry-run          report pending migrations and exit
       --migrate-only             apply migrations and exit
+      --public-url string        external URL of the web UI, for links in notifications (e.g. https://stampede.example.com)
       --secure-cookies           mark session cookies Secure (use behind HTTPS)
       --trusted-proxy strings    CIDR of a reverse proxy whose X-Forwarded-For is trusted (repeatable)
       --worker-addr string       gRPC address workers connect to (empty disables workers) (default ":8081")

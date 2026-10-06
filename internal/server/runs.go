@@ -9,9 +9,13 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/prometheus/client_golang/prometheus"
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/codes"
+	"go.opentelemetry.io/otel/trace"
 
 	"github.com/Ivan825/Stampede/internal/api/gen"
 	"github.com/Ivan825/Stampede/internal/metrics"
+	"github.com/Ivan825/Stampede/internal/observe"
 	"github.com/Ivan825/Stampede/internal/report"
 	"github.com/Ivan825/Stampede/internal/runner"
 	"github.com/Ivan825/Stampede/internal/scenario"
@@ -40,8 +44,13 @@ type activeRun struct {
 	mu       sync.Mutex
 	exec     Execution
 	killed   bool
+	killedBy string
 	stopping bool
 	done     chan struct{}
+	// obs is the run's resolved observe block (target metrics, trace links).
+	obs *observe.Config
+	// link ties the run's span to the request that started it.
+	link trace.Link
 }
 
 type runManager struct {
@@ -137,7 +146,20 @@ func (m *runManager) event(ctx context.Context, r *activeRun, ev ExecEvent) {
 // execute drives one run from start to report. It never panics out: any
 // failure ends the run as failed with the error recorded.
 func (m *runManager) execute(r *activeRun, spec ExecSpec, prog *scenario.Program, plan *scenario.Plan) {
-	ctx := context.Background()
+	// One span covers the run from scheduling to its report. It outlives
+	// the request that started it, so it is a new trace linked to it.
+	ctx, span := tracer.Start(context.Background(), "run",
+		trace.WithNewRoot(), trace.WithLinks(r.link), trace.WithSpanKind(trace.SpanKindInternal),
+		trace.WithAttributes(
+			attribute.String("stampede.run.id", r.id.String()),
+			attribute.String("stampede.project.id", r.project.String()),
+			attribute.String("stampede.scenario", spec.Scenario.Metadata.Name),
+			attribute.String("stampede.target", spec.Scenario.Target.BaseURL),
+			attribute.String("stampede.load.mode", plan.Mode),
+			attribute.Float64("stampede.load.peak", plan.Peak()),
+			attribute.Int("stampede.workers.requested", spec.Workers),
+		))
+	defer span.End()
 	defer func() {
 		m.mu.Lock()
 		delete(m.active, r.id)
@@ -152,6 +174,9 @@ func (m *runManager) execute(r *activeRun, spec ExecSpec, prog *scenario.Program
 		_ = m.s.st.FinishRun(ctx, db.FinishRunParams{ID: r.id, Status: statusFailed, Error: &msg})
 		m.finished.WithLabelValues(statusFailed).Inc()
 		m.publishStatus(ctx, r)
+		m.s.notify.runFinished(r, statusFailed, msg, nil)
+		span.SetAttributes(attribute.String("stampede.run.status", statusFailed))
+		span.SetStatus(codes.Error, msg)
 	}
 
 	m.setStatus(ctx, r, statusStarting)
@@ -167,6 +192,7 @@ func (m *runManager) execute(r *activeRun, spec ExecSpec, prog *scenario.Program
 	if killed {
 		exec.Kill()
 	}
+	span.AddEvent("load started")
 	if err := m.s.st.MarkRunStarted(ctx, db.MarkRunStartedParams{ID: r.id, StartedAt: ptr(time.Now())}); err != nil {
 		m.s.log.Error("mark started", "run", r.id, "error", err)
 	}
@@ -210,6 +236,7 @@ func (m *runManager) execute(r *activeRun, spec ExecSpec, prog *scenario.Program
 		m.s.log.Error("set run workers", "run", r.id, "error", err)
 	}
 	m.setStatus(ctx, r, statusAnalyzing)
+	span.AddEvent("load ended", trace.WithAttributes(attribute.String("stampede.stop_reason", res.StopReason), attribute.Int("stampede.workers", res.Workers)))
 
 	if res.Snapshots != nil {
 		snaps = res.Snapshots
@@ -226,6 +253,11 @@ func (m *runManager) execute(r *activeRun, spec ExecSpec, prog *scenario.Program
 	rep.Notes = append(rep.Notes, res.Notes...)
 	if res.Annotate != nil {
 		res.Annotate(rep)
+	}
+	if !r.obs.Empty() {
+		octx, cancel := context.WithTimeout(ctx, 2*time.Minute)
+		r.obs.Apply(octx, rep, time.Second)
+		cancel()
 	}
 	repJSON, err := json.Marshal(rep)
 	if err != nil {
@@ -254,6 +286,14 @@ func (m *runManager) execute(r *activeRun, spec ExecSpec, prog *scenario.Program
 	m.finished.WithLabelValues(status).Inc()
 	m.publishStatus(ctx, r)
 	m.s.log.Info("run finished", "run", r.id, "status", status, "verdict", verdict, "requests", rep.Overall.Requests)
+	m.s.notify.runFinished(r, status, "", rep)
+	span.SetAttributes(
+		attribute.String("stampede.run.status", status),
+		attribute.String("stampede.run.verdict", verdict),
+		attribute.Int64("stampede.requests", int64(rep.Overall.Requests)), //nolint:gosec // counts fit
+		attribute.Float64("stampede.error_rate", rep.Overall.ErrorRate),
+		attribute.Float64("stampede.p95_seconds", rep.Overall.Latency.P95),
+	)
 }
 
 func ptr[T any](v T) *T { return &v }
@@ -319,13 +359,17 @@ func (m *runManager) stop(id uuid.UUID) bool {
 }
 
 // kill stops a run's load immediately. It is safe to call before the
-// executor has started: the kill is applied as soon as it does.
-func (m *runManager) kill(id uuid.UUID) bool {
+// executor has started: the kill is applied as soon as it does. by names
+// who pulled the kill switch, for notifications.
+func (m *runManager) kill(id uuid.UUID, by string) bool {
 	r := m.get(id)
 	if r == nil {
 		return false
 	}
 	r.mu.Lock()
+	if !r.killed {
+		r.killedBy = by
+	}
 	r.killed = true
 	exec := r.exec
 	r.mu.Unlock()
@@ -370,7 +414,7 @@ func (m *runManager) shutdown(ctx context.Context) {
 	case <-done:
 	case <-ctx.Done():
 		for _, id := range ids {
-			m.kill(id)
+			m.kill(id, "server shutdown")
 		}
 	}
 }

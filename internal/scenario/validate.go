@@ -116,6 +116,11 @@ func (s *Scenario) Validate() error {
 	if _, err := s.Load.Plan(); err != nil {
 		add("load", "%v", err)
 	}
+	if o := s.Observe; o != nil {
+		for _, p := range o.problems() {
+			add(p[0], "%s", p[1])
+		}
+	}
 
 	if len(errs) > 0 {
 		return &ValidationError{Problems: errs}

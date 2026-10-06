@@ -27,7 +27,44 @@ type Scenario struct {
 	Journeys   []Journey         `yaml:"journeys" json:"journeys"`
 	Load       Load              `yaml:"load" json:"load"`
 	Targets    []string          `yaml:"targets,omitempty" json:"targets,omitempty"`
+	// Observe links the run to the target's own telemetry: Prometheus
+	// metrics queried after the run and trace links for slow requests.
+	Observe *Observe `yaml:"observe,omitempty" json:"observe,omitempty"`
 }
+
+// Observe connects a run to the system under test's own telemetry.
+type Observe struct {
+	Prometheus *PrometheusObserve `yaml:"prometheus,omitempty" json:"prometheus,omitempty"`
+	Traces     *TracesObserve     `yaml:"traces,omitempty" json:"traces,omitempty"`
+}
+
+// PrometheusObserve names PromQL queries charted in the report. After the
+// run each query is evaluated over the run's time range.
+type PrometheusObserve struct {
+	// URL is the Prometheus base URL (stampede run only). It may be
+	// templated, for example ${env.PROM_URL}.
+	URL string `yaml:"url,omitempty" json:"url,omitempty"`
+	// BearerToken is sent as Authorization: Bearer (stampede run only).
+	// It may be templated, for example ${secret.PROM_TOKEN}.
+	BearerToken string `yaml:"bearerToken,omitempty" json:"bearerToken,omitempty"`
+	// Integration names a Prometheus integration configured on the server
+	// (server runs only; the server never fetches a URL from a scenario).
+	Integration string `yaml:"integration,omitempty" json:"integration,omitempty"`
+	// Queries maps a short name to a PromQL expression.
+	Queries map[string]string `yaml:"queries" json:"queries"`
+}
+
+// TracesObserve turns the trace IDs of the slowest requests into links.
+type TracesObserve struct {
+	// URL is a link template containing {traceId}, for example
+	// https://jaeger.example.com/trace/{traceId}.
+	URL string `yaml:"url,omitempty" json:"url,omitempty"`
+	// Integration names a traces integration configured on the server.
+	Integration string `yaml:"integration,omitempty" json:"integration,omitempty"`
+}
+
+// TraceIDPlaceholder is replaced by a trace ID in trace link templates.
+const TraceIDPlaceholder = "{traceId}"
 
 // Metadata names and labels a scenario.
 type Metadata struct {

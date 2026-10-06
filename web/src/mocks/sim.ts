@@ -10,7 +10,9 @@ import type {
   Report,
   ReportJourney,
   RunSummary,
+  SlowRequest,
   Stats,
+  TargetMetric,
   Validation,
   Verdict,
 } from '@/api/types';
@@ -391,6 +393,7 @@ export function buildReport(args: {
             wait: { mean: p50 * factor * 0.92, p95: p50 * factor * 2.3 },
             download: { mean: 0.0006 * factor, p95: 0.0024 * factor },
           },
+          slowest: slowestFor(id, n, st.latency.max, args.started, duration, errorRate * factor),
         };
       });
     const jr = steps.reduce((s, x) => s + x.stats.requests, 0);
@@ -457,6 +460,7 @@ export function buildReport(args: {
     errors,
     timeline: tl,
     ...(notes.length ? { notes } : {}),
+    targetMetrics: targetMetricsFor(tl),
   };
   if (args.breakpoint) {
     const failing = tl.find((p) => p.p95 > 0.25 || p.errorRate > 0.01);
@@ -474,6 +478,67 @@ export function buildReport(args: {
       : { found: false, lastPass: Math.round(peakPlanned), unit };
   }
   return report;
+}
+
+/** A deterministic 32-hex-digit trace ID. */
+function traceId(seed: number): string {
+  let x = (seed * 2654435761) >>> 0;
+  let out = '';
+  for (let i = 0; i < 4; i++) {
+    x = (x * 1664525 + 1013904223) >>> 0;
+    out += x.toString(16).padStart(8, '0');
+  }
+  return out;
+}
+
+/** The five slowest requests of a step, as the server keeps them. */
+function slowestFor(
+  stepId: number,
+  requests: number,
+  max: number,
+  started: string,
+  duration: number,
+  errorRate: number,
+): SlowRequest[] {
+  if (requests === 0 || duration === 0) return [];
+  return Array.from({ length: Math.min(5, requests) }, (_, i) => {
+    const t = ((stepId * 7 + i * 13) % Math.max(1, duration)) + ((i * 37) % 10) / 10;
+    const id = traceId(stepId * 10 + i + 1);
+    const failedOne = i === 0 && errorRate > 0.005;
+    return {
+      latency: max * (1 - i * 0.08),
+      at: new Date(Date.parse(started) + t * 1000).toISOString(),
+      t,
+      traceId: id,
+      traceUrl: `https://jaeger.example.com/trace/${id}`,
+      ...(failedOne ? { error: 'timeout after 30s' } : { status: 200 }),
+    };
+  });
+}
+
+/** The target's own metrics, as observe.prometheus would chart them. */
+function targetMetricsFor(tl: Point[]): TargetMetric[] {
+  if (tl.length === 0) return [];
+  const peak = Math.max(...tl.map((p) => p.rps), 1);
+  return [
+    {
+      name: 'cpu',
+      query: 'rate(process_cpu_seconds_total{job="shop"}[30s])',
+      points: tl.map((p) => ({ t: p.t, value: 0.08 + (0.85 * p.rps) / peak })),
+    },
+    {
+      name: 'memory',
+      query: 'process_resident_memory_bytes{job="shop"}',
+      points: tl.map((p, i) => ({ t: p.t, value: 118e6 + i * 0.35e6 + (p.rps / peak) * 40e6 })),
+    },
+    {
+      name: 'db_connections',
+      query: 'pg_stat_activity_count{datname="shop"}',
+      points: tl.map((p) => ({ t: p.t, value: Math.round(4 + (p.rps / peak) * 46) })),
+      error:
+        'the query returned 2 series; the first is shown. Aggregate it to one series, for example sum(...) or max(...)',
+    },
+  ];
 }
 
 export function summaryOf(r: Report): RunSummary {

@@ -22,6 +22,7 @@ var htmlTmpl = template.Must(template.New("report").Funcs(template.FuncMap{
 	"rate":    func(f float64) string { return strconv.FormatFloat(f, 'f', 1, 64) },
 	"when":    func(t time.Time) string { return t.Format("2 Jan 2006 15:04:05 MST") },
 	"secs":    func(f float64) string { return fmtSecs(f) },
+	"offset":  fmtOffset,
 }).Parse(htmlTemplate))
 
 type htmlData struct {
@@ -34,6 +35,16 @@ type htmlData struct {
 	Unit            string
 	// HasStreams shows the streams table.
 	HasStreams bool
+	// SlowRows lists every step's slowest requests.
+	SlowRows []SlowRow
+	// MetricCharts are the target's own metrics (observe.prometheus).
+	MetricCharts []metricChart
+}
+
+type metricChart struct {
+	Name, Query, Error string
+	Min, Max, Last     string
+	Chart              template.HTML
 }
 
 // WriteHTML writes a self-contained HTML report with inline SVG charts and
@@ -96,5 +107,19 @@ func (r *Report) WriteHTML(w io.Writer) error {
 		}
 	}
 	d.NarrativeHTML = narrativeHTML(r.Narrative, r.Facts())
+	d.SlowRows = r.slowRows()
+	for _, m := range r.TargetMetrics {
+		mc := metricChart{Name: m.Name, Query: m.Query, Error: m.Error}
+		if lo, hi, last, ok := m.Range(); ok {
+			mc.Min, mc.Max, mc.Last = MetricValue(lo), MetricValue(hi), MetricValue(last)
+			mx := make([]float64, len(m.Points))
+			my := make([]float64, len(m.Points))
+			for i, p := range m.Points {
+				mx[i], my[i] = p.T, p.Value
+			}
+			mc.Chart = lineChart(m.Name, mx, []series{{Name: m.Name, Class: "s2", Ys: my, Fmt: MetricValue}})
+		}
+		d.MetricCharts = append(d.MetricCharts, mc)
+	}
 	return htmlTmpl.Execute(w, d)
 }

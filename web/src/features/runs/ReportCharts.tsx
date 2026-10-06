@@ -7,10 +7,10 @@ import {
 } from 'echarts/components';
 import * as echarts from 'echarts/core';
 import { CanvasRenderer } from 'echarts/renderers';
-import { useEffect, useMemo, useRef } from 'react';
-import type { Point } from '@/api/types';
+import { useEffect, useMemo, useRef, type ReactNode } from 'react';
+import type { Point, TargetMetric } from '@/api/types';
 import { cssVar, useIsDark } from '@/components/misc';
-import { axisMs, axisPct, clock, ms, secs } from '@/lib/format';
+import { axisMs, axisPct, clock, metricValue, ms, secs } from '@/lib/format';
 
 echarts.use([
   LineChart,
@@ -39,13 +39,18 @@ function TimelineChart({
   leftFmt,
   rightFmt,
   height = 220,
+  synced = true,
+  extra,
 }: {
-  title: string;
+  title: ReactNode;
   xs: number[];
   series: S[];
   leftFmt: (v: number) => string;
   rightFmt?: (v: number) => string;
   height?: number;
+  /** Share the cursor with the other timeline charts (same x axis). */
+  synced?: boolean;
+  extra?: ReactNode;
 }) {
   const el = useRef<HTMLDivElement>(null);
   const dark = useIsDark();
@@ -53,8 +58,10 @@ function TimelineChart({
   useEffect(() => {
     if (!el.current) return;
     const chart = echarts.init(el.current, undefined, { renderer: 'canvas' });
-    chart.group = group;
-    echarts.connect(group);
+    if (synced) {
+      chart.group = group;
+      echarts.connect(group);
+    }
     const muted = cssVar('--muted');
     const line = cssVar('--line');
     const fg = cssVar('--fg');
@@ -147,13 +154,85 @@ function TimelineChart({
       ro.disconnect();
       chart.dispose();
     };
-  }, [xs, series, dark, leftFmt, rightFmt]);
+  }, [xs, series, dark, leftFmt, rightFmt, synced]);
 
   return (
     <figure className="rounded-lg border border-line bg-surface px-3 pt-2.5 pb-1">
       <figcaption className="mb-1 text-[13px] font-semibold">{title}</figcaption>
-      <div ref={el} style={{ height }} role="img" aria-label={`${title} chart`} />
+      {extra}
+      <div
+        ref={el}
+        style={{ height }}
+        role="img"
+        aria-label={`${typeof title === 'string' ? title : 'Metric'} chart`}
+      />
     </figure>
+  );
+}
+
+/** One chart per Prometheus query of the target's own metrics. */
+export function TargetMetricCharts({ metrics }: { metrics: TargetMetric[] }) {
+  return (
+    <div className="grid gap-3 lg:grid-cols-2">
+      {metrics.map((m) => (
+        <TargetMetricChart key={m.name} metric={m} />
+      ))}
+    </div>
+  );
+}
+
+function TargetMetricChart({ metric }: { metric: TargetMetric }) {
+  const { xs, series, range } = useMemo(() => {
+    const pts = metric.points ?? [];
+    const values = pts.map((p) => p.value);
+    return {
+      xs: pts.map((p) => p.t),
+      series: [{ name: metric.name, color: '--s2', data: values, fmt: metricValue }] as S[],
+      range: values.length
+        ? { min: Math.min(...values), max: Math.max(...values), last: values[values.length - 1]! }
+        : null,
+    };
+  }, [metric]);
+  const header = (
+    <span className="flex flex-wrap items-baseline gap-x-3">
+      <span className="font-mono">{metric.name}</span>
+      {range && (
+        <span className="num text-xs font-normal text-muted">
+          min {metricValue(range.min)} · max {metricValue(range.max)} · last{' '}
+          {metricValue(range.last)}
+        </span>
+      )}
+    </span>
+  );
+  const detail = (
+    <>
+      <p className="mb-1 font-mono text-[11px] break-all text-muted">{metric.query}</p>
+      {metric.error && (
+        <p className="mb-1 text-xs text-warn" role="note">
+          {metric.error}
+        </p>
+      )}
+    </>
+  );
+  if (!range) {
+    return (
+      <figure className="rounded-lg border border-line bg-surface px-3 py-2.5">
+        <figcaption className="mb-1 text-[13px] font-semibold">{header}</figcaption>
+        {detail}
+        <p className="text-xs text-muted">No data returned.</p>
+      </figure>
+    );
+  }
+  return (
+    <TimelineChart
+      title={header}
+      extra={detail}
+      xs={xs}
+      series={series}
+      leftFmt={metricValue}
+      height={160}
+      synced={false}
+    />
   );
 }
 
