@@ -407,3 +407,50 @@ func TestSchedulerOwnerLosesRunnerRole(t *testing.T) {
 	clock.Advance(61 * time.Minute)
 	eventually(t, 5*time.Second, "the run", func() bool { return len(countRuns(t, owner, f.pid)) == 1 })
 }
+
+// TestSchedulerSkipsRefusedRun: a firing whose run the server would no
+// longer accept (here, the target's caps were lowered) is skipped and
+// audited. Deleting the scenario deletes the schedule.
+func TestSchedulerSkipsRefusedRun(t *testing.T) {
+	clock := &fakeClock{}
+	base := startSchedServer(t, storetest.Open(t), clock)
+	c := newClient(t, base)
+	setup(t, c)
+	tg := okTarget(t)
+	f := newSchedFixture(t, c, tg.URL, "5s")
+	var sch map[string]any
+	if code := c.do("POST", "/projects/"+f.pid+"/schedules", map[string]any{"name": "capped", "scenarioId": f.sid, "targetId": f.tid, "cron": "@daily"}, &sch); code != 201 {
+		t.Fatalf("create: %d", code)
+	}
+	id := sch["id"].(string)
+	if code := c.do("PATCH", "/targets/"+f.tid, map[string]any{"name": "local", "baseURL": tg.URL, "caps": map[string]any{"maxDurationSeconds": 2}}, nil); code != 200 {
+		t.Fatalf("lower caps: %d", code)
+	}
+	clock.Advance(25 * time.Hour)
+	eventually(t, 3*time.Second, "the skip", func() bool {
+		c.do("GET", "/schedules/"+id, nil, &sch)
+		return strings.Contains(sch["lastSkipReason"].(string), "not accepted")
+	})
+	if !strings.Contains(sch["lastSkipReason"].(string), "caps") {
+		t.Errorf("reason: %v", sch["lastSkipReason"])
+	}
+	if n := len(countRuns(t, c, f.pid)); n != 0 {
+		t.Fatalf("started %d runs over the caps", n)
+	}
+	var audit []map[string]any
+	c.do("GET", "/audit?limit=100", nil, &audit)
+	found := false
+	for _, a := range audit {
+		found = found || (a["action"] == "schedule.skip" && a["actor"] == "scheduler")
+	}
+	if !found {
+		t.Error("the skip was not audited")
+	}
+
+	if code := c.do("DELETE", "/scenarios/"+f.sid, nil, nil); code != 204 {
+		t.Fatalf("delete scenario: %d", code)
+	}
+	if code := c.do("GET", "/schedules/"+id, nil, nil); code != 404 {
+		t.Errorf("schedule outlived its scenario: %d", code)
+	}
+}
