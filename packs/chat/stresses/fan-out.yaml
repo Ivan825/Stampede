@@ -1,0 +1,42 @@
+# Everyone in one room: an all-hands, a live event, a popular channel.
+# Each message must reach every member, so the work grows with the square
+# of the room's size. The ack latency is the fan-out time; watch it as the
+# room fills up.
+apiVersion: stampede.dev/v1
+kind: Scenario
+metadata:
+  name: chat-fan-out
+  tags: [pack:chat, fan-out]
+target:
+  baseURL: ${env.TARGET_URL}
+journeys:
+  - name: town-hall
+    steps:
+      - name: sign in
+        post: /api/login
+        json: { user: "member-${vu}" }
+        check: { status: 200 }
+        extract: { token: "$.token" }
+      - name: connect
+        ws: /ws?room=town-hall
+        headers: { Authorization: "Bearer ${token}" }
+        timeout: 10s
+        steps:
+          - name: welcome
+            expect: { json: { "$.type": welcome }, timeout: 10s }
+          - loop: 20
+            steps:
+              - think: 1s..3s
+              - send: { type: say, text: "message ${iter} from ${vu}" }
+              - name: ack
+                expect: { json: { "$.type": ack }, timeout: 10s }
+load:
+  mode: vus
+  stages:
+    - { duration: 1m, target: "50" }
+    - { duration: 1m, target: "150" }
+    - { duration: 1m, target: "300" }
+    - { duration: 1m, target: "300" }
+targets:
+  - town-hall/ack.p95 < 250ms
+  - errors < 1%

@@ -1,0 +1,7 @@
+# Default targets for chat. An "ack" is the server confirming a message
+# reached every member of the room, so its latency is the fan-out time
+# users notice; connecting must stay quick even when everyone reconnects.
+targets:
+  - chat/ack.p95 < 250ms
+  - chat/connect.p99 < 1s
+  - errors < 1%

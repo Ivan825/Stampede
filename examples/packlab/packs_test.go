@@ -255,11 +255,13 @@ func shorten(s *scenario.Scenario) {
 }
 
 func shortenSteps(steps []scenario.Step) {
-	limit := scenario.Duration(20 * time.Millisecond)
+	// A tenth of the pack's think time, at most 300ms: short enough for a
+	// quick test, long enough that users still pause between messages.
+	limit := scenario.Duration(300 * time.Millisecond)
 	for i := range steps {
 		st := &steps[i]
 		if st.Think != nil {
-			st.Think.Min, st.Think.Max = min(st.Think.Min, limit), min(st.Think.Max, limit)
+			st.Think.Min, st.Think.Max = min(st.Think.Min/10, limit), min(st.Think.Max/10, limit)
 		}
 		if st.Loop != nil {
 			shortenSteps(st.Loop.Steps)
