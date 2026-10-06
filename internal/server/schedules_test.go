@@ -21,7 +21,7 @@ import (
 // come due without waiting.
 type fakeClock struct{ off atomic.Int64 }
 
-func (c *fakeClock) Now() time.Time         { return time.Now().Add(time.Duration(c.off.Load())) }
+func (c *fakeClock) Now() time.Time          { return time.Now().Add(time.Duration(c.off.Load())) }
 func (c *fakeClock) Advance(d time.Duration) { c.off.Add(int64(d)) }
 
 // startSchedServer starts a server on st with a fast scheduler running.
