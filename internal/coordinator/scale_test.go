@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"runtime"
 	"sync/atomic"
 	"testing"
@@ -18,7 +19,13 @@ import (
 // with its own gRPC connection and engine), runs a short rate scenario
 // across all of them and checks the merged result is exact.
 func TestCoordinates200Workers(t *testing.T) {
-	const n = 200
+	n := 200
+	if runtime.GOOS == "darwin" && os.Getenv("CI") != "" {
+		// Hosted macOS runners have a fraction of the Linux runners' CPU;
+		// 200 in-process workers under the race detector overload them.
+		// The Linux job proves 200; this one checks the same paths.
+		n = 60
+	}
 	var hits atomic.Int64
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { hits.Add(1) }))
 	defer srv.Close()
