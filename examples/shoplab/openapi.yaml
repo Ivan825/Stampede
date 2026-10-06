@@ -1,5 +1,862 @@
 openapi: 3.1.0
 info:
   title: ShopLab API
-  version: 0.1.0
-paths: {}
+  version: 1.0.0
+  summary: Sample e-commerce API with planted performance bottlenecks, used to demo Stampede.
+  description: |
+    ShopLab is a small e-commerce JSON API that ships with Stampede. Six
+    performance bottlenecks are planted on purpose; each is switched off by a
+    `SHOPLAB_FIX_*` environment variable (see README.md).
+
+    Typical user journey:
+    1. `GET /api/products` and `GET /api/products/{id}` (anonymous browsing)
+    2. `POST /api/login` with a seeded user (`user0001@shoplab.test` ...
+       `user1000@shoplab.test`, password `shoplab-pass`) to obtain a token
+    3. `POST /api/cart` one or more times
+    4. `POST /api/checkout`
+    5. `GET /api/orders` and `GET /api/orders/{id}`
+
+    Authenticated endpoints take `Authorization: Bearer <token>`. Every error
+    response has the body `{"error":{"code":"...","message":"..."}}`. Money
+    is returned both as integer cents (`*Cents`, authoritative) and as a
+    decimal number for display.
+
+    Products 1-10 start with only 5 units in stock (oversell demo); products
+    1-100 are "popular" with ~2000 reviews each (cache stampede demo).
+  license:
+    name: Apache-2.0
+    identifier: Apache-2.0
+servers:
+  - url: http://localhost:8090
+    description: Local ShopLab (docker compose or `go run ./cmd/shoplab`)
+# Endpoints are anonymous unless they declare bearerAuth themselves.
+security: []
+tags:
+  - name: catalog
+    description: Anonymous product browsing.
+  - name: auth
+    description: Login and the current user.
+  - name: cart
+    description: Per-session cart stored in Redis.
+  - name: orders
+    description: Checkout and order history.
+  - name: admin
+    description: Demo and diagnostics endpoints.
+  - name: ops
+    description: Health, readiness, metrics and this document.
+
+paths:
+  /:
+    get:
+      tags: [ops]
+      operationId: getIndex
+      summary: Service info and active fix flags
+      responses:
+        '200':
+          description: Service information.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Index' }
+              example:
+                name: ShopLab
+                version: dev
+                admin: true
+                fixes: { n1: false, index: false, pool: false, cache: false, race: false, leak: false }
+                links: { openapi: /openapi.yaml, metrics: /metrics, health: /healthz, ready: /readyz }
+
+  /healthz:
+    get:
+      tags: [ops]
+      operationId: getHealth
+      summary: Liveness probe
+      description: Returns 200 whenever the process is serving HTTP. Does not touch dependencies.
+      responses:
+        '200':
+          description: Alive.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [status]
+                properties:
+                  status: { type: string, const: ok }
+              example: { status: ok }
+
+  /readyz:
+    get:
+      tags: [ops]
+      operationId: getReady
+      summary: Readiness probe (checks Postgres and Redis)
+      responses:
+        '200':
+          description: All dependencies reachable.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Readiness' }
+              example: { status: ready, checks: { postgres: ok, redis: ok } }
+        '503':
+          description: At least one dependency is down.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Readiness' }
+              example: { status: unavailable, checks: { postgres: ok, redis: 'dial tcp 10.0.0.3:6379: connect: connection refused' } }
+
+  /metrics:
+    get:
+      tags: [ops]
+      operationId: getMetrics
+      summary: Prometheus metrics
+      description: |
+        Prometheus text exposition. Notable series:
+        `shoplab_http_request_duration_seconds{route,method,status}`,
+        `shoplab_db_queries_total`, `shoplab_db_pool_*` (acquired, idle,
+        total, max, wait count and wait time), `shoplab_cache_loads_total`,
+        `shoplab_sessions`, `shoplab_session_store_bytes`,
+        `shoplab_oversold_total`, `shoplab_fix_enabled{fix}` plus Go runtime
+        and process metrics.
+      responses:
+        '200':
+          description: Metrics in Prometheus text format.
+          content:
+            text/plain:
+              schema: { type: string }
+              example: |
+                # HELP shoplab_oversold_total Units sold beyond available inventory, detected after checkout commits.
+                # TYPE shoplab_oversold_total counter
+                shoplab_oversold_total 0
+
+  /openapi.yaml:
+    get:
+      tags: [ops]
+      operationId: getOpenAPI
+      summary: This OpenAPI document
+      responses:
+        '200':
+          description: OpenAPI 3.1 document.
+          content:
+            application/yaml:
+              schema: { type: string }
+
+  /api/products:
+    get:
+      tags: [catalog]
+      operationId: listProducts
+      summary: List products
+      description: |
+        Paginated product listing ordered by id, with category, stock and
+        average rating. Planted bottleneck N+1: unless `SHOPLAB_FIX_N1` is
+        set, each page issues one extra query per product for its category
+        and another for its rating.
+      parameters:
+        - name: page
+          in: query
+          description: 1-based page number.
+          schema: { type: integer, minimum: 1, default: 1 }
+          example: 1
+        - name: per_page
+          in: query
+          description: Items per page.
+          schema: { type: integer, minimum: 1, maximum: 100, default: 20 }
+          example: 20
+        - name: q
+          in: query
+          description: Case-insensitive substring match on the product name.
+          schema: { type: string }
+          example: shoe
+        - name: category
+          in: query
+          description: Category slug (e.g. `shoes`, `electronics`) or numeric category id.
+          schema: { type: string }
+          example: shoes
+      responses:
+        '200':
+          description: A page of products.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ProductPage' }
+              example:
+                page: 1
+                perPage: 20
+                total: 830
+                products:
+                  - id: 1
+                    sku: SL-000001
+                    name: Urban Navy Trail Shoe
+                    priceCents: 8999
+                    price: 89.99
+                    stock: 5
+                    category: { id: 1, name: Shoes, slug: shoes }
+                    averageRating: 3.98
+                    reviewCount: 2000
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '500': { $ref: '#/components/responses/InternalError' }
+
+  /api/products/{id}:
+    get:
+      tags: [catalog]
+      operationId: getProduct
+      summary: Product detail
+      description: |
+        Full product page with category, stock and a review summary (average,
+        count, histogram, most mentioned terms and the 5 latest reviews).
+        Served from a Redis cache (default TTL 10s); the `X-Cache` response
+        header says `hit`, `miss` or `stale`. `stock` may be up to one TTL old.
+        Planted bottleneck: without `SHOPLAB_FIX_CACHE` every concurrent miss
+        recomputes the expensive review summary (cache stampede).
+      parameters:
+        - $ref: '#/components/parameters/ProductId'
+      responses:
+        '200':
+          description: The product.
+          headers:
+            X-Cache:
+              description: How the response was served.
+              schema: { type: string, enum: [hit, miss, stale, error] }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ProductDetail' }
+              example:
+                id: 1
+                sku: SL-000001
+                name: Urban Navy Trail Shoe
+                description: The urban trail shoe is a rugged pick from our Shoes range. Navy finish, built for outdoor use.
+                priceCents: 8999
+                price: 89.99
+                stock: 5
+                category: { id: 1, name: Shoes, slug: shoes }
+                reviews:
+                  averageRating: 3.98
+                  count: 2000
+                  histogram: { '1': 98, '2': 141, '3': 302, '4': 660, '5': 799 }
+                  highlights:
+                    - { term: comfortable, count: 412 }
+                    - { term: durable, count: 398 }
+                  latest:
+                    - id: 1834
+                      rating: 5
+                      title: Love it
+                      body: Comfortable laces fit great and the sole is solid.
+                      author: Maya Chen
+                      createdAt: '2026-08-30T09:12:44Z'
+                generatedAt: '2026-10-06T12:00:00Z'
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '500': { $ref: '#/components/responses/InternalError' }
+
+  /api/login:
+    post:
+      tags: [auth]
+      operationId: login
+      summary: Log in and obtain a bearer token
+      description: |
+        Creates a server-side session. Seeded users are
+        `user0001@shoplab.test` to `user1000@shoplab.test` (see
+        `data/users.csv`), all with password `shoplab-pass`. Passwords use
+        bcrypt cost 4 so login itself is cheap. Planted bottleneck: without
+        `SHOPLAB_FIX_LEAK` sessions are never evicted and each pins 16 KiB.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/LoginRequest' }
+            example: { email: user0001@shoplab.test, password: shoplab-pass }
+      responses:
+        '200':
+          description: Logged in.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/LoginResponse' }
+              example:
+                token: 3f6c1b2a9d8e7f60514233a4b5c6d7e8f90a1b2c3d4e5f60718293a4b5c6d7e8
+                tokenType: Bearer
+                expiresAt: '2026-10-06T12:15:00Z'
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401':
+          description: Unknown email or wrong password.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+              example: { error: { code: invalid_credentials, message: invalid email or password } }
+        '500': { $ref: '#/components/responses/InternalError' }
+
+  /api/me:
+    get:
+      tags: [auth]
+      operationId: getMe
+      summary: The logged-in user
+      security: [{ bearerAuth: [] }]
+      responses:
+        '200':
+          description: The current user.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/User' }
+              example: { id: 1, email: user0001@shoplab.test, name: Ava Sharma, createdAt: '2024-09-01T12:00:00Z' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '500': { $ref: '#/components/responses/InternalError' }
+
+  /api/cart:
+    get:
+      tags: [cart]
+      operationId: getCart
+      summary: The current session's cart
+      security: [{ bearerAuth: [] }]
+      responses:
+        '200':
+          description: The cart (empty `items` when nothing was added).
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Cart' }
+              example:
+                items:
+                  - { productId: 1, name: Urban Navy Trail Shoe, qty: 1, priceCents: 8999, lineTotalCents: 8999, lineTotal: 89.99 }
+                itemCount: 1
+                subtotalCents: 8999
+                subtotal: 89.99
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '500': { $ref: '#/components/responses/InternalError' }
+    post:
+      tags: [cart]
+      operationId: setCartItem
+      summary: Add a product to the cart or change its quantity
+      description: Sets the quantity of `productId` in the cart (upsert; not additive). Stock is checked at checkout, not here.
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CartRequest' }
+            example: { productId: 1, qty: 1 }
+      responses:
+        '200':
+          description: The updated cart.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Cart' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '500': { $ref: '#/components/responses/InternalError' }
+
+  /api/cart/{productId}:
+    delete:
+      tags: [cart]
+      operationId: removeCartItem
+      summary: Remove a product from the cart
+      description: Idempotent; removing a product that is not in the cart still returns 200.
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - name: productId
+          in: path
+          required: true
+          schema: { type: integer, format: int64, minimum: 1 }
+          example: 1
+      responses:
+        '200':
+          description: The updated cart.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Cart' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '500': { $ref: '#/components/responses/InternalError' }
+
+  /api/checkout:
+    post:
+      tags: [orders]
+      operationId: checkout
+      summary: Place an order for the cart contents
+      description: |
+        Creates an order from the cart, decrements stock and empties the cart.
+        Tax is 8.25%; shipping is $4.99 below $50, free from $50. No request
+        body. Planted bottleneck: without `SHOPLAB_FIX_RACE` stock is checked
+        on an unlocked read and written back as an absolute value, so
+        concurrent checkouts oversell (see `GET /admin/oversold`).
+      security: [{ bearerAuth: [] }]
+      responses:
+        '201':
+          description: Order placed.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/CheckoutResponse' }
+              example: { orderId: 20001, total: 97.41, totalCents: 9741, itemCount: 1, status: placed, createdAt: '2026-10-06T12:00:01Z' }
+        '400':
+          description: The cart is empty.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+              example: { error: { code: empty_cart, message: 'cart is empty; add items with POST /api/cart first' } }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '409':
+          description: A product in the cart does not have enough stock. The cart is left unchanged.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+              example:
+                error:
+                  code: out_of_stock
+                  message: product 1 is out of stock (requested 1, available 0)
+                  details: { productId: 1, requested: 1, available: 0 }
+        '500': { $ref: '#/components/responses/InternalError' }
+
+  /api/orders:
+    get:
+      tags: [orders]
+      operationId: listOrders
+      summary: The user's orders, newest first
+      description: >-
+        Planted bottleneck: without `SHOPLAB_FIX_INDEX` there is no index on
+        orders (user_id, created_at) and every call scans the whole orders table.
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - name: page
+          in: query
+          schema: { type: integer, minimum: 1, default: 1 }
+          example: 1
+        - name: per_page
+          in: query
+          schema: { type: integer, minimum: 1, maximum: 100, default: 20 }
+          example: 20
+      responses:
+        '200':
+          description: A page of orders (without items).
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/OrderPage' }
+              example:
+                page: 1
+                perPage: 20
+                total: 21
+                orders:
+                  - { id: 20001, status: placed, subtotalCents: 8999, taxCents: 742, shippingCents: 0, totalCents: 9741, total: 97.41, itemCount: 1, createdAt: '2026-10-06T12:00:01Z' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '500': { $ref: '#/components/responses/InternalError' }
+
+  /api/orders/{id}:
+    get:
+      tags: [orders]
+      operationId: getOrder
+      summary: One of the user's orders, with items
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: Order id. Orders of other users are reported as 404.
+          schema: { type: integer, format: int64, minimum: 1 }
+          example: 20001
+      responses:
+        '200':
+          description: The order.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Order' }
+              example:
+                id: 20001
+                status: placed
+                subtotalCents: 8999
+                taxCents: 742
+                shippingCents: 0
+                totalCents: 9741
+                total: 97.41
+                itemCount: 1
+                createdAt: '2026-10-06T12:00:01Z'
+                items:
+                  - { productId: 1, name: Urban Navy Trail Shoe, qty: 1, unitPriceCents: 8999, lineTotalCents: 8999 }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '500': { $ref: '#/components/responses/InternalError' }
+
+  /admin/oversold:
+    get:
+      tags: [admin]
+      operationId: getOversold
+      summary: Oversell report
+      description: |
+        Lists products whose inventory ledger is inconsistent: more units sold
+        than received (`oversoldUnits` > 0) and/or a `stock` column that
+        drifted from `unitsReceived - unitsSold` because of lost updates.
+        Always available (read-only).
+      responses:
+        '200':
+          description: Oversell report.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/OversoldReport' }
+              example:
+                oversoldUnits: 37
+                detectedSinceStart: 37
+                raceFixEnabled: false
+                products:
+                  - { id: 1, name: Urban Navy Trail Shoe, stock: 2, unitsReceived: 5, unitsSold: 42, trueStock: -37, oversoldUnits: 37, lostUpdates: 39 }
+        '500': { $ref: '#/components/responses/InternalError' }
+
+  /admin/cache/flush:
+    post:
+      tags: [admin]
+      operationId: flushCache
+      summary: Drop every cached product detail (cold-cache test)
+      description: Only enabled when `SHOPLAB_ADMIN=1`; otherwise 404.
+      responses:
+        '200':
+          description: Cache flushed.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [flushed]
+                properties:
+                  flushed: { type: integer, description: Number of keys deleted. }
+              example: { flushed: 312 }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '500': { $ref: '#/components/responses/InternalError' }
+
+  /admin/stock/reset:
+    post:
+      tags: [admin]
+      operationId: resetStock
+      summary: Restore the low-stock demo products
+      description: Sets products 1-10 back to 5 units with a consistent ledger so the oversell demo can be repeated. Only enabled when `SHOPLAB_ADMIN=1`; otherwise 404.
+      responses:
+        '200':
+          description: Stock reset.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [reset, stock]
+                properties:
+                  reset: { type: integer, description: Products updated. }
+                  stock: { type: integer, description: New stock of each. }
+              example: { reset: 10, stock: 5 }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '500': { $ref: '#/components/responses/InternalError' }
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      description: 'Token from `POST /api/login` (64 hex characters).'
+
+  parameters:
+    ProductId:
+      name: id
+      in: path
+      required: true
+      description: Product id (1..number of seeded products, 10000 by default).
+      schema: { type: integer, format: int64, minimum: 1 }
+      example: 1
+
+  responses:
+    BadRequest:
+      description: Invalid input (bad JSON, failed validation, bad path or query parameter).
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+          example: { error: { code: validation_failed, message: qty must be between 1 and 99 } }
+    Unauthorized:
+      description: Missing, unknown or expired bearer token.
+      headers:
+        WWW-Authenticate:
+          schema: { type: string }
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+          example: { error: { code: unauthorized, message: invalid or expired token } }
+    NotFound:
+      description: The resource does not exist.
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+          example: { error: { code: not_found, message: product not found } }
+    InternalError:
+      description: Unexpected server error (details are logged, not returned).
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+          example: { error: { code: internal, message: internal server error } }
+
+  schemas:
+    Error:
+      type: object
+      required: [error]
+      properties:
+        error:
+          type: object
+          required: [code, message]
+          properties:
+            code:
+              type: string
+              description: Stable machine-readable code.
+              enum:
+                - invalid_json
+                - validation_failed
+                - invalid_id
+                - invalid_query
+                - invalid_credentials
+                - unauthorized
+                - not_found
+                - method_not_allowed
+                - empty_cart
+                - out_of_stock
+                - timeout
+                - not_implemented
+                - internal
+            message: { type: string }
+            details:
+              description: Extra structured data for some codes (e.g. out_of_stock).
+              type: object
+              additionalProperties: true
+
+    Index:
+      type: object
+      required: [name, version, fixes, admin, links]
+      properties:
+        name: { type: string }
+        version: { type: string }
+        admin: { type: boolean, description: Whether mutating /admin endpoints are enabled. }
+        fixes:
+          type: object
+          description: Which planted bottlenecks are fixed.
+          required: [n1, index, pool, cache, race, leak]
+          properties:
+            n1: { type: boolean }
+            index: { type: boolean }
+            pool: { type: boolean }
+            cache: { type: boolean }
+            race: { type: boolean }
+            leak: { type: boolean }
+        links:
+          type: object
+          additionalProperties: { type: string }
+
+    Readiness:
+      type: object
+      required: [status, checks]
+      properties:
+        status: { type: string, enum: [ready, unavailable] }
+        checks:
+          type: object
+          description: Per-dependency result, `ok` or an error message.
+          additionalProperties: { type: string }
+
+    Category:
+      type: object
+      required: [id, name, slug]
+      properties:
+        id: { type: integer, format: int64 }
+        name: { type: string, examples: [Shoes] }
+        slug: { type: string, examples: [shoes] }
+
+    ProductSummary:
+      type: object
+      required: [id, sku, name, priceCents, price, stock, category, averageRating, reviewCount]
+      properties:
+        id: { type: integer, format: int64 }
+        sku: { type: string, examples: [SL-000001] }
+        name: { type: string }
+        priceCents: { type: integer, format: int64, minimum: 0 }
+        price: { type: number, description: Display price in dollars. }
+        stock: { type: integer, description: Units in stock. }
+        category: { $ref: '#/components/schemas/Category' }
+        averageRating: { type: number, minimum: 0, maximum: 5, description: 0 when there are no reviews. }
+        reviewCount: { type: integer, format: int64, minimum: 0 }
+
+    ProductPage:
+      type: object
+      required: [page, perPage, total, products]
+      properties:
+        page: { type: integer, minimum: 1 }
+        perPage: { type: integer, minimum: 1, maximum: 100 }
+        total: { type: integer, format: int64, description: Total matching products. }
+        products:
+          type: array
+          items: { $ref: '#/components/schemas/ProductSummary' }
+
+    Review:
+      type: object
+      required: [id, rating, title, body, author, createdAt]
+      properties:
+        id: { type: integer, format: int64 }
+        rating: { type: integer, minimum: 1, maximum: 5 }
+        title: { type: string }
+        body: { type: string }
+        author: { type: string, description: Reviewer's display name. }
+        createdAt: { type: string, format: date-time }
+
+    TermCount:
+      type: object
+      required: [term, count]
+      properties:
+        term: { type: string }
+        count: { type: integer, format: int64 }
+
+    ReviewSummary:
+      type: object
+      required: [averageRating, count, histogram, highlights, latest]
+      properties:
+        averageRating: { type: number, minimum: 0, maximum: 5 }
+        count: { type: integer, format: int64 }
+        histogram:
+          type: object
+          description: Review count per star rating.
+          required: ['1', '2', '3', '4', '5']
+          properties:
+            '1': { type: integer, format: int64 }
+            '2': { type: integer, format: int64 }
+            '3': { type: integer, format: int64 }
+            '4': { type: integer, format: int64 }
+            '5': { type: integer, format: int64 }
+        highlights:
+          type: array
+          description: Up to 5 most mentioned words across all reviews (empty when there are no reviews).
+          items: { $ref: '#/components/schemas/TermCount' }
+        latest:
+          type: array
+          description: Up to 5 newest reviews, newest first (empty when there are no reviews).
+          items: { $ref: '#/components/schemas/Review' }
+
+    ProductDetail:
+      type: object
+      required: [id, sku, name, description, priceCents, price, stock, category, reviews, generatedAt]
+      properties:
+        id: { type: integer, format: int64 }
+        sku: { type: string }
+        name: { type: string }
+        description: { type: string }
+        priceCents: { type: integer, format: int64, minimum: 0 }
+        price: { type: number }
+        stock: { type: integer, description: May be up to one cache TTL stale. }
+        category: { $ref: '#/components/schemas/Category' }
+        reviews: { $ref: '#/components/schemas/ReviewSummary' }
+        generatedAt: { type: string, format: date-time, description: When this detail was computed (older than now on cache hits). }
+
+    LoginRequest:
+      type: object
+      required: [email, password]
+      properties:
+        email: { type: string, format: email, examples: [user0001@shoplab.test] }
+        password: { type: string, examples: [shoplab-pass] }
+
+    LoginResponse:
+      type: object
+      required: [token, tokenType, expiresAt]
+      properties:
+        token: { type: string, pattern: '^[0-9a-f]{64}$', description: 'Send as `Authorization: Bearer <token>`.' }
+        tokenType: { type: string, const: Bearer }
+        expiresAt: { type: string, format: date-time }
+
+    User:
+      type: object
+      required: [id, email, name, createdAt]
+      properties:
+        id: { type: integer, format: int64 }
+        email: { type: string, format: email }
+        name: { type: string }
+        createdAt: { type: string, format: date-time }
+
+    CartRequest:
+      type: object
+      required: [productId, qty]
+      properties:
+        productId: { type: integer, format: int64, minimum: 1 }
+        qty: { type: integer, minimum: 1, maximum: 99, description: New quantity for this product. }
+
+    CartItem:
+      type: object
+      required: [productId, name, qty, priceCents, lineTotalCents, lineTotal]
+      properties:
+        productId: { type: integer, format: int64 }
+        name: { type: string }
+        qty: { type: integer, minimum: 1 }
+        priceCents: { type: integer, format: int64 }
+        lineTotalCents: { type: integer, format: int64 }
+        lineTotal: { type: number }
+
+    Cart:
+      type: object
+      required: [items, itemCount, subtotalCents, subtotal]
+      properties:
+        items:
+          type: array
+          items: { $ref: '#/components/schemas/CartItem' }
+        itemCount: { type: integer, description: Sum of quantities. }
+        subtotalCents: { type: integer, format: int64 }
+        subtotal: { type: number }
+
+    CheckoutResponse:
+      type: object
+      required: [orderId, total, totalCents, itemCount, status, createdAt]
+      properties:
+        orderId: { type: integer, format: int64 }
+        total: { type: number, description: Grand total in dollars (subtotal + tax + shipping). }
+        totalCents: { type: integer, format: int64 }
+        itemCount: { type: integer }
+        status: { type: string, const: placed }
+        createdAt: { type: string, format: date-time }
+
+    OrderItem:
+      type: object
+      required: [productId, name, qty, unitPriceCents, lineTotalCents]
+      properties:
+        productId: { type: integer, format: int64 }
+        name: { type: string }
+        qty: { type: integer, minimum: 1 }
+        unitPriceCents: { type: integer, format: int64 }
+        lineTotalCents: { type: integer, format: int64 }
+
+    Order:
+      type: object
+      required: [id, status, subtotalCents, taxCents, shippingCents, totalCents, total, itemCount, createdAt]
+      properties:
+        id: { type: integer, format: int64 }
+        status: { type: string, enum: [placed, shipped, delivered] }
+        subtotalCents: { type: integer, format: int64 }
+        taxCents: { type: integer, format: int64 }
+        shippingCents: { type: integer, format: int64 }
+        totalCents: { type: integer, format: int64 }
+        total: { type: number }
+        itemCount: { type: integer, description: Sum of item quantities. }
+        createdAt: { type: string, format: date-time }
+        items:
+          type: array
+          description: Present on GET /api/orders/{id} only.
+          items: { $ref: '#/components/schemas/OrderItem' }
+
+    OrderPage:
+      type: object
+      required: [page, perPage, total, orders]
+      properties:
+        page: { type: integer, minimum: 1 }
+        perPage: { type: integer, minimum: 1, maximum: 100 }
+        total: { type: integer, format: int64 }
+        orders:
+          type: array
+          items: { $ref: '#/components/schemas/Order' }
+
+    OversoldProduct:
+      type: object
+      required: [id, name, stock, unitsReceived, unitsSold, trueStock, oversoldUnits, lostUpdates]
+      properties:
+        id: { type: integer, format: int64 }
+        name: { type: string }
+        stock: { type: integer, format: int64, description: Value of the stock column. }
+        unitsReceived: { type: integer, format: int64 }
+        unitsSold: { type: integer, format: int64 }
+        trueStock: { type: integer, format: int64, description: unitsReceived - unitsSold; negative means oversold. }
+        oversoldUnits: { type: integer, format: int64, minimum: 0 }
+        lostUpdates: { type: integer, format: int64, description: stock - trueStock; units "created" by lost updates. }
+
+    OversoldReport:
+      type: object
+      required: [oversoldUnits, detectedSinceStart, raceFixEnabled, products]
+      properties:
+        oversoldUnits: { type: integer, format: int64, description: Total oversold units in the database. }
+        detectedSinceStart: { type: integer, format: int64, description: Oversold units detected by this process (also shoplab_oversold_total). }
+        raceFixEnabled: { type: boolean }
+        products:
+          type: array
+          items: { $ref: '#/components/schemas/OversoldProduct' }
