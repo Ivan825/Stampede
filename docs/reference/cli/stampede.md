@@ -23,8 +23,10 @@ stampede [flags]
 * [stampede agent](stampede_agent.md)	 - Inject faults into dependencies during a load test
 * [stampede compare](stampede_compare.md)	 - Compare two versions using repeated runs of each
 * [stampede completion](stampede_completion.md)	 - Generate the autocompletion script for the specified shell
+* [stampede coverage](stampede_coverage.md)	 - Show which API endpoints a scenario's journeys exercise and which none does
 * [stampede doctor](stampede_doctor.md)	 - Check the server, its database, workers and a target
 * [stampede down](stampede_down.md)	 - Stop the local Docker Compose stack
+* [stampede drift](stampede_drift.md)	 - Find journeys an API change broke
 * [stampede generate](stampede_generate.md)	 - Draft a scenario with an AI model and dry-run every journey (optional, bring your own key)
 * [stampede init](stampede_init.md)	 - Detect what kind of product a target is and set up the matching pack
 * [stampede keygen](stampede_keygen.md)	 - Print a new random master key for STAMPEDE_MASTER_KEY

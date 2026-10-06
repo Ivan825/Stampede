@@ -147,6 +147,9 @@ scripted model; it has not yet been run against a real provider in this
 repository's CI. `stampede run --narrative` (or `stampede report
 --narrative`) adds a written summary to a finished report in which every
 claim cites the figures behind it and is labelled measured or suspected.
+`stampede coverage` shows which API endpoints no journey exercises, and
+`stampede drift` finds journeys an API change broke ([coverage and
+drift](docs/guides/coverage.md)).
 
 **Safety.** Private targets just work; public targets stay under low caps
 until you prove ownership; requests cannot leave the target's host; hard caps
