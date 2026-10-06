@@ -1,0 +1,9 @@
+# Default targets for content sites. A page served from the cache takes a
+# few milliseconds and one rendered by the origin takes tens or hundreds,
+# so a p95 well under the render time holds only while at least 95% of
+# requests are cache hits: these latency targets are hit-rate targets.
+targets:
+  - http.p95 < 200ms
+  - errors < 1%
+  - "home/home.p95 < 50ms"
+  - "home/top story.p95 < 50ms"

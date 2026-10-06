@@ -1,0 +1,42 @@
+# A cold cache: right after a deploy, a cache flush or a CDN outage,
+# every page has to come from the origin again. Readers ramp up from
+# 10/s to 100/s across 5,000 articles plus the home and section pages;
+# the origin must keep up while the cache fills, and pages must settle
+# back to cache-hit speed. Run it straight after a restart or a purge
+# (NewsLab: POST /api/cache/purge with the editor token).
+apiVersion: stampede.dev/v1
+kind: Scenario
+metadata:
+  name: content-cold-cache
+  tags: [pack:content, cold-start]
+target:
+  baseURL: ${env.TARGET_URL}
+journeys:
+  - name: long-tail
+    weight: 50
+    steps:
+      - name: article
+        get: /articles/story-${rand(15001, 20000)}
+        check: { status: 200 }
+  - name: home
+    weight: 30
+    steps:
+      - name: home
+        get: /
+        check: { status: 200 }
+  - name: section
+    weight: 20
+    steps:
+      - name: section
+        get: /section/${pick(['world', 'politics', 'business', 'technology', 'sport', 'culture', 'science', 'opinion'])}
+        check: { status: 200 }
+load:
+  mode: rate
+  stages:
+    - { duration: 1m, target: 10/s }
+    - { duration: 2m, target: 100/s }
+    - { duration: 2m, target: 100/s }
+targets:
+  - "long-tail/article.p95 < 500ms"
+  - "home/home.p95 < 100ms"
+  - errors < 1%

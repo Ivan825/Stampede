@@ -16,6 +16,7 @@ and as a single binary in CI. (The e-commerce pack's reference app is
 | `public-apis` | [APILab](#apilab) | 8096 | [public-apis](../../packs/public-apis) |
 | `fintech` | [BankLab](#banklab) | 8097 | [fintech](../../packs/fintech) |
 | `social` | [SocialLab](#sociallab) | 8098 | [social](../../packs/social) |
+| `content` | [NewsLab](#newslab) | 8099 | [content](../../packs/content) |
 
 ```sh
 go run ./examples/packlab -product ticketing                # on :8094
@@ -179,3 +180,21 @@ database round trip.
 | `timeline` | The home feed gathers every post of every followed account (several thousand) and sorts them all to show twenty | `feed-rush.yaml`: `feed` p95 and CPU as the rate climbs |
 | `likes` | Every like takes one global lock, scans the post's likers for a repeat and writes the like row before letting go, so likes run one at a time across the app | `viral-spike.yaml`: `like` p95 |
 | `notify` | Notifications are stored and written to the recipient's sockets inside the like, comment or follow request, under one lock | `viral-spike.yaml`: `like` and `comment` p95 |
+
+## NewsLab
+
+A news site with 20,000 articles (`story-00001` ... `story-20000`) in
+eight sections, behind a page cache like a CDN's: `Cache-Control`
+(`s-maxage` 60 seconds for fronts and feeds, 5 minutes for articles),
+`ETag`, `Age`, `X-Cache: HIT|MISS` and 304s for `If-None-Match`. Pages
+are HTML (`/`, `/section/{name}`, `/articles/{slug}`), plus `/feed.xml`
+and a JSON API. The origin renders four pages at a time and a render
+costs 40ms (article) to 100ms (home page). The newsroom publishes with
+`POST /api/articles` and the bearer token `newslab-editor`;
+`GET /api/cache/stats` reports hits, misses and renders.
+
+| Fix | Bottleneck | Where it shows |
+|---|---|---|
+| `cachekey` | The cache key is the full URL, so links with tracking parameters (`utm_*`, `fbclid`) never hit and every such reader waits for the origin | `breaking-news.yaml`: `social-reader` `article` p95 (seconds, against under a millisecond with the fix) |
+| `stampede` | A page that is not cached is rendered by every request that asks for it, so an expired or purged home page sends a crowd to the four render slots | `breaking-news.yaml` and `cold-cache.yaml`: `home` p99 |
+| `purge` | Publishing an article empties the whole cache instead of the pages it appears on | `breaking-news.yaml`: `top story` p99 after each update |
