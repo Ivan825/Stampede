@@ -38,6 +38,7 @@ stampede server [flags]
       --secure-cookies           mark session cookies Secure (use behind HTTPS)
       --trusted-proxy strings    CIDR of a reverse proxy whose X-Forwarded-For is trusted (repeatable)
       --worker-addr string       gRPC address workers connect to (empty disables workers) (default ":8081")
+      --worker-mtls              mutual TLS with a CA built from the master key: workers enroll with stampede worker --mtls and the join token is never sent
       --worker-tls-cert string   TLS certificate for the worker port
       --worker-tls-key string    TLS key for the worker port
 ```

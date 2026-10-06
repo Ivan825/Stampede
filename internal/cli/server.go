@@ -20,6 +20,7 @@ import (
 
 	"github.com/Ivan825/Stampede/internal/coordinator"
 	"github.com/Ivan825/Stampede/internal/keyring"
+	"github.com/Ivan825/Stampede/internal/pki"
 	"github.com/Ivan825/Stampede/internal/safety"
 	"github.com/Ivan825/Stampede/internal/scenario"
 	"github.com/Ivan825/Stampede/internal/server"
@@ -49,6 +50,7 @@ type serverFlags struct {
 	dataDir       string
 	tlsCert       string
 	tlsKey        string
+	workerMTLS    bool
 }
 
 func newServerCmd() *cobra.Command {
@@ -83,6 +85,7 @@ Environment:
 	fl.StringVar(&f.dataDir, "data-dir", os.Getenv("STAMPEDE_DATA_DIR"), "directory holding CSV/JSON feeder files for runs")
 	fl.StringVar(&f.tlsCert, "worker-tls-cert", os.Getenv("STAMPEDE_WORKER_TLS_CERT"), "TLS certificate for the worker port")
 	fl.StringVar(&f.tlsKey, "worker-tls-key", os.Getenv("STAMPEDE_WORKER_TLS_KEY"), "TLS key for the worker port")
+	fl.BoolVar(&f.workerMTLS, "worker-mtls", os.Getenv("STAMPEDE_WORKER_MTLS") == "true", "mutual TLS with a CA built from the master key: workers enroll with stampede worker --mtls and the join token is never sent")
 	fl.StringVar(&f.abortErrors, "abort-errors", envOr("STAMPEDE_ABORT_ERRORS", "90%"), "stop any run whose error rate stays at or above this (0 disables)")
 	fl.DurationVar(&f.abortFor, "abort-for", 30*time.Second, "how long --abort-errors must hold before a run is stopped")
 	fl.StringSliceVar(&f.trusted, "trusted-proxy", splitEnv("STAMPEDE_TRUSTED_PROXIES"), "CIDR of a reverse proxy whose X-Forwarded-For is trusted (repeatable)")
@@ -163,8 +166,30 @@ func runServer(cmd *cobra.Command, f *serverFlags) error {
 			cfg.Executor = local
 			break
 		}
-		coord := coordinator.New(coordinator.Config{JoinToken: f.joinToken, Logger: log})
+		ccfg := coordinator.Config{JoinToken: f.joinToken, Logger: log}
 		var tlsCfg *tls.Config
+		if f.workerMTLS {
+			if f.tlsCert != "" {
+				return errors.New("--worker-mtls and --worker-tls-cert are alternatives; choose one")
+			}
+			if kr == nil {
+				return errors.New("--worker-mtls needs a master key (STAMPEDE_MASTER_KEY): the CA is derived from it")
+			}
+			ca, err := pki.NewCA(kr.Derive(pki.Purpose, 32))
+			if err != nil {
+				return err
+			}
+			host, _ := os.Hostname()
+			sc, err := ca.ServerCert([]string{host, "localhost", "127.0.0.1", "::1"}, 10*365*24*time.Hour)
+			if err != nil {
+				return err
+			}
+			tlsCfg = ca.ServerTLS(sc)
+			ccfg.CA = ca
+			log.Info("worker mutual TLS on", "ca", pki.Fingerprint(ca.DER),
+				"hint", "pin it on workers with --ca-fingerprint")
+		}
+		coord := coordinator.New(ccfg)
 		if f.tlsCert != "" {
 			cert, err := tls.LoadX509KeyPair(f.tlsCert, f.tlsKey)
 			if err != nil {

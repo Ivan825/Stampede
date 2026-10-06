@@ -24,6 +24,8 @@ type workerFlags struct {
 	insecure bool
 	caFile   string
 	verbose  bool
+	mtls     bool
+	caPin    string
 }
 
 func newWorkerCmd() *cobra.Command {
@@ -38,9 +40,15 @@ needed, so workers run fine behind NAT and firewalls.
 The worker reconnects on its own if the connection drops. If it loses the
 server for 10 seconds during a run it stops generating load by itself.
 
+With --mtls (for servers started with --worker-mtls) the worker enrolls for
+its own certificate from the server's built-in CA, proving it knows the join
+token without sending it, and connects with that certificate. Pin the CA
+with --ca-fingerprint, as logged by the server.
+
 The join token can also be given in STAMPEDE_JOIN_TOKEN, which keeps it out
 of the process list.`,
-		Example: `  stampede worker --server stampede.internal:7443 --token $TOKEN --region mumbai
+		Example: `  stampede worker --server stampede.internal:8081 --mtls --ca-fingerprint sha256:9f2c... --region mumbai
+  stampede worker --server stampede.internal:7443 --token $TOKEN --region mumbai
   stampede worker --server 10.0.0.5:7443 --insecure --label pool=spot --max-vus 2000`,
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
@@ -68,6 +76,8 @@ of the process list.`,
 	fl.IntVar(&f.maxVUs, "max-vus", 0, "most virtual users this worker accepts (0 = no limit)")
 	fl.BoolVar(&f.insecure, "insecure", false, "connect without TLS (trusted networks only)")
 	fl.StringVar(&f.caFile, "ca", "", "PEM file of the CA that signed the server certificate (default the system roots)")
+	fl.BoolVar(&f.mtls, "mtls", os.Getenv("STAMPEDE_WORKER_MTLS") == "true", "enroll with the server's built-in CA and connect with this worker's own certificate (server started with --worker-mtls)")
+	fl.StringVar(&f.caPin, "ca-fingerprint", os.Getenv("STAMPEDE_CA_FINGERPRINT"), "with --mtls, the server CA's fingerprint (sha256:...); without it the CA is trusted on first enrollment, authenticated by the join token")
 	fl.BoolVarP(&f.verbose, "verbose", "v", false, "debug logging")
 	return cmd
 }
@@ -75,7 +85,16 @@ of the process list.`,
 func (f *workerFlags) config() (worker.Config, error) {
 	cfg := worker.Config{
 		Server: f.server, Token: f.token, Name: f.name, Region: f.region,
-		MaxVUs: f.maxVUs, Insecure: f.insecure,
+		MaxVUs: f.maxVUs, Insecure: f.insecure, MTLS: f.mtls, CAFingerprint: strings.TrimSpace(f.caPin),
+	}
+	if f.mtls && (f.insecure || f.caFile != "") {
+		return cfg, errors.New("--mtls replaces --insecure and --ca; use one")
+	}
+	if f.caPin != "" && !f.mtls {
+		return cfg, errors.New("--ca-fingerprint needs --mtls")
+	}
+	if p := cfg.CAFingerprint; p != "" && (!strings.HasPrefix(p, "sha256:") || len(p) != len("sha256:")+64) {
+		return cfg, errors.New("--ca-fingerprint must look like sha256:<64 hex digits>, as printed by the server")
 	}
 	if cfg.Server == "" {
 		return cfg, errors.New("--server is required")
