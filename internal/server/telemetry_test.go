@@ -1,10 +1,14 @@
 package server_test
 
 import (
+	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"path/filepath"
+	"regexp"
 	"strings"
 	"testing"
 
@@ -80,6 +84,26 @@ load: {vus: 1, duration: 1s}`}, &sc)
 	} {
 		if !strings.Contains(m, want) {
 			t.Errorf("/metrics lacks %s", want)
+		}
+	}
+
+	// Every Stampede and Go runtime metric the Grafana dashboard queries
+	// must exist. (process_* metrics depend on the operating system.)
+	dash, err := os.ReadFile(filepath.Join("..", "..", "deploy", "grafana", "stampede-server.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var doc map[string]any
+	if err := json.Unmarshal(dash, &doc); err != nil {
+		t.Fatalf("dashboard is not JSON: %v", err)
+	}
+	queried := regexp.MustCompile(`\b(stampede|go)_[a-z_]+`).FindAllString(string(dash), -1)
+	if len(queried) < 5 {
+		t.Fatalf("dashboard queries only %v", queried)
+	}
+	for _, n := range queried {
+		if !strings.Contains(m, "\n"+n) {
+			t.Errorf("the dashboard queries %s, which /metrics does not serve", n)
 		}
 	}
 }
