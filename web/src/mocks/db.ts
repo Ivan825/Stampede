@@ -3,6 +3,7 @@
  * OpenAPI-generated types so fixtures cannot drift from the API.
  */
 import type {
+  AIProvider,
   AuditEntry,
   Integration,
   Me,
@@ -34,6 +35,7 @@ import {
   type SimParams,
 } from './sim';
 import { nextTimes, parseCron } from './cron';
+import { seedAI, type MockAIJob } from './ai';
 import {
   catalogBreakpoint,
   checkoutStress,
@@ -85,6 +87,8 @@ export interface Db {
   channels: (NotificationChannel & { url: string })[];
   deliveries: Record<string, NotificationDelivery[]>;
   schedules: Schedule[];
+  aiProviders: AIProvider[];
+  aiJobs: MockAIJob[];
 }
 
 function scenarioFrom(
@@ -370,7 +374,23 @@ export function createDb(options: MockOptions): Db {
     channels: [],
     deliveries: {},
     schedules: [],
+    aiProviders: [],
+    aiJobs: [],
   };
+  {
+    const ai = seedAI({
+      uuid,
+      ago,
+      projectId: p1.id,
+      targetId: targets[1]!.id,
+      targetURL: targets[1]!.baseURL,
+      smoke: sSmoke,
+      ana: 'ana@acme.dev',
+      tom: 'tom@acme.dev',
+    });
+    db.aiProviders = ai.providers;
+    db.aiJobs = ai.jobs;
+  }
   {
     const id = uuid();
     const delivery: NotificationDelivery = {
