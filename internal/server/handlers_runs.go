@@ -456,6 +456,17 @@ func (h *handlers) GetRunReport(ctx context.Context, req gen.GetRunReportRequest
 		rep.WriteMarkdown(&buf)
 		setDownload("md")
 		return gen.GetRunReport200TextmarkdownResponse{Body: &buf, ContentLength: int64(buf.Len())}, nil
+	case gen.Csv, gen.TimelineCsv:
+		write, suffix := rep.WriteCSV, ""
+		if format == gen.TimelineCsv {
+			write, suffix = rep.WriteTimelineCSV, "-timeline"
+		}
+		if err := write(&buf); err != nil {
+			return nil, err
+		}
+		name += suffix
+		setDownload("csv")
+		return gen.GetRunReport200TextcsvResponse{Body: &buf, ContentLength: int64(buf.Len())}, nil
 	default:
 		var m map[string]any
 		if err := json.Unmarshal(raw, &m); err != nil {

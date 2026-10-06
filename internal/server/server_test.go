@@ -333,13 +333,18 @@ targets: ["errors < 1%", "p95 < 1s"]`
 	if c.do("GET", "/runs/"+rid+"/timeline", nil, &tl); len(tl) < 3 {
 		t.Errorf("timeline %d", len(tl))
 	}
-	for _, f := range []string{"html", "junit", "markdown"} {
+	for f, first := range map[string]string{"html": "<!doctype html>", "junit": "<?xml", "markdown": "", "csv": "journey,step,", "timeline-csv": "t_s,rps,"} {
 		r2, _ := http.NewRequest("GET", base+"/api/v1/runs/"+rid+"/report?format="+f, nil)
 		resp, err := c.http.Do(r2)
 		if err != nil || resp.StatusCode != 200 || !strings.Contains(resp.Header.Get("Content-Disposition"), "attachment") {
 			t.Errorf("format %s: %v %v", f, err, resp)
+			continue
 		}
+		body, _ := io.ReadAll(resp.Body)
 		resp.Body.Close()
+		if !strings.HasPrefix(string(body), first) {
+			t.Errorf("format %s starts %.40q", f, body)
+		}
 	}
 
 	// Kill switch: a long run is killed and ends aborted.

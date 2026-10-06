@@ -696,8 +696,11 @@ paths:
           in: query
           schema:
             type: string
-            enum: [json, html, junit, markdown]
+            enum: [json, html, junit, markdown, csv, timeline-csv]
             default: json
+          description: >
+            csv is one row per step, per journey and for the whole run;
+            timeline-csv is one row per second. Latencies are in milliseconds.
       responses:
         "200":
           description: The report. JSON follows the `stampede run --json` format.
@@ -709,6 +712,8 @@ paths:
             application/xml:
               schema: { type: string }
             text/markdown:
+              schema: { type: string }
+            text/csv:
               schema: { type: string }
         "404": { $ref: "#/components/responses/NotFound" }
         "409": { $ref: "#/components/responses/Conflict" }
