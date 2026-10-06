@@ -42,7 +42,13 @@ jobs:
         with:
           go-version-file: go.mod
       - name: test
-        run: go test -race -count=1 -coverprofile=coverage.out ./...
+        shell: bash
+        run: |
+          set -o pipefail
+          if ! go test -race -count=1 -coverprofile=coverage.out ./... 2>&1 | tee test.log; then
+            echo "::error title=failing tests::$(grep -E -- '--- FAIL|^FAIL|panic:' test.log | head -15 | tr '\n' ' ')"
+            exit 1
+          fi
       - name: coverage summary
         if: matrix.os == 'ubuntu-latest'
         run: go tool cover -func=coverage.out | tail -1
