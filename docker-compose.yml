@@ -42,6 +42,9 @@ services:
       STAMPEDE_JOIN_TOKEN: ${STAMPEDE_JOIN_TOKEN:-local-compose-join-token}
       STAMPEDE_MASTER_KEY_FILE: /data/master.key
       STAMPEDE_MASTER_KEY_AUTOGEN: "true"
+      # Workers enroll for their own certificates from a CA derived from
+      # the master key; the join token never crosses the network.
+      STAMPEDE_WORKER_MTLS: "true"
       STAMPEDE_LOG_FORMAT: text
       # CSV/JSON feeder files for runs. ShopLab's data folder is mounted so
       # its scenarios (which read ../data/users.csv) work unchanged.
@@ -61,7 +64,7 @@ services:
 
   worker-1: &worker
     image: ghcr.io/ivan825/stampede:${STAMPEDE_VERSION:-local}
-    command: ["worker", "--server", "server:8081", "--insecure", "--name", "worker-1", "--region", "local"]
+    command: ["worker", "--server", "server:8081", "--mtls", "--name", "worker-1", "--region", "local"]
     environment:
       STAMPEDE_JOIN_TOKEN: ${STAMPEDE_JOIN_TOKEN:-local-compose-join-token}
     volumes:
@@ -73,7 +76,7 @@ services:
 
   worker-2:
     <<: *worker
-    command: ["worker", "--server", "server:8081", "--insecure", "--name", "worker-2", "--region", "local"]
+    command: ["worker", "--server", "server:8081", "--mtls", "--name", "worker-2", "--region", "local"]
 
 volumes:
   stampede-db:

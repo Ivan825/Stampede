@@ -51,6 +51,11 @@ spec:
             - --server={{ include "stampede.workerAddress" . }}
             {{- if .Values.workerTLS.enabled }}
             - --ca=/etc/stampede/worker-tls/ca.crt
+            {{- else if .Values.workerMTLS.enabled }}
+            - --mtls
+            {{- with .Values.workerMTLS.caFingerprint }}
+            - --ca-fingerprint={{ . }}
+            {{- end }}
             {{- else }}
             - --insecure
             {{- end }}

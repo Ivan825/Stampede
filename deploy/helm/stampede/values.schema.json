@@ -112,6 +112,14 @@
         "annotations": { "$ref": "#/definitions/stringMap" }
       }
     },
+    "workerMTLS": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "enabled": { "type": "boolean" },
+        "caFingerprint": { "type": "string", "pattern": "^(sha256:[0-9a-f]{64})?$" }
+      }
+    },
     "workerTLS": {
       "type": "object",
       "additionalProperties": false,

@@ -37,8 +37,8 @@ the files it runs. This page lists what is defended today and what is not.
 | Stolen API token | tokens hashed at rest, revocable, optional expiry, can never exceed their owner's current role, cannot mint other tokens | built |
 | Secrets leaking into reports, logs or AI prompts | secrets never returned by the API; env values stored redacted on runs; AI traffic redacted (tokens, cookies, auth headers, emails, phone and card numbers) before leaving | built |
 | Database dump exposes secrets | AES-256-GCM envelope encryption bound to project and name; master key kept outside the database | built |
-| A rogue worker | join token compared in constant time; a worker only receives runs assigned to it | partial: one shared token, no per-worker identity |
-| Eavesdropping between server and workers | TLS on the worker port when certificates are configured | partial: mutual TLS with a built-in CA is planned |
+| A rogue worker | with `--worker-mtls`: each worker enrolls for its own short-lived certificate by proving it knows the join token without sending it; without it, the token is compared in constant time. A worker only receives runs assigned to it | partial: enrollment is gated by one shared token, and there is no per-worker revocation short of rotating it |
+| Eavesdropping or impersonation between server and workers | mutual TLS 1.3 with a CA derived from the master key (default in Compose and Helm); enrollment proofs bound to the TLS session; worker certificates valid only for client authentication; optional CA fingerprint pinning | built |
 | Denial of service on the worker port | gRPC pinned past GO-2026-6443; keepalive limits | partial: no rate limiting per peer |
 | Runaway run | kill switch (UI, CLI, API), worker dead man's switch after 10 s without the server, breakpoint auto-stop, auto-abort on sustained errors or latency (server floor 90% errors for 30 s by default) | built |
 | Supply chain | Dependabot, govulncheck and golangci-lint (gosec) in CI, pinned workflow actions, distroless non-root images; signed releases and SBOMs from GoReleaser | built in config; not yet exercised by a published release |
@@ -49,10 +49,15 @@ the files it runs. This page lists what is defended today and what is not.
   and serves; others wait as standbys (healthy, not ready) and take over
   within a few seconds if the leader's database session ends. Running runs
   are not handed over: the new leader marks them as interrupted.
-- Workers share a join token; a leaked token lets an attacker register a
-  worker and receive scenarios (including the run's secrets) for runs
-  assigned to it. Rotate the token if it leaks, and keep the worker port off
-  the public internet or behind TLS.
+- Workers share a join token for enrollment; a leaked token lets an
+  attacker enroll a worker and receive scenarios (including the run's
+  secrets) for runs assigned to it. Rotate the token if it leaks: enrolled
+  certificates expire within 24 hours. Keep the worker port off the public
+  internet where you can.
+- A worker without `--ca-fingerprint` trusts the CA at its first
+  enrollment. Only a holder of the join token can answer that enrollment,
+  so an attacker would need the token. Pin the fingerprint to remove even
+  that.
 - AI dry runs send real requests to the target (for example a checkout
   creates a real order); use a test environment.
 

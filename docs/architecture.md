@@ -51,5 +51,35 @@ One Go binary in several roles.
 Server replicas are active-passive through a Postgres advisory lock: one
 serves, the others wait as standbys and take over if it goes away.
 
-**Planned:** mutual TLS with a built-in CA, several active replicas sharing
-runs, reassigning a lost worker's share.
+## Worker security
+
+With `stampede server --worker-mtls` (the default in Docker Compose and the
+Helm chart), the worker port uses mutual TLS with a CA built into the
+server:
+
+1. The server derives an Ed25519 CA from its master key (HKDF), so every
+   replica has the same CA without storing it, and logs its fingerprint.
+2. A worker started with `--mtls` makes a fresh key pair and opens a
+   TLS 1.3 connection. It proves it knows the join token by sending an
+   HMAC, keyed by the token, over keying material exported from that TLS
+   session. The token itself is never sent, and the proof is useless on
+   any other connection, so a machine in the middle can neither learn the
+   token nor relay the proof.
+3. The server answers with a certificate for the worker's public key
+   (valid 24 hours, for client authentication only), the CA certificate,
+   and its own HMAC over both. The worker trusts the CA only if that HMAC
+   checks out, or if it matches `--ca-fingerprint` when one is given.
+4. The worker then connects with its certificate. The server requires it
+   on the run stream, and the worker checks the server's certificate
+   against the pinned CA and for server-only usage, so a worker
+   certificate can never pose as the server.
+5. Workers renew at half-life. Rotating the join token locks every worker
+   out within a day.
+
+Without `--worker-mtls`, the worker port can use a certificate from your
+own CA (`--worker-tls-cert`, `--worker-tls-key`, workers `--ca`) or no TLS
+on a trusted network (`--insecure`). In both cases the join token travels
+in `Hello`.
+
+**Planned:** several active replicas sharing runs, reassigning a lost
+worker's share.

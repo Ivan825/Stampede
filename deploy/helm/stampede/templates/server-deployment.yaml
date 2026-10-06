@@ -112,6 +112,10 @@ spec:
                   name: {{ default (include "stampede.secretName" .) .Values.database.external.existingSecret }}
                   key: {{ .Values.database.external.existingSecretKey }}
             {{- end }}
+            {{- if and .Values.workerMTLS.enabled (not .Values.workerTLS.enabled) }}
+            - name: STAMPEDE_WORKER_MTLS
+              value: "true"
+            {{- end }}
             {{- if .Values.workerTLS.enabled }}
             - name: STAMPEDE_WORKER_TLS_CERT
               value: /etc/stampede/worker-tls/tls.crt

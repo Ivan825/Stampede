@@ -33,7 +33,7 @@ groups:
       - { name: Distributed workers over gRPC, synchronised start, lossless merge, status: shipped, doc: how-it-works }
       - { name: Worker loss marked in reports, dead man's switch, status: shipped }
       - { name: Active-passive server replicas, status: shipped }
-      - { name: Mutual TLS with a built-in certificate authority, status: planned }
+      - { name: Mutual TLS with a built-in certificate authority, status: shipped, doc: docs/architecture }
   - name: Workflow
     features:
       - { name: Web UI with scenario editor, live runs and reports, status: shipped }

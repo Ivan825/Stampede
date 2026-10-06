@@ -116,10 +116,20 @@ service:
   workerPort: 8081
   annotations: {}
 
-# Optional TLS for the worker port. The secret must hold tls.crt and tls.key
-# for the server, and ca.crt that in-cluster workers use to verify it. The
-# certificate must name the service (<fullname>, <fullname>.<namespace>.svc).
-# Without it, in-cluster workers connect with --insecure.
+# Mutual TLS on the worker port with a CA the server derives from its master
+# key (on by default). Each worker enrolls for its own certificate, proving it
+# knows the join token without sending it. Set caFingerprint (printed in the
+# server log as "worker mutual TLS on ... ca=sha256:...") to pin the CA on
+# workers instead of trusting it at first enrollment.
+workerMTLS:
+  enabled: true
+  caFingerprint: ""
+
+# Optional TLS for the worker port with your own certificates, instead of
+# workerMTLS. The secret must hold tls.crt and tls.key for the server, and
+# ca.crt that in-cluster workers use to verify it. The certificate must name
+# the service (<fullname>, <fullname>.<namespace>.svc). With neither, in-cluster
+# workers connect with --insecure.
 workerTLS:
   enabled: false
   secretName: ""

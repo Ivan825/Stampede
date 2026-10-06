@@ -118,12 +118,21 @@ seconds during a run.
 
 Workers elsewhere (VMs, other clusters, other clouds) need the worker port
 exposed (for example `service.type=LoadBalancer`, or a separate Service)
-and the join token; see [terraform.md](terraform.md). Use TLS on the worker
-port when it crosses an untrusted network: create a TLS Secret with
+and the join token; see [terraform.md](terraform.md).
+
+The worker port uses mutual TLS by default (`workerMTLS.enabled=true`):
+the server derives a CA from its master key, and every worker enrolls for
+its own certificate with `--mtls`. Set `workerMTLS.caFingerprint` (logged by
+the server at start) to pin the CA on workers. Without a pin, a worker
+trusts the CA at its first enrollment, and only a holder of the join token
+can produce that answer.
+
+To use certificates from your own CA instead, create a TLS Secret with
 `tls.crt`, `tls.key` and `ca.crt` (the certificate must name the service
-host), then set `workerTLS.enabled=true` and `workerTLS.secretName`. The
-TLS settings render and match the server's `--worker-tls-cert/key` and the
-worker's `--ca` flags, but have not been exercised on a cluster yet.
+host), then set `workerTLS.enabled=true` and `workerTLS.secretName`. This
+takes precedence over `workerMTLS`. These settings render and match the
+server's `--worker-tls-cert/key` and the worker's `--ca` flags, but have not
+been exercised on a cluster yet.
 
 ## One server replica
 

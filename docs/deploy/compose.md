@@ -52,9 +52,14 @@ test. The Compose file keeps 8081 on the internal network; publish it (add
 `"8081:8081"` to the server's `ports`) and run on each machine:
 
 ```sh
-STAMPEDE_JOIN_TOKEN=... stampede worker --server <server-host>:8081 --insecure --region <name>
+STAMPEDE_JOIN_TOKEN=... stampede worker --server <server-host>:8081 --mtls \
+  --ca-fingerprint sha256:... --region <name>
 ```
 
-`--insecure` sends the join token in clear text: only use it on a trusted
-network, or configure TLS on the worker port (`STAMPEDE_WORKER_TLS_CERT`,
-`STAMPEDE_WORKER_TLS_KEY` on the server, `--ca` on the worker).
+The Compose stack runs the worker port with mutual TLS
+(`STAMPEDE_WORKER_MTLS=true`). Each worker enrolls for its own certificate
+from a CA the server derives from its master key, and the join token never
+crosses the network ([how it works](../concepts/distributed.md#worker-security)).
+The server logs the CA fingerprint at start (`worker mutual TLS on ...
+ca=sha256:...`). Pass it as `--ca-fingerprint` so a worker accepts only
+this server, even at its first enrollment.

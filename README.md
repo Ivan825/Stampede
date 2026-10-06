@@ -76,7 +76,9 @@ files ([protocols](docs/protocols.md)).
 Load is split by capacity with no arrival lost or duplicated, start times are
 synchronised to within a millisecond, results merge losslessly, a lost
 worker is marked rather than silently ignored, and a kill reaches every
-worker in under a millisecond on a local network.
+worker in under a millisecond on a local network. With `--worker-mtls`
+(the default in Compose and Helm) every worker gets its own certificate from
+a CA built into the server, and the join token never crosses the network.
 
 **Control plane and UI.** `stampede server` with PostgreSQL/TimescaleDB:
 REST API ([OpenAPI](api/openapi.yaml)), web UI with a scenario editor and
@@ -119,7 +121,7 @@ per server and per target; audit log ([safety](docs/safety.md)).
 Browser (Playwright) workers, the plugin interface with MQTT, Kafka, Redis,
 SQL and UDP plugins, the other 19 product packs, AI generation from browser
 crawls, the fault-injection
-agent, mutual TLS between server and workers, several
+agent, several
 active server replicas (today extra replicas are hot standbys), scheduled runs, side-by-side benchmarks with k6 and
 wrk2, a packaged GitHub Action, and the website.
 
