@@ -96,7 +96,7 @@ func (v *VU) runIteration(ctx context.Context, intended time.Time) error {
 		}
 		v.vars.data[name] = row
 	}
-	_, _ = cryptoRandRead(v.rng, v.traceID[:])
+	fillRandom(v.rng, v.traceID[:])
 
 	v.e.collector.IterationStarted(v.ID, j.Index, lag)
 	err := v.runSteps(ctx, j.Steps, intended)
@@ -108,14 +108,14 @@ func (v *VU) runIteration(ctx context.Context, intended time.Time) error {
 	return err
 }
 
-func cryptoRandRead(r *rand.Rand, b []byte) (int, error) {
+// fillRandom fills b from r. Trace IDs need uniqueness, not secrecy.
+func fillRandom(r *rand.Rand, b []byte) {
 	for i := 0; i < len(b); i += 8 {
 		x := r.Uint64()
 		for j := 0; j < 8 && i+j < len(b); j++ {
 			b[i+j] = byte(x >> (8 * j))
 		}
 	}
-	return len(b), nil
 }
 
 func (v *VU) runSteps(ctx context.Context, steps []*scenario.CStep, intended time.Time) error {
@@ -364,7 +364,7 @@ func (v *VU) addTraceHeaders(req *http.Request) {
 		return
 	}
 	var span [8]byte
-	_, _ = cryptoRandRead(v.rng, span[:])
+	fillRandom(v.rng, span[:])
 	req.Header.Set("traceparent", "00-"+hex.EncodeToString(v.traceID[:])+"-"+hex.EncodeToString(span[:])+"-01")
 	if v.e.opts.RunID != "" {
 		req.Header.Set("baggage", "stampede.run_id="+url.QueryEscape(v.e.opts.RunID)+",stampede.vu="+strconv.Itoa(v.ID))

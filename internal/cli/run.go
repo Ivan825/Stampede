@@ -264,7 +264,7 @@ func checkTarget(ctx context.Context, stderr io.Writer, base string, plan *scena
 		return policy.Allow, nil
 	}
 	if err := safety.CheckPlan(plan, safety.UnverifiedPublicCaps); err != nil {
-		return nil, fmt.Errorf("%s is a public host whose ownership is not verified, so load is capped: %v.\nRun `stampede target verify %s` to verify it", u.Hostname(), err, base)
+		return nil, fmt.Errorf("%s is a public host whose ownership is not verified, so load is capped: %w.\nRun `stampede target verify %s` to verify it", u.Hostname(), err, base)
 	}
 	fmt.Fprintf(stderr, "stampede: %s is public and unverified; running under the low default caps\n", u.Hostname())
 	return policy.Allow, nil
@@ -278,7 +278,7 @@ func writeOutputs(stdout io.Writer, rep *report.Report, f *runFlags) error {
 		if path == "-" {
 			return fn(stdout)
 		}
-		if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		if err := os.MkdirAll(filepath.Dir(path), 0o750); err != nil {
 			return err
 		}
 		fh, err := os.Create(path)
