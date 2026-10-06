@@ -46,17 +46,19 @@ export function CopyButton({ value, label = 'Copy' }: { value: string; label?: s
 
 export function Tip({ content, children }: { content: ReactNode; children: ReactNode }) {
   return (
-    <Tooltip.Root delayDuration={300}>
-      <Tooltip.Trigger asChild>{children}</Tooltip.Trigger>
-      <Tooltip.Portal>
-        <Tooltip.Content
-          sideOffset={6}
-          className="z-[70] max-w-xs rounded-md border border-line bg-surface px-2 py-1 text-xs text-fg shadow-md"
-        >
-          {content}
-        </Tooltip.Content>
-      </Tooltip.Portal>
-    </Tooltip.Root>
+    <Tooltip.Provider delayDuration={300}>
+      <Tooltip.Root>
+        <Tooltip.Trigger asChild>{children}</Tooltip.Trigger>
+        <Tooltip.Portal>
+          <Tooltip.Content
+            sideOffset={6}
+            className="z-[70] max-w-xs rounded-md border border-line bg-surface px-2 py-1 text-xs text-fg shadow-md"
+          >
+            {content}
+          </Tooltip.Content>
+        </Tooltip.Portal>
+      </Tooltip.Root>
+    </Tooltip.Provider>
   );
 }
 
