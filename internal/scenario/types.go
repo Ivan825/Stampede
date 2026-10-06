@@ -214,11 +214,29 @@ type Feeder struct {
 	List []any  `yaml:"list,omitempty" json:"list,omitempty"`
 	// Range generates integers from Range[0] to Range[1] inclusive.
 	Range []int64 `yaml:"range,omitempty" json:"range,omitempty"`
+	// Generate makes a fresh row of fake data for every use: field name to
+	// kind, such as email, name, uuid, int(1,100) or text(5MB). Mode and
+	// OnExhausted do not apply.
+	Generate map[string]string `yaml:"generate,omitempty" json:"generate,omitempty"`
+	// SQL reads rows from a database query when the run starts.
+	SQL *SQLFeeder `yaml:"sql,omitempty" json:"sql,omitempty"`
 	// Mode is one of unique, sequential, random or per-vu (default sequential).
 	Mode string `yaml:"mode,omitempty" json:"mode,omitempty"`
 	// OnExhausted applies to unique mode: "stop" ends the virtual user,
 	// "wrap" starts again from the first row (default stop).
 	OnExhausted string `yaml:"onExhausted,omitempty" json:"onExhausted,omitempty"`
+}
+
+// SQLFeeder reads a feeder's rows from a query. Each worker runs it, so
+// the database must be reachable from the workers.
+type SQLFeeder struct {
+	// Driver is postgres or mysql.
+	Driver string `yaml:"driver" json:"driver"`
+	// DSN is the connection string; ${env.X} and ${secret.X} are expanded.
+	DSN   string `yaml:"dsn" json:"dsn"`
+	Query string `yaml:"query" json:"query"`
+	// Limit caps the rows read (default and maximum 1,000,000).
+	Limit int `yaml:"limit,omitempty" json:"limit,omitempty"`
 }
 
 // Feeder modes.

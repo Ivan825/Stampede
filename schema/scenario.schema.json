@@ -165,11 +165,27 @@
         "json": { "type": "string", "description": "JSON file containing an array." },
         "list": { "type": "array" },
         "range": { "type": "array", "items": { "type": "integer" }, "minItems": 2, "maxItems": 2 },
+        "generate": {
+          "type": "object", "minProperties": 1,
+          "additionalProperties": { "type": "string", "examples": ["name", "firstName", "lastName", "email", "username", "password", "phone", "uuid", "seq", "company", "street", "city", "country", "zip", "word", "sentence", "paragraph", "bool", "date", "datetime", "ipv4", "int(1,100)", "float(0,500)", "pick(a|b|c)", "text(5MB)"] },
+          "description": "A fresh row of fake data for every use: field name to kind. email, username and seq never repeat within a run."
+        },
+        "sql": {
+          "type": "object", "additionalProperties": false, "required": ["driver", "dsn", "query"],
+          "properties": {
+            "driver": { "enum": ["postgres", "mysql"] },
+            "dsn": { "type": "string", "description": "Connection string; ${env.X} and ${secret.X} are expanded." },
+            "query": { "type": "string" },
+            "limit": { "type": "integer", "minimum": 0, "description": "Most rows to read (default and maximum 1,000,000)." }
+          },
+          "description": "Rows from a database query, read by each worker when the run starts."
+        },
         "mode": { "enum": ["sequential", "unique", "random", "per-vu"], "default": "sequential", "description": "unique rows are never reused and are partitioned across workers." },
         "onExhausted": { "enum": ["stop", "wrap"], "default": "stop" }
       },
       "oneOf": [
-        { "required": ["csv"] }, { "required": ["json"] }, { "required": ["list"] }, { "required": ["range"] }
+        { "required": ["csv"] }, { "required": ["json"] }, { "required": ["list"] }, { "required": ["range"] },
+        { "required": ["generate"] }, { "required": ["sql"] }
       ]
     },
     "journey": {

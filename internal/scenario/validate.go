@@ -6,6 +6,7 @@ import (
 	"regexp"
 	"strings"
 
+	"github.com/Ivan825/Stampede/internal/feed"
 	"github.com/Ivan825/Stampede/internal/protocol/netem"
 )
 
@@ -62,13 +63,32 @@ func (s *Scenario) Validate() error {
 			add(p, "feeder names must be identifiers")
 		}
 		sources := 0
-		for _, set := range []bool{f.CSV != "", f.JSON != "", len(f.List) > 0, len(f.Range) > 0} {
+		for _, set := range []bool{f.CSV != "", f.JSON != "", len(f.List) > 0, len(f.Range) > 0, len(f.Generate) > 0, f.SQL != nil} {
 			if set {
 				sources++
 			}
 		}
 		if sources != 1 {
-			add(p, "set exactly one of csv, json, list or range")
+			add(p, "set exactly one of csv, json, list, range, generate or sql")
+		}
+		for field, kind := range f.Generate {
+			if _, err := feed.Compile(kind); err != nil {
+				add(p+".generate."+field, "%s", err)
+			}
+		}
+		if q := f.SQL; q != nil {
+			if _, ok := feed.Drivers[q.Driver]; !ok {
+				add(p+".sql.driver", "must be postgres or mysql")
+			}
+			if strings.TrimSpace(q.DSN) == "" {
+				add(p+".sql.dsn", "required")
+			}
+			if strings.TrimSpace(q.Query) == "" {
+				add(p+".sql.query", "required")
+			}
+			if q.Limit < 0 {
+				add(p+".sql.limit", "must not be negative")
+			}
 		}
 		if len(f.Range) > 0 && (len(f.Range) != 2 || f.Range[1] < f.Range[0]) {
 			add(p+".range", "must be [from, to] with to >= from")
