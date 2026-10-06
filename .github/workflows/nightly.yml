@@ -91,3 +91,21 @@ jobs:
           done
           docker compose -f compose/docker-compose.yml logs
           exit 1
+
+  scale:
+    # Highest arrival rate one Stampede process sustains without dropping
+    # iterations or falling behind its schedule, on a hosted runner.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - name: one-process throughput
+        run: go run ./bench/scale -hold 10s -out scale-${{ github.run_number }}.json
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: scale-nightly-${{ github.run_number }}
+          path: scale-*.json
+          retention-days: 90

@@ -82,3 +82,26 @@ lognormal median 20ms  (300/s for 5s)
 ✓  k6                         sent           20.53     52.96     80.10
      truth for that run                      20.21     52.81     79.92
 ```
+
+## Generator throughput
+
+`bench/scale` measures how much load one Stampede process can generate
+before the generator, rather than the target, becomes the limit:
+
+```sh
+go run ./bench/scale                         # 1k to 80k requests/s, 5s per level
+go run ./bench/scale -levels 5000,20000 -hold 10s -out scale.json
+```
+
+It starts the echo server as a separate process (1ms fixed delay) and runs
+an open-model scenario at rising rates. A level is clean when nothing was
+dropped, the achieved rate is within 2% of the plan, errors stay under
+0.1% and the p99 scheduling lag stays under 10ms. It stops at the first
+level that is not clean and reports the highest clean one with the CPU
+count, so results from different machines can be compared. The generator
+and the target share the machine, so the figure is a lower bound for a
+worker on its own host.
+
+The nightly CI job runs it on a hosted Linux runner and keeps the JSON.
+Run it on an otherwise idle machine: anything else running shows up as
+scheduling lag.
