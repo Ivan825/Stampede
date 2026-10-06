@@ -121,7 +121,9 @@ export async function unwrap<T>(call: Promise<FetchResult<T>>): Promise<T> {
 }
 
 /** URL of a run report download in the given format. */
-export function reportUrl(runId: string, format: 'html' | 'json' | 'junit' | 'markdown'): string {
+export type ReportFormat = 'html' | 'json' | 'junit' | 'markdown' | 'csv' | 'timeline-csv';
+
+export function reportUrl(runId: string, format: ReportFormat): string {
   return `${API_BASE}/runs/${encodeURIComponent(runId)}/report?format=${format}`;
 }
 

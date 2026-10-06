@@ -2896,7 +2896,8 @@ export interface operations {
     getRunReport: {
         parameters: {
             query?: {
-                format?: "json" | "html" | "junit" | "markdown";
+                /** @description csv is one row per step, per journey and for the whole run; timeline-csv is one row per second. Latencies are in milliseconds. */
+                format?: "json" | "html" | "junit" | "markdown" | "csv" | "timeline-csv";
             };
             header?: never;
             path: {
@@ -2916,6 +2917,7 @@ export interface operations {
                     "text/html": string;
                     "application/xml": string;
                     "text/markdown": string;
+                    "text/csv": string;
                 };
             };
             404: components["responses"]["NotFound"];

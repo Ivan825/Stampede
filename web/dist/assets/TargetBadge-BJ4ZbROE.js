@@ -1,0 +1,1 @@
+import{qt as e}from"./vendor-CW6SUBE7.js";import{s as t}from"./index-BmESTW1G.js";var n=e();function r({target:e}){return e.private?(0,n.jsx)(t,{tone:`info`,children:`private`}):e.verified?(0,n.jsx)(t,{tone:`pass`,children:`verified`}):(0,n.jsx)(t,{tone:`warn`,children:`unverified`})}export{r as t};

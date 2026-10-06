@@ -1,6 +1,6 @@
 import { clsx } from 'clsx';
-import { Download, ExternalLink } from 'lucide-react';
-import { Fragment } from 'react';
+import { Download, ExternalLink, Printer } from 'lucide-react';
+import { Fragment, useState } from 'react';
 import { reportUrl } from '@/api/client';
 import type { Report, ReportJourney } from '@/api/types';
 import { verdictLabels } from '@/components/chips';
@@ -28,9 +28,12 @@ export function Downloads({ runId }: { runId: string }) {
   const formats = [
     ['html', 'HTML'],
     ['json', 'JSON'],
+    ['csv', 'CSV'],
+    ['timeline-csv', 'Timeline CSV'],
     ['junit', 'JUnit'],
     ['markdown', 'Markdown'],
   ] as const;
+  const [printing, setPrinting] = useState(false);
   return (
     <div className="flex flex-wrap items-center gap-1.5" role="group" aria-label="Download report">
       <Download className="size-3.5 text-muted" aria-hidden />
@@ -44,8 +47,44 @@ export function Downloads({ runId }: { runId: string }) {
           {label}
         </a>
       ))}
+      <button
+        type="button"
+        onClick={() => {
+          setPrinting(true);
+          void printReport(runId).finally(() => setPrinting(false));
+        }}
+        disabled={printing}
+        title="Print the HTML report or save it as PDF"
+        className="inline-flex h-7 items-center gap-1 rounded-md border border-line bg-surface px-2.5 text-[13px] font-medium hover:border-line-strong hover:bg-surface-2 disabled:opacity-60"
+      >
+        <Printer className="size-3.5" aria-hidden />
+        PDF
+      </button>
     </div>
   );
+}
+
+/**
+ * Opens the browser's print dialog on the HTML report, where "Save as
+ * PDF" gives the same PDF as `stampede run --pdf`. The report prints in
+ * its light theme.
+ */
+async function printReport(runId: string): Promise<void> {
+  const res = await fetch(reportUrl(runId, 'html'), { credentials: 'same-origin' });
+  if (!res.ok) return;
+  const frame = document.createElement('iframe');
+  frame.setAttribute('aria-hidden', 'true');
+  frame.style.cssText = 'position:fixed;width:0;height:0;border:0;right:0;bottom:0';
+  frame.srcdoc = await res.text();
+  await new Promise<void>((resolve) => {
+    frame.onload = () => resolve();
+    document.body.appendChild(frame);
+  });
+  frame.contentWindow?.focus();
+  frame.contentWindow?.print();
+  // Printing blocks until the dialog closes in most browsers; remove the
+  // frame afterwards either way.
+  setTimeout(() => frame.remove(), 60_000);
 }
 
 const phases = ['dns', 'connect', 'tls', 'wait', 'download'] as const;

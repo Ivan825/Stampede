@@ -660,6 +660,8 @@ export function createHandlers(initial: MockOptions, opts: MockHandlerOptions = 
         html: ['text/html', 'html'],
         junit: ['application/xml', 'xml'],
         markdown: ['text/markdown', 'md'],
+        csv: ['text/csv', 'csv'],
+        'timeline-csv': ['text/csv', 'csv'],
       };
       const [ct, ext] = types[format] ?? ['text/plain', 'txt'];
       const text =
@@ -667,7 +669,11 @@ export function createHandlers(initial: MockOptions, opts: MockHandlerOptions = 
           ? `<!doctype html><title>${rep.scenario}</title><h1>${rep.scenario}: ${rep.verdict}</h1><p>Mock report.</p>`
           : format === 'junit'
             ? `<?xml version="1.0"?><testsuite name="${rep.scenario}" tests="${rep.thresholds?.length ?? 0}"></testsuite>`
-            : `### Stampede: ${rep.scenario} — ${rep.verdict}\n`;
+            : format === 'csv'
+              ? `journey,step,requests\n,,${rep.overall.requests}\n`
+              : format === 'timeline-csv'
+                ? `t_s,rps\n`
+                : `### Stampede: ${rep.scenario} — ${rep.verdict}\n`;
       return new HttpResponse(text, {
         headers: {
           'Content-Type': ct,
