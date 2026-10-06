@@ -24,6 +24,7 @@ import (
 	"github.com/Ivan825/Stampede/examples/packlab/apilab"
 	"github.com/Ivan825/Stampede/examples/packlab/authlab"
 	"github.com/Ivan825/Stampede/examples/packlab/chatlab"
+	"github.com/Ivan825/Stampede/examples/packlab/dblab"
 	"github.com/Ivan825/Stampede/examples/packlab/gamelab"
 	"github.com/Ivan825/Stampede/examples/packlab/iotlab"
 	"github.com/Ivan825/Stampede/examples/packlab/labkit"
@@ -67,6 +68,7 @@ var products = map[string]product{
 	"public-apis":     {pack: "public-apis", addr: ":8096", new: apilab.New},
 	"iot":             {pack: "iot", addr: ":8110", open: iotlab.Open, listen: ":8111", plugins: []string{"mqtt"}},
 	"event-pipelines": {pack: "event-pipelines", addr: ":8112", open: pipelinelab.Open, listen: ":8113", plugins: []string{"kafka"}},
+	"databases":       {pack: "databases", addr: ":8114", open: dblab.Open, listen: ":8115", plugins: []string{"sql", "redis"}, postgres: true},
 	"gaming":          {pack: "gaming", addr: ":8116", open: gamelab.Open, listen: ":8117", plugins: []string{"udp"}},
 }
 
