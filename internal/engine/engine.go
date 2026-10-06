@@ -97,6 +97,8 @@ type Engine struct {
 
 	stopOnce   sync.Once
 	stopCh     chan struct{}
+	// earlyCh closes when the run is stopped before its planned end.
+	earlyCh chan struct{}
 	stopReason atomic.Value
 	killOnce   sync.Once
 	killCh     chan struct{}
@@ -151,6 +153,7 @@ func New(opts Options) (*Engine, error) {
 		allowHost: opts.AllowHost,
 		userAgent: "stampede/" + version.Version,
 		stopCh:    make(chan struct{}),
+		earlyCh:   make(chan struct{}),
 		killCh:    make(chan struct{}),
 		errLogged: map[int]time.Time{},
 	}
@@ -260,6 +263,9 @@ func (e *Engine) Stop(reason string) {
 			reason = StopRequested
 		}
 		e.stopReason.Store(reason)
+		if reason != StopCompleted {
+			close(e.earlyCh)
+		}
 		close(e.stopCh)
 	})
 }
@@ -500,7 +506,7 @@ func (e *Engine) runIterations(loadCtx, iterCtx context.Context) {
 // runOpen runs the open model: iterations start on a fixed schedule
 // regardless of how the target responds. Each iteration carries its
 // intended start time so latency includes any time spent waiting.
-func (e *Engine) runOpen(loadCtx, iterCtx context.Context) {
+func (e *Engine) runOpen(_, iterCtx context.Context) {
 	type worker struct {
 		vu   *VU
 		work chan time.Time
@@ -558,7 +564,10 @@ func (e *Engine) runOpen(loadCtx, iterCtx context.Context) {
 			}
 		}
 		intended := e.t0.Add(at)
-		if !waiter.wait(intended, loadCtx.Done()) || loadCtx.Err() != nil {
+		// Only an early stop ends dispatch. Arrivals scheduled before the
+		// planned end are sent even if the dispatcher reaches them after
+		// it; their lateness is part of the measured latency.
+		if !waiter.wait(intended, e.earlyCh) {
 			return
 		}
 		var w *worker
