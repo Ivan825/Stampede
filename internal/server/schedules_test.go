@@ -24,6 +24,16 @@ type fakeClock struct{ off atomic.Int64 }
 func (c *fakeClock) Now() time.Time          { return time.Now().Add(time.Duration(c.off.Load())) }
 func (c *fakeClock) Advance(d time.Duration) { c.off.Add(int64(d)) }
 
+// newFakeClock starts 5 seconds after a minute boundary, so a per-minute
+// schedule created at the start of a test cannot come due on its own
+// before the test moves the clock.
+func newFakeClock() *fakeClock {
+	c := &fakeClock{}
+	now := time.Now()
+	c.off.Store(int64(now.Truncate(time.Minute).Add(time.Minute + 5*time.Second).Sub(now)))
+	return c
+}
+
 // startSchedServer starts a server on st with a fast scheduler running.
 func startSchedServer(t *testing.T, st *store.Store, clock *fakeClock) string {
 	t.Helper()
@@ -282,7 +292,7 @@ func TestSchedulerFiresOnce(t *testing.T) {
 	if err := a.Migrate(ctx, slog.New(slog.NewTextHandler(io.Discard, nil)), false); err != nil {
 		t.Fatal(err)
 	}
-	clock := &fakeClock{}
+	clock := newFakeClock()
 	baseA := startSchedServer(t, a, clock)
 	startSchedServer(t, open(), clock)
 
@@ -359,7 +369,7 @@ func TestSchedulerFiresOnce(t *testing.T) {
 // TestSchedulerOwnerLosesRunnerRole: a schedule whose owner can no longer
 // start runs is skipped and audited, until an editor takes it over.
 func TestSchedulerOwnerLosesRunnerRole(t *testing.T) {
-	clock := &fakeClock{}
+	clock := newFakeClock()
 	base := startSchedServer(t, storetest.Open(t), clock)
 	owner := newClient(t, base)
 	setup(t, owner)
@@ -412,7 +422,7 @@ func TestSchedulerOwnerLosesRunnerRole(t *testing.T) {
 // longer accept (here, the target's caps were lowered) is skipped and
 // audited. Deleting the scenario deletes the schedule.
 func TestSchedulerSkipsRefusedRun(t *testing.T) {
-	clock := &fakeClock{}
+	clock := newFakeClock()
 	base := startSchedServer(t, storetest.Open(t), clock)
 	c := newClient(t, base)
 	setup(t, c)
