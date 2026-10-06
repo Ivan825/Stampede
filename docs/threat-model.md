@@ -45,8 +45,10 @@ the files it runs. This page lists what is defended today and what is not.
 
 ## Known gaps
 
-- Only one server replica is safe today; a second replica would mark the
-  first one's runs as failed on start. The Helm chart and operator pin one.
+- Server replicas are active-passive: one holds a Postgres advisory lock
+  and serves; others wait as standbys (healthy, not ready) and take over
+  within a few seconds if the leader's database session ends. Running runs
+  are not handed over: the new leader marks them as interrupted.
 - Workers share a join token; a leaked token lets an attacker register a
   worker and receive scenarios (including the run's secrets) for runs
   assigned to it. Rotate the token if it leaks, and keep the worker port off

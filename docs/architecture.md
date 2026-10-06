@@ -48,5 +48,8 @@ One Go binary in several roles.
 6. At the end the server builds the report from the merged snapshots and
    stores it with the verdict.
 
-**Planned:** mutual TLS with a built-in CA, more than one server replica
-(today run one; see the deploy docs), reassigning a lost worker's share.
+Server replicas are active-passive through a Postgres advisory lock: one
+serves, the others wait as standbys and take over if it goes away.
+
+**Planned:** mutual TLS with a built-in CA, several active replicas sharing
+runs, reassigning a lost worker's share.
