@@ -1,12 +1,17 @@
 package server
 
 import (
+	"bytes"
 	"context"
+	"crypto/sha256"
+	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io/fs"
 	"net/http"
 	"net/netip"
+	"regexp"
 	"runtime/debug"
 	"strings"
 	"time"
@@ -90,7 +95,34 @@ func (s *Server) recoverer(next http.Handler) http.Handler {
 	})
 }
 
-func securityHeaders(next http.Handler) http.Handler {
+var inlineScriptRe = regexp.MustCompile(`(?s)<script(?:\s[^>]*)?>(.*?)</script>`)
+
+// contentSecurityPolicy allows only the app's own files plus the exact
+// inline scripts in index.html (by hash), so an injected script cannot run.
+func contentSecurityPolicy(ui fs.FS) string {
+	hashes := ""
+	if ui != nil {
+		if b, err := fs.ReadFile(ui, "index.html"); err == nil {
+			for _, m := range inlineScriptRe.FindAllSubmatch(b, -1) {
+				if len(bytes.TrimSpace(m[1])) == 0 {
+					continue
+				}
+				sum := sha256.Sum256(m[1])
+				hashes += " 'sha256-" + base64.StdEncoding.EncodeToString(sum[:]) + "'"
+			}
+		}
+	}
+	return "default-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self' data:; " +
+		"worker-src 'self' blob:; script-src 'self' blob:" + hashes + "; connect-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'"
+}
+
+func securityHeaders(csp string) func(http.Handler) http.Handler {
+	return func(next http.Handler) http.Handler {
+		return securityHeadersWith(csp, next)
+	}
+}
+
+func securityHeadersWith(csp string, next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		h := w.Header()
 		h.Set("X-Content-Type-Options", "nosniff")
@@ -99,7 +131,7 @@ func securityHeaders(next http.Handler) http.Handler {
 		if !strings.HasPrefix(r.URL.Path, "/api/") {
 			// The UI and exported HTML reports use inline styles only; no
 			// external sources are ever loaded.
-			h.Set("Content-Security-Policy", "default-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; worker-src 'self' blob:; script-src 'self' blob:; connect-src 'self'; frame-ancestors 'none'")
+			h.Set("Content-Security-Policy", csp)
 		}
 		next.ServeHTTP(w, r)
 	})
