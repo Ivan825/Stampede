@@ -144,10 +144,11 @@ func newInitCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "init",
 		Short: "Detect what kind of product a target is and set up the matching pack",
-		Long: `init probes the target (its OpenAPI document at common paths, its home page
-and response headers), scores the shipped product packs against what it
-finds, asks you to confirm, installs the pack into ./stampede and dry-runs
-its journeys once against the target.`,
+		Long: `init probes the target (its OpenAPI document at common paths, its OpenID
+Connect discovery document, its home page and response headers), scores
+the shipped product packs against what it finds, asks you to confirm,
+installs the pack into ./stampede and dry-runs its journeys once against
+the target.`,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			if target == "" {
 				return errors.New("--target is required, e.g. stampede init --target http://localhost:8090")
