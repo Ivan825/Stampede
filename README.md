@@ -79,14 +79,30 @@ worker in under a millisecond on a local network.
 **Control plane and UI.** `stampede server` with PostgreSQL/TimescaleDB:
 REST API ([OpenAPI](api/openapi.yaml)), web UI with a scenario editor and
 journey graph, live runs and reports, projects, targets, encrypted secrets,
-users and roles, API tokens, audit log, and a kill switch that is always on
+users and roles, API tokens, audit log, integrations and notification settings,
+reports with target metrics and trace links, and a kill switch that is always on
 screen.
 
 **Reports and CI.** Self-contained HTML, JSON, JUnit XML and Markdown;
 exit code 3 when a target fails. `stampede compare` judges repeated runs of
 two versions with bootstrap confidence intervals and a measured noise floor,
 and exits 4 on a regression ([comparing](docs/guides/comparing.md),
-[CI](docs/guides/ci.md)).
+[CI](docs/guides/ci.md)). A composite GitHub Action in [`action/`](action/action.yml)
+runs a scenario, writes the job summary, uploads the reports and fails the
+step on a failed target; CI exercises it by building from source (release
+downloads are untested until a release is published).
+
+**Integrations.** An `observe` block charts your own Prometheus queries
+(CPU, memory, connections) over the run in the report, and every step lists
+its slowest requests with the W3C trace IDs they carried, as links to
+Jaeger or Tempo given a link template. On the server, admins configure
+Prometheus and trace integrations by name, so the server never fetches a
+URL written in a scenario, and notification channels (signed webhooks,
+Slack, Discord) hear when a run finishes, misses a target or is killed,
+with retries, a delivery log and a guard against private destinations. The
+server traces its API and runs with OpenTelemetry when an OTLP endpoint is
+set, and a Grafana dashboard covers its own metrics
+([integrations](docs/guides/integrations.md)).
 
 **Terminal.** `stampede` alone opens a console: `/run spike`, `/runs`,
 `/kill all`, or plain language such as "find the breaking point for
@@ -117,7 +133,7 @@ SQL and UDP plugins, the other 19 product packs, AI generation from GraphQL
 introspection and browser crawls, AI report narratives, the fault-injection
 agent, packet loss and jitter emulation, mutual TLS between server and workers, several
 active server replicas (today extra replicas are hot standbys), scheduled runs, side-by-side benchmarks with k6 and
-wrk2, a packaged GitHub Action, and the website.
+wrk2, and the website.
 
 ## Deploy
 
