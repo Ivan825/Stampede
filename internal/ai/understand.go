@@ -330,20 +330,47 @@ func (u *Understanding) fromOpenAPI(src []byte, red *Redactor) (string, error) {
 		}
 	}
 
-	// Link producers to consumers.
+	// Link producers to consumers, keeping the two most natural sources of
+	// each value: a listing (GET without parameters) or a create (POST)
+	// rather than a delete or a detail page.
 	for _, c := range consumers {
+		var cands []Dependency
+		var scores []int
 		for _, pr := range producers {
-			if pr.op == c.op {
+			if pr.op == c.op || strings.HasPrefix(pr.op, "DELETE ") {
 				continue
 			}
+			var d Dependency
 			switch {
 			case c.kind == "token" && pr.kind == "token":
-				u.addDependency(Dependency{Producer: pr.op, Value: pr.path, Consumer: c.op, Via: "Authorization: Bearer", Kind: "token"})
+				d = Dependency{Producer: pr.op, Value: pr.path, Consumer: c.op, Via: "Authorization: Bearer", Kind: "token"}
 			case c.kind == "token" && pr.kind == "cookie":
-				u.addDependency(Dependency{Producer: pr.op, Value: "Set-Cookie", Consumer: c.op, Via: "session cookie (kept automatically)", Kind: "cookie"})
+				d = Dependency{Producer: pr.op, Value: "Set-Cookie", Consumer: c.op, Via: "session cookie (kept automatically)", Kind: "cookie"}
 			case c.kind == "id" && pr.kind == "id" && c.resource != "" && pr.resource == c.resource:
-				u.addDependency(Dependency{Producer: pr.op, Value: pr.path, Consumer: c.op, Via: c.via, Kind: "id"})
+				d = Dependency{Producer: pr.op, Value: pr.path, Consumer: c.op, Via: c.via, Kind: "id"}
+			default:
+				continue
 			}
+			score := 0
+			if strings.HasPrefix(pr.op, "GET ") && !strings.Contains(pr.op, "{") {
+				score += 2
+			}
+			if strings.HasPrefix(pr.op, "POST ") {
+				score++
+			}
+			if pr.field == "id" {
+				score++
+			}
+			cands = append(cands, d)
+			scores = append(scores, score)
+		}
+		idx := make([]int, len(cands))
+		for i := range idx {
+			idx[i] = i
+		}
+		sort.SliceStable(idx, func(a, b int) bool { return scores[idx[a]] > scores[idx[b]] })
+		for i := 0; i < len(idx) && i < 2; i++ {
+			u.addDependency(cands[idx[i]])
 		}
 	}
 	return Truncate(b.String(), maxSpecDigest) + "\n", nil
