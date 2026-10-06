@@ -82,3 +82,27 @@ func TestPluginCommands(t *testing.T) {
 		t.Fatal("a bad spec should fail")
 	}
 }
+
+// TestInstallFirstPartyPlugin builds plugins/udp from this checkout, the
+// way `stampede plugin install udp` does in a clone of the repository.
+func TestInstallFirstPartyPlugin(t *testing.T) {
+	if testing.Short() {
+		t.Skip("builds a plugin module")
+	}
+	dir := t.TempDir()
+	t.Setenv("STAMPEDE_PLUGIN_DIR", dir)
+	root, err := filepath.Abs(filepath.Join("..", ".."))
+	if err != nil {
+		t.Fatal(err)
+	}
+	out, errOut, err := stampede(t, "plugin", "install", "udp", "--source", root)
+	if err != nil || !strings.Contains(out, "Installed udp") || !strings.Contains(out, "udp.send") {
+		t.Fatalf("install udp: %q %q %v", out, errOut, err)
+	}
+	if _, err := os.Stat(filepath.Join(dir, "stampede-plugin-udp")); err != nil {
+		t.Fatal(err)
+	}
+	if _, _, err := stampede(t, "plugin", "install", "nosuchplugin", "--source", root); err == nil || !strings.Contains(err.Error(), "no first-party plugin") {
+		t.Fatalf("unknown first-party plugin: %v", err)
+	}
+}
