@@ -39,7 +39,7 @@ require (
 	golang.org/x/sys v0.48.0
 	golang.org/x/term v0.46.0
 	golang.org/x/text v0.42.0
-	google.golang.org/grpc v1.85.0-dev.0.20260825072537-93e31b48545e // pinned to the fix for GO-2026-6443 (server panic); move to v1.85.0 once released
+	google.golang.org/grpc v1.86.0-dev // pinned to the fix for GO-2026-6443 (server panic); move to v1.85.0 once released
 	google.golang.org/protobuf v1.36.12
 )
 
