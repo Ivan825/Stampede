@@ -331,6 +331,7 @@ jobs:
           - { pack: ticketing, port: 8094 }
           - { pack: identity, port: 8095 }
           - { pack: public-apis, port: 8096 }
+          - { pack: fintech, port: 8097 }
     runs-on: ubuntu-latest
     env:
       PACK: ${{ matrix.pack }}

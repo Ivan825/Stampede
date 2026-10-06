@@ -14,6 +14,7 @@ and as a single binary in CI. (The e-commerce pack's reference app is
 | `ticketing` | [TicketLab](#ticketlab) | 8094 | [ticketing](../../packs/ticketing) |
 | `identity` | [AuthLab](#authlab) | 8095 | [identity](../../packs/identity) |
 | `public-apis` | [APILab](#apilab) | 8096 | [public-apis](../../packs/public-apis) |
+| `fintech` | [BankLab](#banklab) | 8097 | [fintech](../../packs/fintech) |
 
 ```sh
 go run ./examples/packlab -product ticketing                # on :8094
@@ -142,3 +143,21 @@ simulated receiver that takes 20ms each.
 | `keys` | A key is found by scanning all 20,001 key hashes | every request; `api-mix.yaml` p95 |
 | `limiter` | Rate limits are a sliding-window log behind one global lock that also logs refused attempts, so a client that retries without backing off never gets through, and every key waits on the one lock | `noisy-neighbour.yaml`: the `noisy-client` journey's status counts (5 of 1,680 requests got a 200 in a 15-second run); with heavier floods, `well-behaved` p95 |
 | `webhooks` | One worker delivers every webhook, so a burst of events queues up | `webhook-burst.yaml`: the `webhook` journey's duration and polls |
+
+## BankLab
+
+A retail bank. Customers `c0001` ... `c1000` (password `banklab-pass`)
+each have a current account (`acc_0001_cur`) and a savings account
+(`acc_0001_sav`) with three months of history. `POST /api/login` returns a
+bearer token; then accounts, transactions, monthly statements, `POST
+/api/transfers` and `POST /api/payments` (to the bank's own billers; no
+payment provider is involved), both requiring an `Idempotency-Key`.
+Amounts are in cents. `GET /api/ledger/check` reconciles: every balance
+adds up to zero across the bank and no key moved money twice. Each
+transfer runs a fraud check that takes 5ms.
+
+| Fix | Bottleneck | Where it shows |
+|---|---|---|
+| `lock` | Every transfer and payment holds one ledger-wide lock, fraud check included, so money moves one transfer at a time and balance reads queue behind it | `month-end-peak.yaml`: `payment` and `accounts` p95 as arrivals climb |
+| `balance` | A balance is the sum of the account's whole history, recomputed on every read and every transfer | `banking-mix.yaml`: `accounts` and `transfer`, slower as postings pile up |
+| `statements` | A monthly statement scans the whole bank's journal (about 100,000 postings) for one account's lines | `month-end-peak.yaml`: `statement` p95 |

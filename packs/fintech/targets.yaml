@@ -1,0 +1,8 @@
+# Default targets for banking. Moving money is held tighter than reading
+# history; a statement is a bigger read and gets more time. Where a
+# journey says so, "insufficient funds" is a correct answer, not an error.
+targets:
+  - http.p95 < 500ms
+  - errors < 1%
+  - "transfer/transfer.p95 < 300ms"
+  - "statement/statement.p95 < 1s"

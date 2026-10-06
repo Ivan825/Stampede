@@ -1,0 +1,63 @@
+# The ways moving money must fail, and fail quickly and cleanly: no
+# Idempotency-Key, a key reused for a different payment, more than the
+# account holds, someone else's account, and no sign-in at all. None of
+# them may move money; the last step checks the ledger still balances.
+apiVersion: stampede.dev/v1
+kind: Scenario
+metadata:
+  name: fintech-payment-errors
+  description: Rejected transfers and payments get fast, specific errors and move no money.
+  tags: [pack:fintech, errors]
+target:
+  baseURL: ${env.TARGET_URL}
+data:
+  customers: { csv: ../data/customers.csv, mode: random }
+journeys:
+  - name: rejected
+    steps:
+      - name: sign in
+        post: /api/login
+        json: { customerId: "${data.customers.customerId}", password: "${data.customers.password}" }
+        check: { status: 200 }
+        extract: { token: "$.token" }
+      - name: no idempotency key
+        post: /api/transfers
+        headers: { Authorization: "Bearer ${token}" }
+        json: { fromAccount: "${data.customers.current}", toAccount: "${data.customers.savings}", amount: 1000, currency: EUR }
+        check: { status: 400, json: { "$.error.code": idempotency_key_required } }
+      - name: first use of a key
+        post: /api/transfers
+        headers: { Authorization: "Bearer ${token}", Idempotency-Key: "${uuid()}" }
+        json: { fromAccount: "${data.customers.current}", toAccount: "${data.customers.savings}", amount: 1000, currency: EUR }
+        check: { status: 201 }
+        extract: { key: "header:Idempotency-Key" }
+      - name: key reused for another amount
+        post: /api/transfers
+        headers: { Authorization: "Bearer ${token}", Idempotency-Key: "${key}" }
+        json: { fromAccount: "${data.customers.current}", toAccount: "${data.customers.savings}", amount: 2000, currency: EUR }
+        check: { status: 422, json: { "$.error.code": idempotency_key_reused } }
+      - name: insufficient funds
+        post: /api/transfers
+        headers: { Authorization: "Bearer ${token}", Idempotency-Key: "${uuid()}" }
+        json: { fromAccount: "${data.customers.current}", toAccount: "${data.customers.savings}", amount: 1000000, currency: EUR }
+        check: { status: 422, json: { "$.error.code": insufficient_funds }, maxLatency: 500ms }
+      - name: not your account
+        post: /api/transfers
+        headers: { Authorization: "Bearer ${token}", Idempotency-Key: "${uuid()}" }
+        json: { fromAccount: "acc_bank_capital", toAccount: "${data.customers.savings}", amount: 1000, currency: EUR }
+        check: { status: 403 }
+      - name: not signed in
+        post: /api/payments
+        headers: { Idempotency-Key: "${uuid()}" }
+        json: { fromAccount: "${data.customers.current}", payee: electric, amount: 1000 }
+        check: { status: 401 }
+      - name: ledger balances
+        get: /api/ledger/check
+        check: { status: 200, json: { "$.balanced": true, "$.duplicates": 0 } }
+load:
+  mode: rate
+  rate: 2/s
+  duration: 1m
+targets:
+  - http.p95 < 300ms
+  - errors < 1%

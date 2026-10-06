@@ -1,0 +1,131 @@
+# The everyday mix for a retail bank: customers sign in and check their
+# balances and recent transactions, move money to savings or to someone
+# else, pay a bill (retrying it once with the same Idempotency-Key, as an
+# app does after a timeout) and download a monthly statement.
+apiVersion: stampede.dev/v1
+kind: Scenario
+metadata:
+  name: fintech-banking-mix
+  description: Weighted balance, history, transfer, bill-payment and statement journeys across 1,000 customers.
+  tags: [pack:fintech]
+target:
+  baseURL: ${env.TARGET_URL}
+data:
+  customers: { csv: ../data/customers.csv, mode: random }
+  recipients: { csv: ../data/customers.csv, mode: random }
+journeys:
+  - name: balance
+    weight: 40
+    steps:
+      - name: sign in
+        post: /api/login
+        json: { customerId: "${data.customers.customerId}", password: "${data.customers.password}" }
+        check: { status: 200, json: { "$.token": exists } }
+        extract: { token: "$.token" }
+      - name: accounts
+        get: /api/accounts
+        headers: { Authorization: "Bearer ${token}" }
+        check: { status: 200, json: { "$.accounts[0].balance": exists } }
+      - think: 2s..5s
+      - name: transactions
+        get: /api/accounts/${data.customers.current}/transactions?limit=20
+        headers: { Authorization: "Bearer ${token}" }
+        check: { status: 200, json: { "$.transactions[0].amount": exists } }
+        extract: { cursor: "$.next_cursor" }
+      - think: 2s..4s
+      - name: older transactions
+        get: /api/accounts/${data.customers.current}/transactions?limit=20&before=${cursor}
+        headers: { Authorization: "Bearer ${token}" }
+        check: { status: 200 }
+  - name: transfer
+    weight: 20
+    steps:
+      - name: sign in
+        post: /api/login
+        json: { customerId: "${data.customers.customerId}", password: "${data.customers.password}" }
+        check: { status: 200 }
+        extract: { token: "$.token" }
+      - name: accounts
+        get: /api/accounts
+        headers: { Authorization: "Bearer ${token}" }
+        check: { status: 200 }
+      - think: 3s..8s
+      - name: transfer
+        post: /api/transfers
+        headers: { Authorization: "Bearer ${token}", Idempotency-Key: "${uuid()}" }
+        json: { fromAccount: "${data.customers.current}", toAccount: "${data.customers.savings}", amount: "${rand(100, 5000)}", currency: EUR, reference: "To savings" }
+        check: { status: 201, json: { "$.status": completed } }
+        extract: { transferId: "$.id" }
+      - name: transfer status
+        get: /api/transfers/${transferId}
+        headers: { Authorization: "Bearer ${token}" }
+        check: { status: 200, json: { "$.status": completed } }
+  - name: send-money
+    weight: 15
+    steps:
+      - name: sign in
+        post: /api/login
+        json: { customerId: "${data.customers.customerId}", password: "${data.customers.password}" }
+        check: { status: 200 }
+        extract: { token: "$.token" }
+      - think: 3s..8s
+      - name: transfer
+        post: /api/transfers
+        headers: { Authorization: "Bearer ${token}", Idempotency-Key: "${uuid()}" }
+        # A savings account is always a valid destination, even when the
+        # recipient drawn is the sender.
+        json: { fromAccount: "${data.customers.current}", toAccount: "${data.recipients.savings}", amount: "${rand(500, 10000)}", currency: EUR, reference: "Dinner ${randString(6)}" }
+        check: { status: 201 }
+  - name: pay-bill
+    weight: 15
+    steps:
+      - name: sign in
+        post: /api/login
+        json: { customerId: "${data.customers.customerId}", password: "${data.customers.password}" }
+        check: { status: 200 }
+        extract: { token: "$.token" }
+      - name: payees
+        get: /api/payees
+        headers: { Authorization: "Bearer ${token}" }
+        check: { status: 200, json: { "$.payees[0].id": exists } }
+      - think: 3s..8s
+      - name: payment
+        post: /api/payments
+        headers: { Authorization: "Bearer ${token}", Idempotency-Key: "${uuid()}" }
+        json: { fromAccount: "${data.customers.current}", payee: "${pick(['electric', 'water', 'phone', 'internet'])}", amount: "${rand(2000, 15000)}", currency: EUR, reference: "Bill ${randString(8)}" }
+        check: { status: 201 }
+        extract: { paymentId: "$.id", key: "header:Idempotency-Key", payee: "$.payee", amount: "$.amount", ref: "$.reference" }
+      - name: retry payment
+        # The app timed out and sends the same request again: the bank
+        # must answer with the first payment, not take the money twice.
+        post: /api/payments
+        headers: { Authorization: "Bearer ${token}", Idempotency-Key: "${key}" }
+        json: { fromAccount: "${data.customers.current}", payee: "${payee}", amount: "${amount}", currency: EUR, reference: "${ref}" }
+        check: { status: 201, expr: "json.id == paymentId && headers['idempotent-replayed'] == 'true'" }
+  - name: statement
+    weight: 10
+    steps:
+      - name: sign in
+        post: /api/login
+        json: { customerId: "${data.customers.customerId}", password: "${data.customers.password}" }
+        check: { status: 200 }
+        extract: { token: "$.token" }
+      - name: statements
+        get: /api/accounts/${data.customers.current}/statements
+        headers: { Authorization: "Bearer ${token}" }
+        check: { status: 200, json: { "$.statements[0].month": exists } }
+        extract: { month: "$.statements[0].month" }
+      - think: 1s..3s
+      - name: statement
+        get: /api/accounts/${data.customers.current}/statements/${month}
+        headers: { Authorization: "Bearer ${token}" }
+        check: { status: 200, json: { "$.closingBalance": exists } }
+load:
+  mode: rate
+  rate: 10/s
+  duration: 5m
+targets:
+  - http.p95 < 500ms
+  - errors < 1%
+  - "transfer/transfer.p95 < 300ms"
+  - "statement/statement.p95 < 1s"
