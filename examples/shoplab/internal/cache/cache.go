@@ -19,6 +19,7 @@ import (
 	"errors"
 	"log/slog"
 	"math/rand/v2"
+	"strconv"
 	"time"
 
 	"golang.org/x/sync/singleflight"
@@ -220,6 +221,12 @@ func (c *Cache) timedLoad(ctx context.Context, load Loader) ([]byte, error) {
 	c.opts.Observer.Load(time.Since(start))
 	return v, err
 }
+
+// ProductKeyPrefix namespaces product-detail entries in the KV.
+const ProductKeyPrefix = "shoplab:product:"
+
+// ProductKey is the cache key for a product's detail page.
+func ProductKey(id int64) string { return ProductKeyPrefix + strconv.FormatInt(id, 10) }
 
 // Fixed-mode entries are an 8-byte big-endian freshness deadline (unix nanos)
 // followed by the payload.
