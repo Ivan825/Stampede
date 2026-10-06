@@ -16,10 +16,12 @@ import (
 
 	"cel.dev/cel-go/interpreter"
 	"github.com/spf13/cobra"
+	"github.com/spf13/pflag"
 
 	"github.com/Ivan825/Stampede/internal/agent"
 	"github.com/Ivan825/Stampede/internal/observe"
 	"github.com/Ivan825/Stampede/internal/report"
+	"github.com/Ivan825/Stampede/internal/report/pdf"
 	"github.com/Ivan825/Stampede/internal/runner"
 	"github.com/Ivan825/Stampede/internal/safety"
 	"github.com/Ivan825/Stampede/internal/scenario"
@@ -51,6 +53,7 @@ func ExitCode(err error) int {
 
 type runFlags struct {
 	html, json, junit, md string
+	pdf, csv, timelineCSV string
 	env                   []string
 	baseURL               string
 	vus                   int
@@ -72,8 +75,8 @@ func newRunCmd() *cobra.Command {
 		Use:   "run <scenario.yaml>",
 		Short: "Run a scenario in-process and write a report (no server needed)",
 		Long: `Run a scenario with an in-process engine. Nothing else needs to be running:
-no server, no database. Prints a summary and can write HTML, JSON, JUnit
-and Markdown reports.
+no server, no database. Prints a summary and can write HTML, PDF, CSV,
+JSON, JUnit and Markdown reports.
 
 Exit codes: 0 when every target passes (or none are set), 3 when a target
 fails, 1 on any other error.`,
@@ -90,6 +93,7 @@ fails, 1 on any other error.`,
 	fl.StringVar(&f.json, "json", "", "write a JSON report to this file (- for stdout)")
 	fl.StringVar(&f.junit, "junit", "", "write JUnit XML (one test per target) to this file")
 	fl.StringVar(&f.md, "md", "", "write a Markdown summary to this file (- for stdout)")
+	f.registerExports(fl)
 	fl.StringArrayVarP(&f.env, "env", "e", nil, "set ${env.KEY} for the scenario (KEY=VALUE, repeatable)")
 	fl.StringVar(&f.baseURL, "base-url", "", "override target.baseURL")
 	fl.IntVar(&f.vus, "vus", 0, "override the number of virtual users")
@@ -213,13 +217,15 @@ func runScenario(ctx context.Context, stdout, stderr io.Writer, path string, f *
 		}
 		obs.Apply(ctx, rep, time.Second)
 		narrate(ctx, stderr, rep, narrator)
-		if f.json != "-" && f.md != "-" {
+		if f.json != "-" && f.md != "-" && f.csv != "-" && f.timelineCSV != "-" {
 			rep.WriteText(stdout)
 		}
 		out := *f
 		out.html, out.json = repeatPath(f.html, n, f.repeat), repeatPath(f.json, n, f.repeat)
 		out.junit, out.md = repeatPath(f.junit, n, f.repeat), repeatPath(f.md, n, f.repeat)
-		if err := writeOutputs(stdout, rep, &out); err != nil {
+		out.pdf, out.csv = repeatPath(f.pdf, n, f.repeat), repeatPath(f.csv, n, f.repeat)
+		out.timelineCSV = repeatPath(f.timelineCSV, n, f.repeat)
+		if err := writeOutputs(ctx, stdout, rep, &out); err != nil {
 			return err
 		}
 		failed = failed || rep.Verdict == report.VerdictFail
@@ -390,9 +396,25 @@ func writeFile(stdout io.Writer, path string, fn func(io.Writer) error) error {
 	return fh.Close()
 }
 
-func writeOutputs(stdout io.Writer, rep *report.Report, f *runFlags) error {
+// registerExports adds the PDF and CSV output flags.
+func (f *runFlags) registerExports(fl *pflag.FlagSet) {
+	fl.StringVar(&f.pdf, "pdf", "", "write a PDF report to this file (needs Chrome or Chromium)")
+	fl.StringVar(&f.csv, "csv", "", "write per-step figures as CSV to this file (- for stdout)")
+	fl.StringVar(&f.timelineCSV, "timeline-csv", "", "write the per-second timeline as CSV to this file (- for stdout)")
+}
+
+func writeOutputs(ctx context.Context, stdout io.Writer, rep *report.Report, f *runFlags) error {
 	write := func(path string, fn func(io.Writer) error) error { return writeFile(stdout, path, fn) }
 	if err := write(f.html, rep.WriteHTML); err != nil {
+		return err
+	}
+	if err := write(f.pdf, func(w io.Writer) error { return pdf.Write(ctx, rep, w) }); err != nil {
+		return err
+	}
+	if err := write(f.csv, rep.WriteCSV); err != nil {
+		return err
+	}
+	if err := write(f.timelineCSV, rep.WriteTimelineCSV); err != nil {
 		return err
 	}
 	if err := write(f.json, rep.WriteJSON); err != nil {

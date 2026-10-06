@@ -97,7 +97,7 @@ func newReportCmd() *cobra.Command {
 	f := &runFlags{}
 	cmd := &cobra.Command{
 		Use:   "report <report.json>",
-		Short: "Render a saved JSON report as HTML, JUnit, Markdown or a summary",
+		Short: "Render a saved JSON report as HTML, PDF, CSV, JUnit, Markdown or a summary",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			rs, err := readReports(args)
@@ -110,17 +110,18 @@ func newReportCmd() *cobra.Command {
 				return err
 			}
 			narrate(cmd.Context(), cmd.ErrOrStderr(), r, p)
-			if f.html == "" && f.json == "" && f.junit == "" && f.md == "" {
+			if f.html == "" && f.json == "" && f.junit == "" && f.md == "" && f.pdf == "" && f.csv == "" && f.timelineCSV == "" {
 				r.WriteText(cmd.OutOrStdout())
 				return nil
 			}
-			return writeOutputs(cmd.OutOrStdout(), r, f)
+			return writeOutputs(cmd.Context(), cmd.OutOrStdout(), r, f)
 		},
 	}
 	cmd.Flags().StringVarP(&f.html, "out", "o", "", "write HTML to this file")
 	cmd.Flags().StringVar(&f.junit, "junit", "", "write JUnit XML to this file")
 	cmd.Flags().StringVar(&f.md, "md", "", "write Markdown to this file (- for stdout)")
 	cmd.Flags().StringVar(&f.json, "json", "", "write the JSON report (with any narrative) to this file (- for stdout)")
+	f.registerExports(cmd.Flags())
 	f.ai.register(cmd.Flags())
 	return cmd
 }
