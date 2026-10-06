@@ -1,0 +1,45 @@
+{{- with .Values.server.podDisruptionBudget }}
+{{- if .enabled }}
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: {{ include "stampede.fullname" $ }}-server
+  labels:
+    {{- include "stampede.labels" $ | nindent 4 }}
+    app.kubernetes.io/component: server
+spec:
+  {{- if hasKey . "minAvailable" }}
+  minAvailable: {{ .minAvailable }}
+  {{- else }}
+  maxUnavailable: {{ .maxUnavailable }}
+  {{- end }}
+  selector:
+    matchLabels:
+      {{- include "stampede.selectorLabels" $ | nindent 6 }}
+      app.kubernetes.io/component: server
+{{- end }}
+{{- end }}
+{{- if .Values.workers.enabled }}
+{{- with .Values.workers.podDisruptionBudget }}
+{{- if .enabled }}
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: {{ include "stampede.fullname" $ }}-worker
+  labels:
+    {{- include "stampede.labels" $ | nindent 4 }}
+    app.kubernetes.io/component: worker
+spec:
+  {{- if hasKey . "minAvailable" }}
+  minAvailable: {{ .minAvailable }}
+  {{- else }}
+  maxUnavailable: {{ .maxUnavailable }}
+  {{- end }}
+  selector:
+    matchLabels:
+      {{- include "stampede.selectorLabels" $ | nindent 6 }}
+      app.kubernetes.io/component: worker
+{{- end }}
+{{- end }}
+{{- end }}
