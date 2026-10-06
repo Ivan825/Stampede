@@ -76,7 +76,11 @@ app.kubernetes.io/instance: {{ .Release.Name }}
 
 {{/* Address in-cluster workers dial. */}}
 {{- define "stampede.workerAddress" -}}
+{{- if eq .Values.server.ha "active" -}}
+{{- printf "dns:%s-replicas.%s.svc:%d" (include "stampede.fullname" .) .Release.Namespace (int .Values.service.workerPort) }}
+{{- else -}}
 {{- printf "%s:%d" (include "stampede.fullname" .) (int .Values.service.workerPort) }}
+{{- end }}
 {{- end }}
 
 {{/*

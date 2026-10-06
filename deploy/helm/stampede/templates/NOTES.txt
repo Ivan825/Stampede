@@ -34,7 +34,5 @@ For production use an external PostgreSQL with backups (database.external).
 {{- end }}
 {{- if gt (int .Values.server.replicas) 1 }}
 
-WARNING: server.replicas={{ .Values.server.replicas }}. Stampede {{ include "stampede.imageTag" . }} keeps each run in the replica that
-started it, each worker attaches to one replica, and a starting replica marks every unfinished
-run as failed. Use one replica unless you have read docs/deploy/helm.md.
+Server: {{ .Values.server.replicas }} replicas, {{ if eq .Values.server.ha "active" }}all serving (server.ha=active); workers connect to each one{{ else }}one serving and the rest on standby (server.ha=standby){{ end }}.
 {{- end }}

@@ -7,11 +7,21 @@ metadata:
     app.kubernetes.io/component: server
 spec:
   replicas: {{ .Values.server.replicas }}
-  # A starting server marks every unfinished run as failed, so the old and
-  # new server must never overlap: stop the old one (which finishes its runs'
-  # reports) before starting the new one.
+  {{- if eq .Values.server.ha "active" }}
+  # Active replicas all serve, so pods can be replaced one at a time. A pod
+  # that stops finishes its runs' reports first.
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 0
+      maxSurge: 1
+  {{- else }}
+  # A standby only becomes ready once the serving replica lets go, so a
+  # rolling update would wait forever: stop the old pod (which finishes its
+  # runs' reports) before starting the new one.
   strategy:
     type: Recreate
+  {{- end }}
   selector:
     matchLabels:
       {{- include "stampede.selectorLabels" . | nindent 6 }}
@@ -71,6 +81,8 @@ spec:
               value: ":{{ .Values.service.workerPort }}"
             - name: STAMPEDE_EXECUTOR
               value: {{ .Values.server.executor | quote }}
+            - name: STAMPEDE_HA
+              value: {{ .Values.server.ha | quote }}
             - name: STAMPEDE_LOG_LEVEL
               value: {{ .Values.server.logLevel | quote }}
             - name: STAMPEDE_LOG_FORMAT

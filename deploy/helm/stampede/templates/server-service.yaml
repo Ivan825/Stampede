@@ -24,3 +24,25 @@ spec:
       targetPort: workers
       protocol: TCP
       appProtocol: grpc
+{{- if eq .Values.server.ha "active" }}
+---
+# Every server replica's address, for workers (stampede worker --server dns:...).
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "stampede.fullname" . }}-replicas
+  labels:
+    {{- include "stampede.labels" . | nindent 4 }}
+    app.kubernetes.io/component: server
+spec:
+  clusterIP: None
+  publishNotReadyAddresses: false
+  selector:
+    {{- include "stampede.selectorLabels" . | nindent 4 }}
+    app.kubernetes.io/component: server
+  ports:
+    - name: workers
+      port: {{ .Values.service.workerPort }}
+      targetPort: workers
+      protocol: TCP
+{{- end }}

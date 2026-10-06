@@ -38,10 +38,13 @@ joinToken:
   existingSecretKey: join-token
 
 server:
-  # Keep this at 1. Each run is owned by the replica that started it, workers
-  # attach to one replica each, and a replica that starts marks every
-  # unfinished run as failed. See docs/deploy/helm.md before raising it.
+  # With ha: standby (the default) extra replicas wait as hot standbys and one
+  # serves. With ha: active every replica serves the API and runs tests:
+  # each owns the runs it starts, stop and kill reach the owner through the
+  # database, and workers connect to every replica (found through a headless
+  # service). See docs/deploy/helm.md.
   replicas: 1
+  ha: standby
   # auto: workers when connected, else in-process; workers; or local.
   executor: auto
   logLevel: info
