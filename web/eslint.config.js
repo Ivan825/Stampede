@@ -6,7 +6,7 @@ import globals from 'globals';
 import tseslint from 'typescript-eslint';
 
 export default tseslint.config(
-  { ignores: ['dist', 'node_modules', 'src/api/schema.gen.ts', 'src/lib/monaco/contributions.ts'] },
+  { ignores: ['dist', 'node_modules', 'src/api/schema.gen.ts'] },
   {
     extends: [js.configs.recommended, ...tseslint.configs.strictTypeChecked],
     files: ['**/*.{ts,tsx}'],
@@ -35,12 +35,32 @@ export default tseslint.config(
         { checksVoidReturn: { attributes: false } },
       ],
       '@typescript-eslint/no-unnecessary-condition': 'off',
+      // noUncheckedIndexedAccess makes `!` the clearest way to say "present".
+      '@typescript-eslint/no-non-null-assertion': 'off',
+      '@typescript-eslint/no-unused-vars': [
+        'error',
+        { ignoreRestSiblings: true, argsIgnorePattern: '^_', varsIgnorePattern: '^_' },
+      ],
     },
+  },
+  {
+    // TanStack Router redirects are thrown objects by design.
+    files: ['src/router.tsx'],
+    rules: { '@typescript-eslint/only-throw-error': 'off' },
+  },
+  {
+    // Shared component modules export helpers next to components.
+    files: ['src/components/**'],
+    rules: { 'react-refresh/only-export-components': 'off' },
   },
   {
     files: ['**/*.test.{ts,tsx}', 'src/test/**', 'src/mocks/**'],
     rules: {
       '@typescript-eslint/no-non-null-assertion': 'off',
+      '@typescript-eslint/no-unused-vars': [
+        'error',
+        { ignoreRestSiblings: true, argsIgnorePattern: '^_', varsIgnorePattern: '^_' },
+      ],
       'react-refresh/only-export-components': 'off',
     },
   },
