@@ -21,4 +21,4 @@ packs:
   - { name: mobile-backends, title: "Mobile app backends", status: planned, signature: "Matching category, driven at the API", drivers: [http, graphql, grpc] }
   - { name: serverless, title: "Serverless and edge", status: planned, signature: "Cold starts; concurrency limits", drivers: [http] }
   - { name: event-pipelines, title: "Event pipelines, queues", status: shipped, signature: "Ingest rate; consumer lag; backlog recovery", drivers: [kafka] }
-  - { name: databases, title: "Databases, caches", status: planned, signature: "Query mix; connection-pool exhaustion", drivers: [sql, redis] }
+  - { name: databases, title: "Databases, caches", status: shipped, signature: "Query mix; connection-pool exhaustion", drivers: [sql, redis] }
