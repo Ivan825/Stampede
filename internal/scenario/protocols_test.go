@@ -239,6 +239,37 @@ func TestGRPCPathsResolveAgainstTheScenarioFile(t *testing.T) {
 	}
 }
 
+// TestProtocolDocsExamples parses every step example in docs/protocols.md
+// so the documentation cannot drift from the parser.
+func TestProtocolDocsExamples(t *testing.T) {
+	b, err := os.ReadFile(filepath.Join("..", "..", "docs", "protocols.md"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	blocks := strings.Split(string(b), "```yaml\n")[1:]
+	n := 0
+	for _, blk := range blocks {
+		blk, _, _ = strings.Cut(blk, "```")
+		if !strings.HasPrefix(blk, "- ") {
+			continue
+		}
+		n++
+		lines := strings.Split(strings.TrimRight(blk, "\n"), "\n")
+		for i, l := range lines {
+			lines[i] = "      " + l
+		}
+		// Examples use variables an earlier step would have extracted.
+		src := strings.Replace(protocolScenario(strings.Join(lines, "\n")), "journeys:",
+			"vars: {productId: p1, token: t, orderId: 1}\njourneys:", 1)
+		if _, err := Parse([]byte(src)); err != nil {
+			t.Errorf("example %d does not parse: %v\n%s", n, err, blk)
+		}
+	}
+	if n < 4 {
+		t.Errorf("found %d step examples, want one per protocol", n)
+	}
+}
+
 // TestProtocolExamplesRoundTrip renders every protocol example back to
 // YAML and parses it again, so the compact form survives a save.
 func TestProtocolExamplesRoundTrip(t *testing.T) {
