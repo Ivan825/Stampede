@@ -28,6 +28,7 @@ import (
 	"github.com/Ivan825/Stampede/examples/packlab/iotlab"
 	"github.com/Ivan825/Stampede/examples/packlab/labkit"
 	"github.com/Ivan825/Stampede/examples/packlab/llmlab"
+	"github.com/Ivan825/Stampede/examples/packlab/pipelinelab"
 	"github.com/Ivan825/Stampede/examples/packlab/saaslab"
 	"github.com/Ivan825/Stampede/examples/packlab/ticketlab"
 )
@@ -58,14 +59,15 @@ func (p product) start(cfg labkit.Config) (*labkit.App, error) {
 }
 
 var products = map[string]product{
-	"saas":        {pack: "saas", addr: ":8091", new: saaslab.New},
-	"llm-apps":    {pack: "llm-apps", addr: ":8092", new: llmlab.New},
-	"chat":        {pack: "chat", addr: ":8093", new: chatlab.New},
-	"ticketing":   {pack: "ticketing", addr: ":8094", new: ticketlab.New},
-	"identity":    {pack: "identity", addr: ":8095", new: authlab.New},
-	"public-apis": {pack: "public-apis", addr: ":8096", new: apilab.New},
-	"iot":         {pack: "iot", addr: ":8110", open: iotlab.Open, listen: ":8111", plugins: []string{"mqtt"}},
-	"gaming":      {pack: "gaming", addr: ":8116", open: gamelab.Open, listen: ":8117", plugins: []string{"udp"}},
+	"saas":            {pack: "saas", addr: ":8091", new: saaslab.New},
+	"llm-apps":        {pack: "llm-apps", addr: ":8092", new: llmlab.New},
+	"chat":            {pack: "chat", addr: ":8093", new: chatlab.New},
+	"ticketing":       {pack: "ticketing", addr: ":8094", new: ticketlab.New},
+	"identity":        {pack: "identity", addr: ":8095", new: authlab.New},
+	"public-apis":     {pack: "public-apis", addr: ":8096", new: apilab.New},
+	"iot":             {pack: "iot", addr: ":8110", open: iotlab.Open, listen: ":8111", plugins: []string{"mqtt"}},
+	"event-pipelines": {pack: "event-pipelines", addr: ":8112", open: pipelinelab.Open, listen: ":8113", plugins: []string{"kafka"}},
+	"gaming":          {pack: "gaming", addr: ":8116", open: gamelab.Open, listen: ":8117", plugins: []string{"udp"}},
 }
 
 func names() []string {
