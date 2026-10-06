@@ -1,0 +1,79 @@
+# Deadline day: applications that trickled in for weeks arrive all at
+# once in the last hours. Arrivals climb from 1/s to 40/s, each one a
+# whole application (sign-in, four sections, an upload, submission and
+# the receipt) with brisk pauses. Saving and submitting must not queue.
+apiVersion: stampede.dev/v1
+kind: Scenario
+metadata:
+  name: government-deadline-day
+  tags: [pack:government, ramp, forms]
+target:
+  baseURL: ${env.TARGET_URL}
+data:
+  applicants: { csv: ../data/applicants.csv, mode: random }
+journeys:
+  - name: last-minute
+    steps:
+      - name: request code
+        post: /api/otp/request
+        json: { mobile: "${data.applicants.mobile}" }
+        check: { status: 200 }
+        extract: { requestId: "$.requestId", code: "$.testCode" }
+      - name: verify code
+        post: /api/otp/verify
+        json: { requestId: "${requestId}", code: "${code}" }
+        check: { status: 200 }
+        extract: { token: "$.token" }
+      - name: start application
+        post: /api/applications
+        headers: { Authorization: "Bearer ${token}" }
+        check: { status: 201 }
+        extract: { app: "$.applicationId" }
+      - think: 2s..5s
+      - name: save section
+        put: /api/applications/${app}/sections/personal
+        headers: { Authorization: "Bearer ${token}" }
+        json: { name: "${data.applicants.name}", dateOfBirth: "2007-05-14" }
+        check: { status: 200 }
+      - think: 2s..5s
+      - name: save section
+        put: /api/applications/${app}/sections/address
+        headers: { Authorization: "Bearer ${token}" }
+        json: { line1: "12 Station Road", pin: "560001" }
+        check: { status: 200 }
+      - think: 2s..5s
+      - name: save section
+        put: /api/applications/${app}/sections/education
+        headers: { Authorization: "Bearer ${token}" }
+        json: { board: "State Board", percentage: 81 }
+        check: { status: 200 }
+      - think: 2s..5s
+      - name: save section
+        put: /api/applications/${app}/sections/income
+        headers: { Authorization: "Bearer ${token}" }
+        json: { annualFamilyIncome: 180000 }
+        check: { status: 200 }
+      - name: upload certificate
+        post: /api/applications/${app}/documents?type=income-certificate
+        headers: { Authorization: "Bearer ${token}", Content-Type: application/pdf }
+        body: "%PDF-1.4 ${randString(4096)}${randString(4096)}"
+        check: { status: 201 }
+      - name: submit
+        post: /api/applications/${app}/submit
+        headers: { Authorization: "Bearer ${token}" }
+        check: { status: 200 }
+      - name: receipt
+        get: /api/applications/${app}/receipt
+        headers: { Authorization: "Bearer ${token}" }
+        check: { status: 200 }
+load:
+  mode: rate
+  stages:
+    - { duration: 1m, target: 1/s }
+    - { duration: 3m, target: 40/s }
+    - { duration: 2m, target: 40/s }
+targets:
+  - "last-minute/save section.p95 < 300ms"
+  - "last-minute/submit.p95 < 500ms"
+  - "last-minute/receipt.p95 < 1s"
+  - errors < 1%

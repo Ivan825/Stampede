@@ -19,6 +19,7 @@ and as a single binary in CI. (The e-commerce pack's reference app is
 | `content` | [NewsLab](#newslab) | 8099 | [content](../../packs/content) |
 | `streaming` | [StreamLab](#streamlab) | 8100 | [streaming](../../packs/streaming) |
 | `edtech` | [ExamLab](#examlab) | 8101 | [edtech](../../packs/edtech) |
+| `government` | [GovLab](#govlab) | 8102 | [government](../../packs/government) |
 
 ```sh
 go run ./examples/packlab -product ticketing                # on :8094
@@ -235,3 +236,20 @@ similarity. Writing an attempt costs 5ms.
 | `start` | Starting an attempt shuffles the question bank and writes the attempt while holding the exam's one lock, so at 10:00 students start one at a time (at most 200 a second) | `exam-start.yaml`: `start attempt` p95 (seconds, against a few milliseconds with the fix) |
 | `autosave` | Every saved answer goes into one log for all attempts, and each save and status read scans the whole log (200ns a row) to find the attempt's answers | `exam-start.yaml` and `take-exam.yaml`: `save answer` p95, rising as answers pile up |
 | `similarity` | Each submission is compared with every earlier one under the assignment's lock, so the rush slows down submission by submission and blocks reading the assignment | `deadline-rush.yaml`: `submit work` and `assignment` p95 |
+
+## GovLab
+
+A government portal. Results for 100,000 candidates (roll numbers
+`26000001` ... `26100000`; dates of birth in 2008, listed in the pack's
+`data/candidates.csv`), PDF marksheets, notices, and applications for a
+scholarship that closes 48 hours after start-up: sign in with a one-time
+code (`POST /api/otp/request`; test mode returns the code as
+`testCode`), save four sections, upload documents, submit for an
+acknowledgement number and a PDF receipt. Every query uses one of ten
+database connections.
+
+| Fix | Bottleneck | Where it shows |
+|---|---|---|
+| `index` | Results are found by scanning all 100,000 rows (20ms) on a database connection, so on results day the ten connections run out and notices queue too | `results-day.yaml`: `lookup`, `marksheet` and `notices` p95 |
+| `pdf` | Every marksheet and receipt compresses the 400 KB letterhead image again | `results-day.yaml`: `marksheet` p95 and CPU |
+| `lock` | Every application save takes one portal-wide lock and writes the application and an audit entry (2ms) before letting go, so saves run one at a time | `deadline-day.yaml`: `save section` and `submit` p95 as arrivals climb |

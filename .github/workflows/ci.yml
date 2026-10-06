@@ -336,6 +336,7 @@ jobs:
           - { pack: content, port: 8099 }
           - { pack: streaming, port: 8100 }
           - { pack: edtech, port: 8101 }
+          - { pack: government, port: 8102 }
     runs-on: ubuntu-latest
     env:
       PACK: ${{ matrix.pack }}
