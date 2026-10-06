@@ -1,0 +1,253 @@
+# Default values for the Stampede chart. Every key is described in
+# values.schema.json and in docs/deploy/helm.md.
+
+image:
+  repository: ghcr.io/ivan825/stampede
+  # Defaults to the chart's appVersion.
+  tag: ""
+  pullPolicy: IfNotPresent
+
+imagePullSecrets: []
+nameOverride: ""
+fullnameOverride: ""
+
+serviceAccount:
+  create: true
+  # Defaults to the release's full name.
+  name: ""
+  annotations: {}
+
+# Applied to every Stampede and TimescaleDB pod.
+commonLabels: {}
+
+# Master key for encrypting stored secrets (32 random bytes, base64; make one
+# with `stampede keygen`). Generated on first install and kept across upgrades
+# when neither value nor existingSecret is set. BACK IT UP: without it,
+# secrets stored in the database cannot be decrypted.
+masterKey:
+  value: ""
+  existingSecret: ""
+  existingSecretKey: master-key
+
+# Join token workers present to the server. Generated like the master key.
+# Workers outside the cluster need it too:
+#   kubectl get secret <release>-stampede -o jsonpath='{.data.join-token}' | base64 -d
+joinToken:
+  value: ""
+  existingSecret: ""
+  existingSecretKey: join-token
+
+server:
+  # Keep this at 1. Each run is owned by the replica that started it, workers
+  # attach to one replica each, and a replica that starts marks every
+  # unfinished run as failed. See docs/deploy/helm.md before raising it.
+  replicas: 1
+  # auto: workers when connected, else in-process; workers; or local.
+  executor: auto
+  logLevel: info
+  logFormat: json
+  # Mark session cookies Secure. Turn on when the UI is served over HTTPS.
+  secureCookies: false
+  # CIDRs of reverse proxies (for example the ingress controller's pod
+  # network) whose X-Forwarded-For header is trusted.
+  trustedProxies: []
+  # Hard caps applied to every run (0 = none).
+  caps:
+    maxRate: 0
+    maxVUs: 0
+    maxDuration: ""
+  # Extra command-line flags for `stampede server`.
+  extraArgs: []
+  extraEnv: []
+  extraVolumes: []
+  extraVolumeMounts: []
+  # Directory holding CSV/JSON feeder files (STAMPEDE_DATA_DIR). Mount it
+  # with extraVolumes/extraVolumeMounts.
+  dataDir: ""
+  resources:
+    requests:
+      cpu: 100m
+      memory: 128Mi
+    limits:
+      memory: 1Gi
+  podAnnotations: {}
+  podLabels: {}
+  nodeSelector: {}
+  tolerations: []
+  affinity: {}
+  priorityClassName: ""
+  # The server stops active runs and writes their reports on shutdown.
+  terminationGracePeriodSeconds: 60
+  podDisruptionBudget:
+    enabled: true
+    maxUnavailable: 1
+  podSecurityContext:
+    runAsNonRoot: true
+    runAsUser: 65532
+    runAsGroup: 65532
+    fsGroup: 65532
+    seccompProfile:
+      type: RuntimeDefault
+  securityContext:
+    allowPrivilegeEscalation: false
+    readOnlyRootFilesystem: true
+    capabilities:
+      drop: [ALL]
+  startupProbe:
+    httpGet: { path: /healthz, port: http }
+    periodSeconds: 2
+    failureThreshold: 90
+  livenessProbe:
+    httpGet: { path: /healthz, port: http }
+    periodSeconds: 10
+    timeoutSeconds: 3
+    failureThreshold: 3
+  readinessProbe:
+    httpGet: { path: /readyz, port: http }
+    periodSeconds: 5
+    timeoutSeconds: 3
+    failureThreshold: 3
+
+service:
+  type: ClusterIP
+  httpPort: 8080
+  # gRPC port workers connect to. Expose it (for example with a LoadBalancer
+  # service) for workers outside the cluster.
+  workerPort: 8081
+  annotations: {}
+
+# Optional TLS for the worker port. The secret must hold tls.crt and tls.key
+# for the server, and ca.crt that in-cluster workers use to verify it. The
+# certificate must name the service (<fullname>, <fullname>.<namespace>.svc).
+# Without it, in-cluster workers connect with --insecure.
+workerTLS:
+  enabled: false
+  secretName: ""
+
+ingress:
+  enabled: false
+  className: ""
+  annotations: {}
+  hosts:
+    - host: stampede.example.com
+      paths:
+        - path: /
+          pathType: Prefix
+  tls: []
+  #  - secretName: stampede-tls
+  #    hosts: [stampede.example.com]
+
+workers:
+  enabled: true
+  # Used when autoscaling is off.
+  replicas: 2
+  region: kubernetes
+  # Extra worker labels, KEY: VALUE.
+  labels: {}
+  # Most virtual users one worker accepts (0 = no limit).
+  maxVUs: 0
+  extraArgs: []
+  extraEnv: []
+  extraVolumes: []
+  extraVolumeMounts: []
+  resources:
+    requests:
+      cpu: 250m
+      memory: 128Mi
+    limits:
+      memory: 1Gi
+  # CPU-based HorizontalPodAutoscaler (no KEDA needed). A run's load is split
+  # across the workers connected when it starts, so scaling keeps capacity
+  # ready for the next run rather than resharding a run in flight.
+  autoscaling:
+    enabled: false
+    minReplicas: 2
+    maxReplicas: 10
+    targetCPUUtilizationPercentage: 70
+    behavior: {}
+  podAnnotations: {}
+  podLabels: {}
+  nodeSelector: {}
+  tolerations: []
+  affinity: {}
+  priorityClassName: ""
+  terminationGracePeriodSeconds: 30
+  podDisruptionBudget:
+    enabled: true
+    maxUnavailable: 1
+  podSecurityContext:
+    runAsNonRoot: true
+    runAsUser: 65532
+    runAsGroup: 65532
+    fsGroup: 65532
+    seccompProfile:
+      type: RuntimeDefault
+  securityContext:
+    allowPrivilegeEscalation: false
+    readOnlyRootFilesystem: true
+    capabilities:
+      drop: [ALL]
+
+database:
+  # Use an existing PostgreSQL (TimescaleDB recommended) instead of the
+  # bundled one. Give either url or existingSecret (+ existingSecretKey).
+  external:
+    url: ""
+    existingSecret: ""
+    existingSecretKey: database-url
+
+# A single-node TimescaleDB StatefulSet for small installs and evaluation.
+# For production prefer a managed or operator-run PostgreSQL with backups.
+timescaledb:
+  enabled: true
+  image:
+    repository: timescale/timescaledb
+    tag: 2.22.1-pg17
+    pullPolicy: IfNotPresent
+  database: stampede
+  username: stampede
+  # Generated on first install and kept across upgrades when empty.
+  password: ""
+  existingSecret: ""
+  existingSecretKey: postgres-password
+  persistence:
+    enabled: true
+    size: 8Gi
+    storageClass: ""
+    accessModes: [ReadWriteOnce]
+  resources:
+    requests:
+      cpu: 100m
+      memory: 256Mi
+    limits:
+      memory: 1Gi
+  # timescaledb-tune sizes PostgreSQL from these on first start.
+  tuneMemory: 512MB
+  tuneCPUs: "1"
+  nodeSelector: {}
+  tolerations: []
+  affinity: {}
+  podSecurityContext:
+    runAsNonRoot: true
+    runAsUser: 70
+    runAsGroup: 70
+    fsGroup: 70
+    seccompProfile:
+      type: RuntimeDefault
+  securityContext:
+    allowPrivilegeEscalation: false
+    readOnlyRootFilesystem: true
+    capabilities:
+      drop: [ALL]
+
+# Prometheus Operator ServiceMonitor for the server's /metrics.
+serviceMonitor:
+  enabled: false
+  interval: 30s
+  scrapeTimeout: 10s
+  labels: {}
+
+tests:
+  # Image for `helm test` pods; defaults to the Stampede image, whose
+  # `healthcheck` command does the HTTP check (it has no shell or curl).
+  image: ""

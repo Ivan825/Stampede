@@ -1,0 +1,22 @@
+apiVersion: v2
+name: stampede
+description: >-
+  Self-hosted distributed load testing. Runs the Stampede server (API, run
+  manager and web UI), a pool of load-generating workers and, optionally, a
+  bundled TimescaleDB.
+type: application
+# The chart's own version; bump it on every chart change.
+version: 0.1.0
+# The Stampede release deployed by default (the image tag).
+appVersion: "0.1.0"
+kubeVersion: ">=1.25.0-0"
+home: https://github.com/Ivan825/Stampede
+sources:
+  - https://github.com/Ivan825/Stampede
+icon: https://raw.githubusercontent.com/Ivan825/Stampede/main/brand/icon-light.svg
+keywords: [load-testing, performance, benchmarking, http]
+maintainers:
+  - name: Ivan825
+    url: https://github.com/Ivan825
+annotations:
+  artifacthub.io/license: Apache-2.0

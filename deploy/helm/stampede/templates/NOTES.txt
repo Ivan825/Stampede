@@ -1,0 +1,40 @@
+Stampede {{ include "stampede.imageTag" . }} is installed as release "{{ .Release.Name }}" in namespace "{{ .Release.Namespace }}".
+
+1. Open the web UI and create the first account:
+{{- if .Values.ingress.enabled }}
+{{- range .Values.ingress.hosts }}
+     http{{ if $.Values.ingress.tls }}s{{ end }}://{{ .host }}/
+{{- end }}
+{{- else }}
+     kubectl -n {{ .Release.Namespace }} port-forward svc/{{ include "stampede.fullname" . }} 8080:{{ .Values.service.httpPort }}
+     open http://localhost:8080/
+{{- end }}
+
+2. Check the install:
+     kubectl -n {{ .Release.Namespace }} rollout status deploy/{{ include "stampede.fullname" . }}-server
+     helm test {{ .Release.Name }} -n {{ .Release.Namespace }}
+
+{{- if .Values.workers.enabled }}
+
+3. Workers: {{ if .Values.workers.autoscaling.enabled }}{{ .Values.workers.autoscaling.minReplicas }}-{{ .Values.workers.autoscaling.maxReplicas }} (CPU autoscaled){{ else }}{{ .Values.workers.replicas }}{{ end }} in-cluster, region "{{ .Values.workers.region }}", dialling {{ include "stampede.workerAddress" . }}{{ if not .Values.workerTLS.enabled }} without TLS{{ end }}.
+   To add workers elsewhere (other clusters, VMs, clouds), expose port {{ .Values.service.workerPort }}
+   and give them the join token:
+     kubectl -n {{ .Release.Namespace }} get secret {{ include "stampede.joinTokenSecret" . }} -o jsonpath='{.data.{{ .Values.joinToken.existingSecretKey }}}' | base64 -d
+{{- end }}
+{{- if not .Values.masterKey.existingSecret }}
+
+BACK UP THE MASTER KEY. Secrets stored in Stampede cannot be decrypted without it:
+     kubectl -n {{ .Release.Namespace }} get secret {{ include "stampede.secretName" . }} -o jsonpath='{.data.master-key}' | base64 -d
+The secret is kept on `helm uninstall` for this reason.
+{{- end }}
+{{- if .Values.timescaledb.enabled }}
+
+The bundled single-node TimescaleDB{{ if .Values.timescaledb.persistence.enabled }} stores data on a {{ .Values.timescaledb.persistence.size }} volume{{ else }} has NO persistent volume: data is lost when its pod restarts{{ end }}.
+For production use an external PostgreSQL with backups (database.external).
+{{- end }}
+{{- if gt (int .Values.server.replicas) 1 }}
+
+WARNING: server.replicas={{ .Values.server.replicas }}. Stampede {{ include "stampede.imageTag" . }} keeps each run in the replica that
+started it, each worker attaches to one replica, and a starting replica marks every unfinished
+run as failed. Use one replica unless you have read docs/deploy/helm.md.
+{{- end }}
