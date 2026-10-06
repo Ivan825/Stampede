@@ -8,7 +8,7 @@ LDFLAGS   := -s -w \
 	-X $(PKG)/internal/version.Commit=$(COMMIT) \
 	-X $(PKG)/internal/version.Date=$(DATE)
 
-.PHONY: build test race lint fmt tidy clean
+.PHONY: build test race lint fmt tidy clean generate
 
 build:
 	$(GO) build -trimpath -ldflags "$(LDFLAGS)" -o bin/stampede ./cmd/stampede
@@ -30,3 +30,8 @@ tidy:
 
 clean:
 	rm -rf bin dist
+
+OAPI_CODEGEN := github.com/oapi-codegen/oapi-codegen/v2/cmd/oapi-codegen@v2.7.2
+
+generate:
+	$(GO) run $(OAPI_CODEGEN) -config api/oapi-codegen.yaml api/openapi.yaml
