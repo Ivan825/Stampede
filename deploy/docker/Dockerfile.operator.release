@@ -1,0 +1,8 @@
+# Operator release image, built by GoReleaser (dockers_v2) from prebuilt
+# binaries (linux/amd64/manager, linux/arm64/manager).
+# For a build from source use deploy/operator/Dockerfile.
+FROM gcr.io/distroless/static-debian12:nonroot
+ARG TARGETPLATFORM
+COPY $TARGETPLATFORM/manager /manager
+USER 65532:65532
+ENTRYPOINT ["/manager"]

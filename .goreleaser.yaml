@@ -34,6 +34,21 @@ builds:
     goos: [linux, darwin, windows]
     goarch: [amd64, arm64]
 
+  # The Kubernetes operator, a separate Go module. Shipped only as an image.
+  - id: operator
+    dir: deploy/operator
+    main: ./cmd
+    binary: manager
+    env:
+      - CGO_ENABLED=0
+    flags:
+      - -trimpath
+    ldflags:
+      - -s -w
+    mod_timestamp: "{{ .CommitTimestamp }}"
+    goos: [linux]
+    goarch: [amd64, arm64]
+
 archives:
   - id: stampede
     ids: [stampede]
@@ -97,6 +112,28 @@ dockers_v2:
       org.opencontainers.image.description: Self-hosted distributed load testing
       org.opencontainers.image.source: https://github.com/Ivan825/Stampede
       org.opencontainers.image.url: https://github.com/Ivan825/Stampede
+      org.opencontainers.image.licenses: Apache-2.0
+      org.opencontainers.image.version: "{{ .Version }}"
+      org.opencontainers.image.revision: "{{ .FullCommit }}"
+      org.opencontainers.image.created: "{{ .CommitDate }}"
+
+  - id: operator
+    ids: [operator]
+    dockerfile: deploy/docker/Dockerfile.operator.release
+    images:
+      - ghcr.io/ivan825/stampede-operator
+    tags:
+      - "{{ .Version }}"
+      - "{{ if not .Prerelease }}v{{ .Major }}.{{ .Minor }}{{ end }}"
+      - "{{ if not .Prerelease }}latest{{ end }}"
+    platforms:
+      - linux/amd64
+      - linux/arm64
+    sbom: true
+    labels:
+      org.opencontainers.image.title: stampede-operator
+      org.opencontainers.image.description: Kubernetes operator for Stampede (StampedeCluster, StampedeRun)
+      org.opencontainers.image.source: https://github.com/Ivan825/Stampede
       org.opencontainers.image.licenses: Apache-2.0
       org.opencontainers.image.version: "{{ .Version }}"
       org.opencontainers.image.revision: "{{ .FullCommit }}"
