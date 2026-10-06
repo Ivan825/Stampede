@@ -1,0 +1,24 @@
+# Every product type Stampede plans a pack for. A pack is "shipped" only
+# when its journeys are dry-run against a reference app in CI; the website
+# and `stampede pack list` read this file, so labels always match the repo.
+packs:
+  - { name: ecommerce, title: "E-commerce, marketplaces", status: shipped, signature: "Browse, search, cart, checkout; flash-sale spike; last-item contention", drivers: [http] }
+  - { name: ticketing, title: "Ticketing, booking, travel", status: planned, signature: "On-sale rush; seat-lock contention; waiting-room queues", drivers: [http, websocket] }
+  - { name: fintech, title: "Fintech, banking, payments", status: planned, signature: "Transfers, statements; duplicate-payment safety; month-end peaks", drivers: [http, grpc] }
+  - { name: saas, title: "SaaS dashboards, B2B tools", status: planned, signature: "Login, create and edit records, heavy reports; noisy tenant", drivers: [http, graphql] }
+  - { name: social, title: "Social, feeds, forums", status: planned, signature: "Feed load, post, like, notifications; viral spike", drivers: [http, websocket] }
+  - { name: chat, title: "Chat, collaboration", status: planned, signature: "Thousands of open connections; message fan-out; reconnect storm", drivers: [websocket] }
+  - { name: content, title: "News, blogs, content", status: planned, signature: "Cache hit rate; cold cache; breaking-news spike", drivers: [http] }
+  - { name: streaming, title: "Video and audio streaming", status: planned, signature: "Start-up time; segment delivery; live-event concurrency", drivers: [http] }
+  - { name: llm-apps, title: "AI and LLM apps", status: planned, signature: "Time to first token; tokens per second; long streaming requests", drivers: [sse] }
+  - { name: edtech, title: "EdTech, exam platforms", status: planned, signature: "Everyone starts at 10:00; deadline submission rush", drivers: [http, websocket] }
+  - { name: government, title: "Government, results portals", status: planned, signature: "Results-day and deadline-day surges", drivers: [http] }
+  - { name: delivery, title: "Food delivery, ride hailing", status: planned, signature: "Location updates; matching; live tracking", drivers: [http, websocket] }
+  - { name: gaming, title: "Gaming backends", status: planned, signature: "Matchmaking, leaderboards, session servers", drivers: [websocket, udp] }
+  - { name: iot, title: "IoT platforms", status: planned, signature: "Huge numbers of connected devices; telemetry ingest", drivers: [mqtt] }
+  - { name: public-apis, title: "Public APIs, developer platforms", status: planned, signature: "Rate limits, API keys, webhook delivery", drivers: [http, grpc] }
+  - { name: identity, title: "Login and identity", status: planned, signature: "Login storm; token refresh waves", drivers: [http] }
+  - { name: mobile-backends, title: "Mobile app backends", status: planned, signature: "Matching category, driven at the API", drivers: [http, graphql, grpc] }
+  - { name: serverless, title: "Serverless and edge", status: planned, signature: "Cold starts; concurrency limits", drivers: [http] }
+  - { name: event-pipelines, title: "Event pipelines, queues", status: planned, signature: "Ingest rate; consumer lag; backlog recovery", drivers: [kafka] }
+  - { name: databases, title: "Databases, caches", status: planned, signature: "Query mix; connection-pool exhaustion", drivers: [sql, redis] }

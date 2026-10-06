@@ -1,0 +1,7 @@
+# Default targets for shops. Checkout is held to a tighter error budget
+# than browsing because a failed checkout is lost revenue.
+targets:
+  - http.p95 < 500ms
+  - errors < 1%
+  - checkout.p95 < 1s
+  - checkout.errors < 0.5%

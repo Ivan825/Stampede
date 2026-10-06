@@ -1,0 +1,23 @@
+# Edge journey: wrong passwords must be rejected quickly and cleanly, not
+# with errors or slow responses.
+apiVersion: stampede.dev/v1
+kind: Scenario
+metadata:
+  name: ecommerce-failed-login
+  tags: [pack:ecommerce, edge]
+target:
+  baseURL: ${env.TARGET_URL}
+data:
+  users: { csv: ../data/users.csv, mode: random }
+journeys:
+  - name: wrong-password
+    steps:
+      - post: /api/login
+        json: { email: "${data.users.email}", password: "not-the-password" }
+        check: { status: [400, 401, 403] }
+load:
+  mode: rate
+  rate: 10/s
+  duration: 1m
+targets:
+  - http.p95 < 300ms
