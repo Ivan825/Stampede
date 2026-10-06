@@ -277,6 +277,47 @@ jobs:
       - name: dry-run the e-commerce pack against ShopLab
         run: ./bin/stampede pack test ecommerce --target http://localhost:8090
 
+  packlab:
+    # The other shipped packs, each against its in-memory PackLab app:
+    # stampede init must pick the pack, and every journey must work as
+    # shipped (real think times). The same apps run in-process under load
+    # in the test job (examples/packlab/packs_test.go).
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { pack: saas, port: 8091 }
+          - { pack: llm-apps, port: 8092 }
+          - { pack: chat, port: 8093 }
+          - { pack: ticketing, port: 8094 }
+          - { pack: identity, port: 8095 }
+          - { pack: public-apis, port: 8096 }
+    runs-on: ubuntu-latest
+    env:
+      PACK: ${{ matrix.pack }}
+      TARGET: http://localhost:${{ matrix.port }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - run: make build
+      - name: start the reference app
+        run: |
+          go build -o bin/packlab ./examples/packlab
+          ./bin/packlab -product "$PACK" > packlab.log 2>&1 &
+          for _ in $(seq 1 30); do curl -sf "$TARGET/healthz" > /dev/null && exit 0; sleep 1; done
+          cat packlab.log; exit 1
+      - name: stampede init detects the pack
+        run: |
+          echo n | ./bin/stampede init --target "$TARGET" --dir "$RUNNER_TEMP/init" | tee init.log
+          grep -q "Set up the $PACK pack" init.log
+      - name: dry-run the pack against its reference app
+        run: ./bin/stampede pack test "$PACK" --target "$TARGET"
+      - name: reference app log
+        if: failure()
+        run: cat packlab.log
+
   security:
     runs-on: ubuntu-latest
     steps:
