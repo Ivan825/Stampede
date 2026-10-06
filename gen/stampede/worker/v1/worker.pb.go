@@ -846,8 +846,12 @@ type Heartbeat struct {
 	Health             *Health                `protobuf:"bytes,2,opt,name=health,proto3" json:"health,omitempty"`
 	ActiveRunId        string                 `protobuf:"bytes,3,opt,name=active_run_id,json=activeRunId,proto3" json:"active_run_id,omitempty"`
 	Vus                uint32                 `protobuf:"varint,4,opt,name=vus,proto3" json:"vus,omitempty"`
-	unknownFields      protoimpl.UnknownFields
-	sizeCache          protoimpl.SizeCache
+	// busy_elsewhere is set when the worker process runs load for another
+	// server replica (a worker can connect to several), so this server does
+	// not assign it a run it would refuse.
+	BusyElsewhere bool `protobuf:"varint,5,opt,name=busy_elsewhere,json=busyElsewhere,proto3" json:"busy_elsewhere,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
 }
 
 func (x *Heartbeat) Reset() {
@@ -906,6 +910,13 @@ func (x *Heartbeat) GetVus() uint32 {
 		return x.Vus
 	}
 	return 0
+}
+
+func (x *Heartbeat) GetBusyElsewhere() bool {
+	if x != nil {
+		return x.BusyElsewhere
+	}
+	return false
 }
 
 // ClockPong answers a ClockPing: t1 is echoed, t2 is when the worker
@@ -2132,12 +2143,13 @@ const file_stampede_worker_v1_worker_proto_rawDesc = "" +
 	"\n" +
 	"goroutines\x18\b \x01(\rR\n" +
 	"goroutines\x12\x18\n" +
-	"\adropped\x18\t \x01(\x04R\adropped\"\xa8\x01\n" +
+	"\adropped\x18\t \x01(\x04R\adropped\"\xcf\x01\n" +
 	"\tHeartbeat\x121\n" +
 	"\x15worker_time_unix_nano\x18\x01 \x01(\x03R\x12workerTimeUnixNano\x122\n" +
 	"\x06health\x18\x02 \x01(\v2\x1a.stampede.worker.v1.HealthR\x06health\x12\"\n" +
 	"\ractive_run_id\x18\x03 \x01(\tR\vactiveRunId\x12\x10\n" +
-	"\x03vus\x18\x04 \x01(\rR\x03vus\"q\n" +
+	"\x03vus\x18\x04 \x01(\rR\x03vus\x12%\n" +
+	"\x0ebusy_elsewhere\x18\x05 \x01(\bR\rbusyElsewhere\"q\n" +
 	"\tClockPong\x12 \n" +
 	"\ft1_unix_nano\x18\x01 \x01(\x03R\n" +
 	"t1UnixNano\x12 \n" +

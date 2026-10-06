@@ -61,8 +61,13 @@ func (w *Worker) startRun(ctx context.Context, s *session, sr *workerv1.StartRun
 		}
 	}
 
+	if g := w.cfg.Gate; g != nil && !g.acquire(id) {
+		s.send(runFailed(id, fmt.Errorf("worker is busy with run %s from another server", g.busy())))
+		return
+	}
 	r, err := w.prepare(ctx, sr)
 	if err != nil {
+		w.cfg.Gate.release(id)
 		w.log.Error("cannot start run", "run", id, "error", err)
 		s.send(runFailed(id, err))
 		return
@@ -148,6 +153,7 @@ func (w *Worker) onSnapshot(r *activeRun, s *metrics.Snapshot) {
 
 // execute runs the engine and reports the end of the run.
 func (w *Worker) execute(r *activeRun) {
+	defer w.cfg.Gate.release(r.id)
 	defer close(r.done)
 	defer r.cancel()
 	res, err := r.eng.Run(r.ctx)
@@ -280,4 +286,46 @@ func (w *Worker) deadMan(r *activeRun) {
 			}
 		}
 	}
+}
+
+// Gate lets the Workers of one process (one per server replica, see
+// Config.Gate) share the machine: only one of them runs load at a time.
+// A nil Gate allows everything.
+type Gate struct {
+	mu  sync.Mutex
+	run string
+}
+
+func (g *Gate) acquire(run string) bool {
+	if g == nil {
+		return true
+	}
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	if g.run != "" && g.run != run {
+		return false
+	}
+	g.run = run
+	return true
+}
+
+func (g *Gate) release(run string) {
+	if g == nil {
+		return
+	}
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	if g.run == run {
+		g.run = ""
+	}
+}
+
+// busy returns the run holding the gate, if any.
+func (g *Gate) busy() string {
+	if g == nil {
+		return ""
+	}
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	return g.run
 }

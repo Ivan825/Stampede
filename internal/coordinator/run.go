@@ -323,7 +323,7 @@ func (c *Coordinator) reserve(spec RunSpec, plan *scenario.Plan) (*Run, error) {
 	byID := map[string]*workerConn{}
 	for _, w := range c.workers {
 		w.mu.Lock()
-		if w.stream != nil && w.run == nil && now.Sub(w.seen()) < stale {
+		if w.stream != nil && w.run == nil && !w.busyElsewhere && now.Sub(w.seen()) < stale {
 			avail = append(avail, candidate{
 				id: w.id, name: w.name, region: w.region,
 				cpus: float64(max(w.capacity.CPUs, 1)), maxVUs: w.capacity.MaxVUs,

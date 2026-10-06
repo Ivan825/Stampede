@@ -224,8 +224,10 @@ type workerConn struct {
 	health         wire.Health
 	offset, rtt    time.Duration
 	run            *Run
-	member         int
-	pongs          map[int64]chan clockSample
+	// busyElsewhere: the worker runs load for another server replica.
+	busyElsewhere bool
+	member        int
+	pongs         map[int64]chan clockSample
 }
 
 // serverStream is one live Connect stream. A single writer goroutine owns
@@ -449,6 +451,7 @@ func (c *Coordinator) handle(w *workerConn, m *workerv1.WorkerMessage, now time.
 		hb := msg.Heartbeat
 		w.mu.Lock()
 		w.lastHeartbeat = now
+		w.busyElsewhere = hb.GetBusyElsewhere()
 		if h := wire.HealthFromProto(hb.GetHealth()); h != nil {
 			w.health = *h
 		}

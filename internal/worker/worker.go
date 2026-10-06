@@ -67,6 +67,9 @@ type Config struct {
 	EnrollDialer interface {
 		DialContext(ctx context.Context, network, addr string) (net.Conn, error)
 	}
+	// Gate, shared by the Workers of one process that connect to several
+	// server replicas, lets only one of them run load at a time.
+	Gate *Gate
 	// DialOptions are added to the gRPC dial options (tests dial bufconn).
 	DialOptions []grpc.DialOption
 
@@ -419,6 +422,9 @@ func (w *Worker) heartbeatLoop(s *session) {
 		w.mu.Lock()
 		r := w.run
 		w.mu.Unlock()
+		if g := w.cfg.Gate.busy(); g != "" && (r == nil || r.id != g) {
+			hb.BusyElsewhere = true
+		}
 		if r != nil {
 			r.mu.Lock()
 			if r.finished == nil {

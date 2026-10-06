@@ -142,6 +142,10 @@ message Heartbeat {
   Health health = 2;
   string active_run_id = 3;
   uint32 vus = 4;
+  // busy_elsewhere is set when the worker process runs load for another
+  // server replica (a worker can connect to several), so this server does
+  // not assign it a run it would refuse.
+  bool busy_elsewhere = 5;
 }
 
 // ClockPong answers a ClockPing: t1 is echoed, t2 is when the worker
