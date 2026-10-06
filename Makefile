@@ -33,5 +33,8 @@ clean:
 
 OAPI_CODEGEN := github.com/oapi-codegen/oapi-codegen/v2/cmd/oapi-codegen@v2.7.2
 
+SQLC_IMAGE := sqlc/sqlc:1.29.0
+
 generate:
 	$(GO) run $(OAPI_CODEGEN) -config api/oapi-codegen.yaml api/openapi.yaml
+	docker run --rm -v "$(CURDIR)":/src -w /src $(SQLC_IMAGE) generate
