@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/base64"
 	"errors"
+	"os"
 	"testing"
 )
 
@@ -52,5 +53,23 @@ func TestFromEnv(t *testing.T) {
 	t.Setenv("STAMPEDE_MASTER_KEY", GenerateKey())
 	if _, err := FromEnv(); err != nil {
 		t.Error(err)
+	}
+}
+
+func TestAutogenKeyFile(t *testing.T) {
+	path := t.TempDir() + "/master.key"
+	t.Setenv("STAMPEDE_MASTER_KEY", "")
+	t.Setenv("STAMPEDE_MASTER_KEY_FILE", path)
+	t.Setenv("STAMPEDE_MASTER_KEY_AUTOGEN", "true")
+	k1, err := FromEnv()
+	if err != nil {
+		t.Fatal(err)
+	}
+	k2, err := FromEnv()
+	if err != nil || k1.KeyID() != k2.KeyID() {
+		t.Fatalf("second start must reuse the generated key: %v", err)
+	}
+	if fi, _ := os.Stat(path); fi.Mode().Perm() != 0o600 {
+		t.Errorf("key file mode %v", fi.Mode().Perm())
 	}
 }

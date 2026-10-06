@@ -48,6 +48,16 @@ func FromEnv() (*Keyring, error) {
 	raw := os.Getenv("STAMPEDE_MASTER_KEY")
 	if f := os.Getenv("STAMPEDE_MASTER_KEY_FILE"); raw == "" && f != "" {
 		b, err := os.ReadFile(f) //nolint:gosec // the operator chooses the key file
+		if errors.Is(err, os.ErrNotExist) && os.Getenv("STAMPEDE_MASTER_KEY_AUTOGEN") == "true" {
+			// First start of a self-contained install (Docker Compose): create
+			// the key on the data volume. Back this file up; secrets cannot be
+			// decrypted without it.
+			key := GenerateKey()
+			if err := os.WriteFile(f, []byte(key+"\n"), 0o600); err != nil { //nolint:gosec // the operator chooses the key file
+				return nil, fmt.Errorf("create master key file: %w", err)
+			}
+			b, err = []byte(key), nil
+		}
 		if err != nil {
 			return nil, fmt.Errorf("read master key file: %w", err)
 		}
