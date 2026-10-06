@@ -700,6 +700,35 @@ paths:
         "404": { $ref: "#/components/responses/NotFound" }
         "409": { $ref: "#/components/responses/Conflict" }
 
+  /compare:
+    post:
+      tags: [runs]
+      operationId: compareRuns
+      summary: Compare finished runs of version A with runs of version B
+      description: |
+        The same comparison as `stampede compare`. For p50, p95, p99, error
+        rate, throughput and (for breakpoint runs) the highest load that
+        held, it gives both means, the relative change, a bootstrap 95%
+        confidence interval for the change and the noise floor measured
+        between repeats of one version. A change is a regression or an
+        improvement only when the interval excludes zero and the change is
+        larger than the noise floor. Per-step p95 and error rate are
+        compared too but do not affect the verdict. Every run must belong
+        to the caller's organisation and have finished with a report.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CompareRequest" }
+      responses:
+        "200":
+          description: The comparison
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Comparison" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "422": { $ref: "#/components/responses/Invalid" }
+
   /projects/{projectId}/schedules:
     parameters:
       - $ref: "#/components/parameters/projectId"
@@ -1685,6 +1714,97 @@ components:
       type: object
       description: The full report; same format as `stampede run --json`.
       additionalProperties: true
+
+    CompareRequest:
+      type: object
+      required: [a, b]
+      properties:
+        a:
+          type: array
+          description: Runs of the baseline version
+          minItems: 1
+          maxItems: 20
+          items: { type: string, format: uuid }
+        b:
+          type: array
+          description: Runs of the new version
+          minItems: 1
+          maxItems: 20
+          items: { type: string, format: uuid }
+        labelA: { type: string, maxLength: 100, description: Name for the baseline (default A) }
+        labelB: { type: string, maxLength: 100, description: Name for the new version (default B) }
+
+    CompareVerdict:
+      type: string
+      enum: [regression, improvement, no-change, inconclusive]
+      x-enum-varnames: [CompareRegression, CompareImprovement, CompareNoChange, CompareInconclusive]
+
+    CompareSide:
+      type: object
+      required: [label, runs]
+      properties:
+        label: { type: string }
+        runs:
+          type: array
+          items: { type: string }
+
+    MetricDelta:
+      type: object
+      required: [name, higherIsBetter, a, b, meanA, meanB, change, ciLow, ciHigh, noiseFloor, verdict]
+      properties:
+        name: { type: string, description: "p50, p95, p99, error rate, throughput or max sustainable load" }
+        higherIsBetter: { type: boolean }
+        a:
+          type: array
+          description: The value from each run of A. Latencies are in seconds, error rates are fractions.
+          items: { type: number, format: double }
+        b:
+          type: array
+          items: { type: number, format: double }
+        meanA: { type: number, format: double }
+        meanB: { type: number, format: double }
+        change:
+          type: number
+          format: double
+          nullable: true
+          description: (meanB - meanA) / meanA; null when meanA is 0 and meanB is not.
+        ciLow: { type: number, format: double, nullable: true, description: Lower bound of the 95% interval of the change }
+        ciHigh: { type: number, format: double, nullable: true, description: Upper bound of the 95% interval of the change }
+        noiseFloor: { type: number, format: double, description: Largest relative spread between repeats of one version (at least 0.02) }
+        verdict: { $ref: "#/components/schemas/CompareVerdict" }
+
+    StepDelta:
+      type: object
+      required: [journey, step, metrics]
+      properties:
+        journey: { type: string }
+        step: { type: string }
+        metrics:
+          type: array
+          description: p95 and error rate
+          items: { $ref: "#/components/schemas/MetricDelta" }
+
+    Comparison:
+      type: object
+      required: [a, b, comparable, problems, metrics, steps, verdict, confidence, markdown]
+      properties:
+        a: { $ref: "#/components/schemas/CompareSide" }
+        b: { $ref: "#/components/schemas/CompareSide" }
+        comparable: { type: boolean, description: False when the runs differ in scenario, load plan, duration or worker count, or a run was generator-limited }
+        problems:
+          type: array
+          description: Why the runs are not comparable
+          items: { type: string }
+        metrics:
+          type: array
+          items: { $ref: "#/components/schemas/MetricDelta" }
+        steps:
+          type: array
+          description: Per-step comparisons; informational, they do not change the verdict
+          items: { $ref: "#/components/schemas/StepDelta" }
+        verdict: { $ref: "#/components/schemas/CompareVerdict" }
+        confidence: { type: number, format: double, description: Confidence level of the intervals (0.95) }
+        markdown: { type: string, description: The comparison as Markdown, as `stampede compare --md` writes it }
 
     Worker:
       type: object
