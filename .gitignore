@@ -1,0 +1,29 @@
+# Build output
+/bin/
+/dist/
+*.test
+*.out
+coverage.*
+
+# Go workspace
+go.work.sum
+
+# Node
+node_modules/
+web/dist/
+site/dist/
+site/.astro/
+
+# Local env and data
+.env
+.env.*
+!.env.example
+*.local.yaml
+/.stampede/
+/reports/
+
+# Editors and OS
+.DS_Store
+.idea/
+.vscode/
+*.swp
