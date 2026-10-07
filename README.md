@@ -75,23 +75,29 @@ binary, Helm chart) for networks without internet access; see
 
 **Describe users, not requests.** A [scenario](docs/concepts/scenarios.md)
 is a YAML file of weighted journeys with `${}` expressions, extractors
-(JSONPath, header, cookie, regex, CSS), checks, think times, branches,
-loops, conditions and CSV/JSON/list/range data. It is validated against a
-published JSON Schema, including that every variable is extracted before it
-is used.
+(JSONPath, header, cookie, regex, CSS), checks (status, body, JSONPath
+values, JSON Schema, latency, any expression), think times, branches,
+loops, conditions, JavaScript `script` steps, and test data from CSV,
+JSON, lists, ranges, generated fake data or a SQL query. It is validated
+against a published JSON Schema, including that every variable is
+extracted before it is used.
 
 **Numbers you can trust.** Latency is measured from each request's
 *scheduled* send time, so queueing is never hidden. Percentiles come from
 merged HDR-style histograms, never averages of percentiles. DNS, connect,
-TLS, wait and download are timed for every request. Workers report their own
-saturation, and a run they distorted is marked generator-limited instead of
-failed. Accuracy is checked against a calibrated server in CI
+TLS, wait and download are timed for every request. The load generator
+watches itself (CPU, scheduling lag, dropped iterations, GC, file
+descriptors, ephemeral ports, network), on workers and in `stampede run`
+alike, and a run it distorted is marked generator-limited instead of
+failed. Each kind of failure keeps redacted request/response examples
+(browser steps: a screenshot, console errors and a HAR). Accuracy is checked against a calibrated server in CI
 ([how](docs/concepts/measurement.md)).
 
 **Every test type.** Open and closed models; smoke, baseline, stress, spike,
 soak, breakpoint, steps, recovery and wave shapes on any scenario; targets
-such as `checkout.p95 < 800ms`; breakpoint search; the knee of the
-throughput-against-load curve; per-user network emulation (3G, 4G, slow
+such as `checkout.p95 < 800ms`; breakpoint search narrowed by
+confirmation holds; the knee of the throughput-against-load curve; recovery
+time after a spike; per-user network emulation (3G, 4G, slow
 Wi-Fi, or explicit latency, jitter, bandwidth and packet loss); replay of
 an access log or HAR file at its recorded times; auto-abort when a target
 falls over ([test types](docs/guides/test-types.md)).
