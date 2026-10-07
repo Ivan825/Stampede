@@ -125,12 +125,3 @@ export function nextTimes(c: Cron, timeZone: string, after: Date, n: number): st
   }
   return out;
 }
-
-/** Throws when `timeZone` is not an IANA zone. */
-export function checkZone(timeZone: string) {
-  try {
-    new Intl.DateTimeFormat('en-US', { timeZone });
-  } catch {
-    throw new Error(`unknown time zone "${timeZone}" (use an IANA name such as Europe/London)`);
-  }
-}
