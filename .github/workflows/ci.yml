@@ -606,11 +606,13 @@ jobs:
           set -e
           fail() { echo "::error title=compose profiles::$1"; docker compose --profile browser --profile observability logs --tail 80; exit 1; }
           curl -fsS http://localhost:8080/readyz >/dev/null || fail "server not ready"
-          for i in $(seq 60); do
-            docker compose logs server | grep -q 'worker connected.*browser-worker' && break
-            sleep 2
+          for w in worker-1 worker-2 browser-worker; do
+            for i in $(seq 60); do
+              docker compose logs server | grep -q "worker connected.*name=$w" && break
+              sleep 2
+            done
+            docker compose logs server | grep -q "worker connected.*name=$w" || fail "$w did not connect"
           done
-          docker compose logs server | grep -q 'worker connected.*browser-worker' || fail "the browser worker did not connect"
           for i in $(seq 60); do
             curl -fsS http://localhost:9090/api/v1/targets | grep -q '"health":"up"' && break
             sleep 2

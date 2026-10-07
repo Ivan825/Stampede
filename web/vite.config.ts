@@ -43,8 +43,6 @@ export default defineConfig(({ mode }) => ({
   },
   server: {
     port: 5173,
-    // The scenario JSON Schema lives at the repository root.
-    fs: { allow: ['..'] },
     proxy:
       mode === 'mock'
         ? undefined
@@ -75,7 +73,6 @@ export default defineConfig(({ mode }) => ({
             // imports; keep it out of the app entry so vendor chunks never
             // import app code.
             { name: 'runtime', test: /vite\/preload-helper/ },
-            { name: 'monaco', test: /node_modules[\\/].*(monaco-|vscode-|jsonc-parser)/ },
             { name: 'echarts', test: /node_modules[\\/].*(echarts|zrender)/ },
             { name: 'flow', test: /node_modules[\\/].*(@xyflow|d3-|classcat|zustand)/ },
             { name: 'uplot', test: /node_modules[\\/].*uplot/ },
@@ -87,7 +84,6 @@ export default defineConfig(({ mode }) => ({
       },
     },
   },
-  worker: { format: 'es' },
   test: {
     environment: 'jsdom',
     globals: true,

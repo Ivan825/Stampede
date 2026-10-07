@@ -3,79 +3,84 @@ import userEvent from '@testing-library/user-event';
 import { describe, expect, it } from 'vitest';
 import { renderApp, renderWithRouter } from '@/test/render';
 import { installMockApi } from '@/test/server';
+import { AIProvidersTab } from './AIProvidersTab';
 import { IntegrationsTab } from './IntegrationsTab';
 import { NotificationsTab } from './NotificationsTab';
 
 describe('IntegrationsTab', () => {
-  it('lists integrations without tokens and adds a traces link template', async () => {
-    const db = installMockApi();
-    const user = userEvent.setup();
+  it('lists integrations without tokens and points to the CLI to add one', async () => {
+    installMockApi();
     renderWithRouter(<IntegrationsTab />);
     expect(await screen.findByText('prod-prometheus')).toBeInTheDocument();
     expect(screen.getByText('http://prometheus.monitoring:9090')).toBeInTheDocument();
     expect(screen.getByText('stored')).toBeInTheDocument();
-
-    await user.click(screen.getByRole('button', { name: /Add integration/ }));
-    const dialog = await screen.findByRole('dialog', { name: 'Add integration' });
-    await user.type(within(dialog).getByLabelText('Name'), 'tempo');
-    await user.selectOptions(within(dialog).getByLabelText('Kind'), 'traces');
-    // A template without {traceId} is refused before it is sent.
-    await user.type(within(dialog).getByLabelText('URL'), 'https://tempo.example.com/trace/');
-    await user.click(within(dialog).getByRole('button', { name: 'Add integration' }));
-    expect(within(dialog).getByText('The template must contain {traceId}.')).toBeInTheDocument();
-    await user.type(within(dialog).getByLabelText('URL'), '{{traceId}');
-    expect(within(dialog).queryByLabelText(/Bearer token/)).not.toBeInTheDocument();
-    await user.click(within(dialog).getByRole('button', { name: 'Add integration' }));
-    expect(await screen.findByText('tempo')).toBeInTheDocument();
-    await waitFor(() => expect(db.integrations.map((i) => i.name)).toContain('tempo'));
-    expect(db.integrations.find((i) => i.name === 'tempo')?.url).toBe(
-      'https://tempo.example.com/trace/{traceId}',
-    );
+    expect(
+      screen.getByText('stampede integrations create <name> --kind <kind> --url <url>'),
+    ).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Add integration|Delete/ })).toBeNull();
   });
 });
 
 describe('NotificationsTab', () => {
-  it('creates a webhook channel and shows its signing secret once', async () => {
-    const db = installMockApi();
-    const user = userEvent.setup();
-    renderWithRouter(<NotificationsTab />);
-    expect(await screen.findByText('perf-alerts')).toBeInTheDocument();
-
-    await user.click(screen.getByRole('button', { name: /Add channel/ }));
-    const dialog = await screen.findByRole('dialog', { name: 'Add notification channel' });
-    await user.type(within(dialog).getByLabelText('Name'), 'ops-hook');
-    await user.selectOptions(within(dialog).getByLabelText('Kind'), 'webhook');
-    await user.type(within(dialog).getByLabelText('URL'), 'https://hooks.example.com/stampede');
-    await user.click(within(dialog).getByRole('checkbox', { name: /Run killed/ }));
-    await user.click(within(dialog).getByRole('button', { name: 'Add channel' }));
-
-    const done = await screen.findByRole('dialog', { name: 'Channel created' });
-    expect(within(done).getByLabelText('Signing secret').textContent).toMatch(/^whsec_/);
-    const created = db.channels.find((c) => c.name === 'ops-hook');
-    expect(created?.events).toEqual(['run.finished', 'run.target_failed']);
-    expect(created?.urlHint).toBe('https://hooks.example.com');
-    await user.click(within(done).getByRole('button', { name: 'Done' }));
-    expect(await screen.findByText('ops-hook')).toBeInTheDocument();
-  });
-
-  it('sends a test and shows it in the delivery log', async () => {
+  it('lists channels and their delivery log, without creating or testing', async () => {
     installMockApi();
     const user = userEvent.setup();
     renderWithRouter(<NotificationsTab />);
     const row = (await screen.findByText('perf-alerts')).closest('tr')!;
-    await user.click(within(row).getByRole('button', { name: /Send test/ }));
-    expect(await screen.findByText(/Test delivered to perf-alerts/)).toBeInTheDocument();
+    expect(
+      screen.getByText('stampede notify channels create <name> --kind <kind> --url-env <VAR>'),
+    ).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Add channel|Send test|Delete/ })).toBeNull();
 
-    await user.click(within(row).getByRole('button', { name: 'Deliveries' }));
+    await user.click(within(row).getByRole('button', { name: 'Deliveries of perf-alerts' }));
     const log = await screen.findByRole('dialog', { name: 'Deliveries · perf-alerts' });
-    await waitFor(() => expect(within(log).getAllByRole('row')).toHaveLength(3));
-    expect(within(log).getByText('test')).toBeInTheDocument();
+    await waitFor(() => expect(within(log).getAllByRole('row').length).toBeGreaterThan(1));
     expect(within(log).getByText('run.finished')).toBeInTheDocument();
   });
 });
 
-describe('Settings tabs', () => {
-  it('shows Integrations and Notifications to admins only', async () => {
+describe('AIProvidersTab', () => {
+  it('lists providers without their keys and points to the CLI to change them', async () => {
+    installMockApi();
+    renderWithRouter(<AIProvidersTab />);
+    const row = (await screen.findByText('default')).closest('tr')!;
+    expect(within(row).getByText('stored')).toBeInTheDocument();
+    expect(within(row).getByText('claude-sonnet-5-5')).toBeInTheDocument();
+    expect(
+      screen.getByText('stampede ai providers set <name> --kind <kind> --api-key-env <VAR>'),
+    ).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Add provider|Replace|Delete/ })).toBeNull();
+    expect(screen.queryByLabelText(/API key/)).not.toBeInTheDocument();
+  });
+});
+
+describe('Settings', () => {
+  it('shows who you are and how to sign the CLI in, with no password form', async () => {
+    installMockApi();
+    renderApp('/settings');
+    expect(await screen.findByText('Who you are signed in as.')).toBeInTheDocument();
+    expect(screen.getByText('priya@acme.dev')).toBeInTheDocument();
+    expect(screen.getByText('stampede login')).toBeInTheDocument();
+    expect(screen.getByText('stampede password')).toBeInTheDocument();
+    expect(document.querySelector('input[type="password"]')).toBeNull();
+  });
+
+  it('lists tokens and users read-only', async () => {
+    installMockApi();
+    const user = userEvent.setup();
+    renderApp('/settings?tab=tokens');
+    expect(await screen.findByRole('table', { name: 'API tokens' })).toBeInTheDocument();
+    expect(screen.getByText('stampede tokens create <name> --role <role>')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /New token|Revoke/ })).toBeNull();
+
+    await user.click(screen.getByRole('tab', { name: 'Users' }));
+    const users = await screen.findByRole('table', { name: 'Users' });
+    expect(within(users).queryByRole('combobox')).not.toBeInTheDocument();
+    expect(within(users).queryByRole('button')).not.toBeInTheDocument();
+    expect(screen.getByText('stampede users create <email> --role <role>')).toBeInTheDocument();
+  });
+
+  it('shows Integrations, Notifications and AI providers to admins only', async () => {
     const db = installMockApi();
     const viewer = db.users.find((u) => u.role === 'viewer' || u.role === 'editor')!;
     db.meId = viewer.id;
@@ -86,5 +91,6 @@ describe('Settings tabs', () => {
     );
     expect(screen.queryByRole('tab', { name: 'Integrations' })).not.toBeInTheDocument();
     expect(screen.queryByRole('tab', { name: 'Notifications' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('tab', { name: 'AI providers' })).not.toBeInTheDocument();
   });
 });

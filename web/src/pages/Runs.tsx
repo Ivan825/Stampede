@@ -1,16 +1,16 @@
 import { useNavigate, useParams, useSearch } from '@tanstack/react-router';
-import { ChevronLeft, ChevronRight, GitCompare, Play } from 'lucide-react';
+import { ChevronLeft, ChevronRight, GitCompare } from 'lucide-react';
 import { useState } from 'react';
-import { useMe, useRuns, useScenarios } from '@/api/queries';
+import { useProject, useRuns, useScenarios } from '@/api/queries';
 import type { Run } from '@/api/types';
 import { hasReport } from '@/api/types';
+import { CliHint } from '@/components/cliHint';
 import { Button, Card, EmptyState, ErrorAlert, Loading, PageHeader, Select } from '@/components/ui';
 import { CompareDialog } from '@/features/runs/CompareDialog';
 import { MAX_PER_SIDE } from '@/features/runs/compareSides';
-import { NewRunDialog } from '@/features/runs/NewRunDialog';
 import { RunsTable, type RunSelection } from '@/features/runs/RunsTable';
+import { cli } from '@/lib/cli';
 import { dateTime } from '@/lib/format';
-import { permissions } from '@/lib/roles';
 
 const PAGE = 25;
 
@@ -18,15 +18,13 @@ export function RunsPage() {
   const { projectId } = useParams({ from: '/app/projects/$projectId/runs' });
   const search = useSearch({ from: '/app/projects/$projectId/runs' });
   const navigate = useNavigate({ from: '/projects/$projectId/runs' });
-  const me = useMe();
-  const can = permissions(me.role);
+  const project = useProject(projectId);
   const scenarios = useScenarios(projectId);
   const runs = useRuns(
     projectId,
     { scenarioId: search.scenarioId, before: search.before, limit: PAGE },
     search.before ? undefined : 5_000,
   );
-  const [newRun, setNewRun] = useState(false);
   const [comparing, setComparing] = useState(false);
   // Selected runs by id; kept across pages so runs from several pages can be compared.
   const [selected, setSelected] = useState<Map<string, Run>>(new Map());
@@ -53,11 +51,14 @@ export function RunsPage() {
       <PageHeader
         title="Runs"
         actions={
-          can.startRuns && (
-            <Button variant="primary" onClick={() => setNewRun(true)}>
-              <Play className="size-3.5" aria-hidden /> New run
-            </Button>
-          )
+          <CliHint
+            command={cli.start({
+              project: project.data?.slug,
+              scenario: scenarios.data?.find((s) => s.id === search.scenarioId)?.name,
+            })}
+          >
+            Start a run from the terminal
+          </CliHint>
         }
       />
       <div className="mb-3 flex flex-wrap items-center gap-2">
@@ -141,14 +142,6 @@ export function RunsPage() {
           runs={[...selected.values()]}
           open
           onOpenChange={setComparing}
-        />
-      )}
-      {can.startRuns && (
-        <NewRunDialog
-          projectId={projectId}
-          open={newRun}
-          onOpenChange={setNewRun}
-          scenarioId={search.scenarioId}
         />
       )}
     </div>

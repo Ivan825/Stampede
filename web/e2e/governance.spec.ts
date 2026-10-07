@@ -1,23 +1,31 @@
-import { expect, test } from '@playwright/test';
+import { expect, test, type Page } from '@playwright/test';
 import { nav, open } from './fixtures';
 
-test('admins set the organisation’s caps and see them in the effective limits', async ({
+/** Opens the live checkout-stress run from the runs list. */
+async function openLiveRun(page: Page) {
+  await nav(page, 'Runs');
+  await page
+    .getByRole('row')
+    .filter({ hasText: 'checkout-stress' })
+    .filter({ hasText: 'running' })
+    .getByRole('link')
+    .first()
+    .click();
+  await expect(page).toHaveURL(/\/runs\/[0-9a-f-]{36}$/);
+}
+
+test('limits show the organisation’s caps read-only, with the command that sets them', async ({
   page,
 }) => {
   await open(page, '/settings?tab=limits');
-  const form = page.getByRole('form', { name: 'Organisation caps' });
-  await expect(form.getByLabel('Max VUs')).toHaveValue('3000');
-  await form.getByLabel('Max rate (/s)').fill('800');
-  await form.getByLabel('Max duration (s)').fill('1800');
-  await form.getByRole('button', { name: 'Save caps' }).click();
-  await expect(page.getByText('Organisation caps saved.')).toBeVisible();
-
-  const staging = page
-    .getByRole('table', { name: 'Target caps' })
-    .getByRole('row')
-    .filter({ hasText: 'https://staging.shop.acme.dev' });
-  await expect(staging).toContainText('800/s');
-  await expect(staging).toContainText('30m');
+  const org = page.getByRole('table', { name: 'Organisation caps' });
+  await expect(org).toContainText('3,000');
+  await expect(page.getByRole('form', { name: 'Organisation caps' })).toHaveCount(0);
+  await expect(
+    page.getByText('stampede caps set --max-rate <n> --max-vus <n> --max-duration <d>', {
+      exact: true,
+    }),
+  ).toBeVisible();
 
   const store = page
     .getByRole('table', { name: 'Project caps' })
@@ -28,74 +36,34 @@ test('admins set the organisation’s caps and see them in the effective limits'
   await expect(page.getByRole('heading', { name: 'Project settings' })).toBeVisible();
 });
 
-test('project admins change caps, the dry-run gate and members’ roles', async ({ page }) => {
+test('project settings show caps, the dry-run gate and roles read-only, even to admins', async ({
+  page,
+}) => {
   await open(page, '/');
-  await nav(page, 'Project settings');
-  await expect(page.getByRole('heading', { name: 'Project settings' })).toBeVisible();
-
-  const form = page.getByRole('form', { name: 'Caps and dry run' });
-  const gate = form.getByRole('checkbox', { name: 'Require a passing dry run before load' });
-  await expect(gate).toBeChecked();
-  await form.getByLabel('Max rate (/s)').fill('250');
-  await gate.uncheck();
-  await form.getByRole('button', { name: 'Save' }).click();
-  await expect(page.getByText('Project settings saved.')).toBeVisible();
-  await expect(gate).not.toBeChecked();
-  await expect(form.getByLabel('Max rate (/s)')).toHaveValue('250');
-
-  // The Limits tab shows the saved values.
-  await page.getByRole('button', { name: /Account menu/ }).click();
-  await page.getByRole('menuitem', { name: 'Settings' }).click();
-  await page.getByRole('tab', { name: 'Limits' }).click();
-  const store = page
-    .getByRole('table', { name: 'Project caps' })
-    .getByRole('row')
-    .filter({ hasText: 'Storefront' });
-  await expect(store).toContainText('not required');
-  await expect(store).toContainText('250/s');
-  await nav(page, 'Project settings');
-
-  const members = page.getByRole('table', { name: 'Project members' });
-  const ana = members.getByRole('combobox', { name: 'Role for Ana Lima in this project' });
-  await ana.selectOption('viewer');
-  await expect(page.getByText('Ana Lima is now viewer in this project.')).toBeVisible();
-  await members.getByRole('button', { name: 'Remove the project override for Ana Lima' }).click();
-  await expect(
-    page.getByText('Ana Lima has their organisation role (editor) here again.'),
-  ).toBeVisible();
-  await expect(ana).toHaveValue('');
-});
-
-test('project settings are read-only for viewers', async ({ page }) => {
-  await open(page, '/?mock=viewer');
   await nav(page, 'Project settings');
   const settings = page.getByRole('region', { name: 'Caps and dry run' });
-  await expect(settings).toContainText('Read-only');
   await expect(settings).toContainText('required');
-  await expect(page.getByRole('form', { name: 'Caps and dry run' })).toHaveCount(0);
+  await expect(settings).toContainText(/stampede projects settings set --project \S+/);
+  await expect(page.getByRole('form')).toHaveCount(0);
+  await expect(page.getByRole('checkbox')).toHaveCount(0);
+  const members = page.getByRole('table', { name: 'Project members' });
+  await expect(members.getByRole('combobox')).toHaveCount(0);
+  await expect(members.getByRole('row').filter({ hasText: 'Kenji Mori' })).toContainText(
+    'Project override',
+  );
   await expect(
-    page.getByRole('table', { name: 'Project members' }).getByRole('combobox'),
-  ).toHaveCount(0);
+    page.getByText(/stampede projects roles set <email> <role> --project/),
+  ).toBeVisible();
 });
 
-test('a drift schedule shows what broke and proposes a fix for review', async ({ page }) => {
+test('schedules and drift results are read-only and point to the CLI', async ({ page }) => {
   await open(page, '/');
   await nav(page, 'Schedules');
-
-  // A new drift check, with the spec on the target's host.
-  await page.getByRole('button', { name: 'New schedule' }).click();
-  const dialog = page.getByRole('dialog', { name: 'New schedule' });
-  await dialog.getByRole('radio', { name: /Check for drift/ }).check();
-  await dialog.getByLabel('Name').fill('api-drift');
-  await dialog
-    .getByLabel('Target')
-    .selectOption({ label: 'staging — https://staging.shop.acme.dev' });
-  await dialog.getByLabel('OpenAPI spec URL').fill('https://staging.shop.acme.dev/openapi.yaml');
-  await dialog.getByRole('button', { name: 'Create schedule' }).click();
+  await expect(page.getByRole('button', { name: /New schedule|Run now|Check now/ })).toHaveCount(0);
+  await expect(page.getByText(/^stampede schedules create /)).toBeVisible();
+  await expect(page.getByText('stampede schedules run <name>')).toBeVisible();
   const schedules = page.getByRole('table', { name: 'Schedules' });
-  await expect(schedules.getByRole('row').filter({ hasText: 'api-drift' })).toContainText(
-    'drift check',
-  );
+  await expect(schedules.getByRole('switch')).toHaveCount(0);
 
   // The seeded hourly check found a broken journey.
   await schedules
@@ -109,9 +77,24 @@ test('a drift schedule shows what broke and proposes a fix for review', async ({
   await expect(check.getByRole('list', { name: 'Removed endpoints' })).toContainText(
     'POST /api/login',
   );
-  await check.getByRole('button', { name: 'Propose a fix' }).click();
-  await expect(page).toHaveURL(/\/projects\/[0-9a-f-]{36}\/ai\/[0-9a-f-]{36}$/);
-  await expect(page.getByRole('heading', { name: /^Job [0-9a-f]{8}/ })).toBeVisible();
+  await expect(check.getByText(/^stampede drift repair [0-9a-f-]{36}$/)).toBeVisible();
+  await expect(check.getByRole('button', { name: 'Propose a fix' })).toHaveCount(0);
+});
+
+test('targets and secrets are listed read-only', async ({ page }) => {
+  await open(page, '/');
+  await nav(page, 'Targets');
+  await expect(page.getByRole('heading', { name: 'Targets' })).toBeVisible();
+  await expect(page.getByText('https://staging.shop.acme.dev', { exact: true })).toBeVisible();
+  await expect(page.getByRole('button', { name: /New target|Check now|Delete|Edit/ })).toHaveCount(
+    0,
+  );
+  await expect(page.getByText(/^stampede targets create /)).toBeVisible();
+  await nav(page, 'Secrets');
+  await expect(page.getByRole('heading', { name: 'Secrets' })).toBeVisible();
+  await expect(page.getByRole('table', { name: 'Secrets' })).toBeVisible();
+  await expect(page.getByRole('button', { name: /New secret|Update|Delete/ })).toHaveCount(0);
+  await expect(page.getByText(/^stampede secrets set <NAME> --project/)).toBeVisible();
 });
 
 test('a run the dry-run gate refused explains which journey failed', async ({ page }) => {
@@ -136,16 +119,43 @@ test('a run the dry-run gate refused explains which journey failed', async ({ pa
 
 test('the live view shows the dry run that passed before load', async ({ page }) => {
   await open(page, '/');
-  await nav(page, 'Runs');
-  await page
-    .getByRole('row')
-    .filter({ hasText: 'checkout-stress' })
-    .filter({ hasText: 'running' })
-    .getByRole('link')
-    .first()
-    .click();
+  await openLiveRun(page);
   const gate = page.getByRole('region', { name: 'Dry run before load' });
   await expect(gate).toContainText('PASSED');
   await expect(gate).toContainText(/All \d+ journeys? passed the dry run; starting load\./);
   await expect(page.getByRole('list', { name: 'Run events' })).toContainText('dryrun.passed');
+});
+
+test('the Kill safety control stops a live run', async ({ page }) => {
+  await open(page, '/');
+  await openLiveRun(page);
+  const safety = page.getByRole('group', { name: 'Safety controls' });
+  await expect(safety.getByRole('button', { name: 'Stop' })).toBeVisible();
+  await safety.getByRole('button', { name: 'Kill switch: kill this run' }).click();
+  const confirm = page.getByRole('alertdialog', { name: 'Kill this run?' });
+  await confirm.getByRole('button', { name: 'Kill run' }).click();
+  await expect(page.getByText('Run killed.')).toBeVisible();
+  await expect(page.getByRole('group', { name: 'Safety controls' })).toHaveCount(0, {
+    timeout: 20_000,
+  });
+  await expect(page.getByRole('heading', { level: 1 })).toContainText('aborted');
+});
+
+test('the header kill switch stops every active run', async ({ page }) => {
+  await open(page, '/');
+  const killAll = page.getByRole('button', { name: /Kill switch: stop all \d+ active runs?/ });
+  await killAll.click();
+  const confirm = page.getByRole('alertdialog', { name: 'Kill switch: stop all load now?' });
+  await expect(confirm).toContainText('stampede kill --all');
+  await confirm.getByRole('button', { name: /^Kill \d+ active runs?$/ }).click();
+  await expect(page.getByText(/^Killed \d+ runs?\.$/)).toBeVisible();
+  await expect(killAll).toHaveCount(0, { timeout: 20_000 });
+});
+
+test('viewers see no safety controls', async ({ page }) => {
+  await open(page, '/?mock=viewer');
+  await openLiveRun(page);
+  await expect(page.getByRole('list', { name: 'Worker health' })).toBeVisible();
+  await expect(page.getByRole('group', { name: 'Safety controls' })).toHaveCount(0);
+  await expect(page.getByRole('button', { name: /Kill switch/ })).toBeDisabled();
 });

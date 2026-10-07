@@ -1,11 +1,10 @@
-import { Link, useNavigate } from '@tanstack/react-router';
-import { Sparkles } from 'lucide-react';
+import { Link } from '@tanstack/react-router';
 import type { ReactNode } from 'react';
-import { useDriftResult, useDriftResults, useRepairDrift } from '@/api/queries';
+import { useDriftResult, useDriftResults } from '@/api/queries';
 import type { DriftResult } from '@/api/types';
 import { Chip } from '@/components/chips';
+import { CliHint } from '@/components/cliHint';
 import { Modal } from '@/components/dialog';
-import { useToast } from '@/components/toast';
 import {
   Button,
   Card,
@@ -17,6 +16,7 @@ import {
   Table,
 } from '@/components/ui';
 import { TraceView } from '@/features/ai/JourneyCard';
+import { cli } from '@/lib/cli';
 import { dateTime, relativeTime } from '@/lib/format';
 
 export function DriftStatusChip({ status }: { status: string }) {
@@ -136,18 +136,7 @@ function Section({ title, children }: { title: string; children: ReactNode }) {
   );
 }
 
-function DriftDetail({
-  r,
-  canRepair,
-  projectId,
-}: {
-  r: DriftResult;
-  canRepair: boolean;
-  projectId: string;
-}) {
-  const repair = useRepairDrift(projectId);
-  const navigate = useNavigate();
-  const toast = useToast();
+function DriftDetail({ r, projectId }: { r: DriftResult; projectId: string }) {
   const journeys = r.journeys ?? [];
   const repairable = r.status === 'drifted' && r.broken.length > 0;
   return (
@@ -170,31 +159,14 @@ function DriftDetail({
               : `The journeys ${r.broken.join(', ')} no longer work against the API.`}
           </p>
           <p className="mt-1 text-muted">
-            Propose a fix to have the AI generator repair {r.broken.length === 1 ? 'it' : 'them'}{' '}
-            from this evidence. Nothing is saved until you review and approve the proposed version.
+            The AI generator can propose a repair of {r.broken.length === 1 ? 'it' : 'them'} from
+            this evidence. Nothing is saved until the proposed version is reviewed and approved.
           </p>
           <div className="mt-2 flex flex-wrap items-center gap-2">
-            {canRepair && (
-              <Button
-                variant="primary"
-                size="sm"
-                loading={repair.isPending}
-                onClick={() =>
-                  repair.mutate(
-                    { id: r.id },
-                    {
-                      onSuccess: (job) =>
-                        void navigate({
-                          to: '/projects/$projectId/ai/$jobId',
-                          params: { projectId, jobId: job.id },
-                        }),
-                      onError: (e) => toast.error(e),
-                    },
-                  )
-                }
-              >
-                <Sparkles className="size-3.5" aria-hidden /> Propose a fix
-              </Button>
+            {!r.repairJobId && (
+              <CliHint command={cli.driftRepair(r.id)} className="bg-surface">
+                Propose a fix from the terminal
+              </CliHint>
             )}
             {r.repairJobId && (
               <Link
@@ -272,12 +244,10 @@ function DriftDetail({
 export function DriftResultDialog({
   id,
   projectId,
-  canRepair,
   onClose,
 }: {
   id: string | null;
   projectId: string;
-  canRepair: boolean;
   onClose: () => void;
 }) {
   const result = useDriftResult(id);
@@ -294,7 +264,7 @@ export function DriftResultDialog({
       ) : result.error ? (
         <ErrorAlert error={result.error} />
       ) : (
-        <DriftDetail r={result.data} canRepair={canRepair} projectId={projectId} />
+        <DriftDetail r={result.data} projectId={projectId} />
       )}
     </Modal>
   );

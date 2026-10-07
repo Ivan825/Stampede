@@ -220,36 +220,30 @@ stampede generate --proto protos/orders.proto --proto-import-path protos \
   --target http://localhost:9090 -o orders.yaml
 ```
 
-## In the web UI
+## On a server
 
-An admin adds a provider in **Settings → AI providers**: kind, model, base
-URL, API key and monthly token cap. The key is never shown again; leave it
-empty when replacing a provider to keep the stored one.
+Everything that changes something is done with the CLI; the web UI shows the
+results.
 
-Each project has an **AI studio** page listing its jobs with their status,
-stage, tokens used and who started them. Editors choose **Generate
-journeys** and give a description and any of an OpenAPI spec, a HAR
-recording or an access log, uploaded as a file or pasted. The dialog
-enforces the server's limits (20,000 characters of description, 5 MiB of
-OpenAPI, 20 MiB each of HAR and access log). A dry run needs a target. You
-can also pick an existing scenario to diff against, the provider when there
-are several, and the number of repair rounds.
-
-A job's page shows its stage and repair round while it runs, then:
-
-- one card per journey with its status (passed, flagged or not run), the
-  number of dry-run attempts, its problems, and each dry-run pass with every
-  request expandable to its headers, body, status, redacted response,
-  extracted values and checks
-- the proposed scenario in the read-only editor, and the diff against the
-  existing scenario
-- the tokens used
-
-Editors approve the proposal as a new scenario or as a new version of a
-scenario. A job that needs review asks for confirmation first, because its
-flagged journeys did not pass the dry run. After approval the page links to
-the saved version. Viewers and runners can read everything but not start or
-approve jobs.
+- An admin adds a provider (kind, model, base URL, API key and monthly token
+  cap) with `stampede ai providers set`. The key is never shown again;
+  leave it out when replacing a provider to keep the stored one. The web
+  UI lists the providers under **Settings → AI providers**, with their
+  token use but never their keys.
+- Editors start a job with `stampede ai jobs create`, giving a description
+  and any of an OpenAPI spec, a HAR recording or an access log. The
+  server's limits apply (20,000 characters of description, 5 MiB of
+  OpenAPI, 20 MiB each of HAR and access log). A dry run needs a target.
+  A job can also diff against an existing scenario, pick the provider when
+  there are several, and set the number of repair rounds.
+- Editors approve the proposal as a new scenario or as a new version of a
+  scenario with `stampede ai jobs approve`. A job that needs review must be
+  approved explicitly as unvalidated, because its flagged journeys did not
+  pass the dry run.
+- The web UI's **AI jobs** page in a project lists the jobs; opening one
+  shows its progress, each journey's dry-run trace, the proposed scenario
+  and its diff against the existing one, and the `stampede ai jobs approve`
+  command for that job. Approving is not done in the UI.
 
 ## Server API
 
@@ -321,9 +315,10 @@ with each citation's figure on hover. The text and Markdown reports
 list the claims with their fact ids, and the JSON report stores it under
 `narrative`.
 
-On a server, a finished run's report page has a "Write a summary" button that writes the
-narrative with the organisation's AI provider (`POST
-/api/v1/runs/{runId}/narrative`); it is saved into the report.
+On a server, `stampede narrative <run>` writes the narrative of a finished
+run with the organisation's AI provider (`POST
+/api/v1/runs/{runId}/narrative`); it is saved into the report, and the run's
+page in the web UI shows it as the AI summary.
 
 ## Limitations
 

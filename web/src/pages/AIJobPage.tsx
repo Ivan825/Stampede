@@ -3,11 +3,10 @@ import { Link, useParams } from '@tanstack/react-router';
 import { clsx } from 'clsx';
 import { Check, Loader2 } from 'lucide-react';
 import { useState } from 'react';
-import { useAIJob, useMe } from '@/api/queries';
+import { useAIJob } from '@/api/queries';
 import type { AIJob } from '@/api/types';
 import { isAIJobActive } from '@/api/types';
 import { AIJobStatusChip } from '@/components/chips';
-import { CopyButton } from '@/components/misc';
 import {
   Card,
   EmptyState,
@@ -18,13 +17,12 @@ import {
   SectionTitle,
   Stat,
 } from '@/components/ui';
-import { Approved, ApprovePanel } from '@/features/ai/ApprovePanel';
+import { Approved, AwaitingApproval } from '@/features/ai/Approved';
 import { DiffView } from '@/features/ai/DiffView';
 import { JourneyCard } from '@/features/ai/JourneyCard';
 import { stageHelp, stageLabels, stages } from '@/features/ai/stages';
-import { YamlEditor } from '@/features/scenarios/YamlEditor';
+import { YamlView } from '@/features/scenarios/YamlView';
 import { count, dateTime, relativeTime } from '@/lib/format';
-import { permissions } from '@/lib/roles';
 
 function Progress({ job }: { job: AIJob }) {
   const current =
@@ -89,10 +87,9 @@ function Proposal({ job }: { job: AIJob }) {
               </Tabs.Trigger>
             )}
           </Tabs.List>
-          <CopyButton value={job.yaml ?? ''} label="Copy YAML" />
         </div>
         <Tabs.Content value="yaml" className="h-[460px]">
-          <YamlEditor value={job.yaml ?? ''} resetKey={job.yaml ?? ''} readOnly />
+          <YamlView yaml={job.yaml ?? ''} label="Proposed scenario YAML" className="h-full" />
         </Tabs.Content>
         {job.scenarioId && (
           <Tabs.Content value="diff">
@@ -112,8 +109,6 @@ function Proposal({ job }: { job: AIJob }) {
 
 export function AIJobPage() {
   const { projectId, jobId } = useParams({ from: '/app/projects/$projectId/ai/$jobId' });
-  const me = useMe();
-  const can = permissions(me.role);
   const q = useAIJob(jobId);
 
   if (q.isPending) return <Loading />;
@@ -130,7 +125,7 @@ export function AIJobPage() {
       <PageHeader
         breadcrumb={
           <Link to="/projects/$projectId/ai" params={{ projectId }} className="hover:underline">
-            AI studio
+            AI jobs
           </Link>
         }
         title={
@@ -161,13 +156,7 @@ export function AIJobPage() {
             {job.error && <p className="mt-0.5 text-muted">{job.error}</p>}
           </Notice>
         )}
-        {job.approvedAt ? (
-          <Approved job={job} />
-        ) : finished && can.generateJourneys ? (
-          <ApprovePanel job={job} />
-        ) : finished ? (
-          <p className="text-[13px] text-muted">Editors can approve this proposal.</p>
-        ) : null}
+        {job.approvedAt ? <Approved job={job} /> : finished ? <AwaitingApproval job={job} /> : null}
 
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
           <Stat

@@ -1,4 +1,4 @@
-import { screen, within } from '@testing-library/react';
+import { screen, waitFor, within } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 import type { RunEvent } from '@/api/types';
 import { renderApp } from '@/test/render';
@@ -76,7 +76,7 @@ describe('Run page events', () => {
     renderApp(`/runs/${run.id}`);
     const gate = within(await screen.findByRole('region', { name: 'Dry run before load' }));
     // The dry run's result, and the failed journey's.
-    expect(gate.getAllByText('FAILED')).toHaveLength(2);
+    await waitFor(() => expect(gate.getAllByText('FAILED')).toHaveLength(2));
     expect(
       gate.getByText('1 of 2 journeys failed the dry run; no load was started.'),
     ).toBeInTheDocument();

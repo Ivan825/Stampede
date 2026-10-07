@@ -113,7 +113,7 @@ AGENT_URL=http://agent.staging:7070 STAMPEDE_SECRET_AGENT_TOKEN=... \
 ## On a server
 
 The server only contacts URLs an admin configured. An admin adds the agent
-under **Settings → Integrations** as a *Fault agent*, or with
+as a fault agent integration with `stampede integrations create`, or with
 `POST /api/v1/integrations` `{"name": "chaos", "kind": "agent", "url":
 "http://agent.shop.svc:7070", "bearerToken": "..."}`. The token is stored
 encrypted. Scenarios then name it:

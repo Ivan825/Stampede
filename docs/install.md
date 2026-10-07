@@ -37,7 +37,8 @@ from every commit, including that a tampered archive is refused.
 ## The full stack without a clone
 
 ```sh
-stampede up      # needs Docker; open http://localhost:8080
+stampede up      # needs Docker
+stampede setup   # create the organisation and owner; then open http://localhost:8080
 stampede down    # stop it (add --volumes to delete its data)
 ```
 
@@ -48,6 +49,10 @@ installed version: the server and web UI, two workers and TimescaleDB. Runs
 reach an app on your own machine as `http://host.docker.internal:<port>`.
 Inside a clone it uses the repository's `docker-compose.yml`, which also
 starts ShopLab.
+
+Everything you do to the server is done with the CLI; the web UI is read
+only, for watching runs and reading reports, apart from the Stop, Kill and
+Kill all safety controls.
 
 ## From source
 

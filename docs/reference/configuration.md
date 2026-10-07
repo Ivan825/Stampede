@@ -52,8 +52,10 @@ Back up the master key with the database: secrets cannot be decrypted
 without it. See [upgrades and backups](../deploy/upgrades.md).
 
 Integrations (Prometheus, trace links) and notification channels are
-configured per organisation through the API or Settings in the web UI, not
-here; see [integrations](../guides/integrations.md).
+configured per organisation with the CLI (`stampede integrations create`,
+`stampede notify channels create`) or the API, not here, and listed read
+only under Settings in the web UI; see
+[integrations](../guides/integrations.md).
 
 ### Single sign-on (OpenID Connect)
 

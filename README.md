@@ -52,8 +52,13 @@ stampede                                        # or the interactive console: /i
 database, with Docker:
 
 ```sh
-stampede up            # released images of the installed version; open http://localhost:8080
+stampede up            # released images of the installed version
+stampede setup         # create the organisation and the owner account
 ```
+
+Everything is done with the CLI; the web UI on <http://localhost:8080> is
+for analysis: live runs, reports, comparisons, scenarios, schedules and
+settings, read only, plus the Stop, Kill and Kill all safety controls.
 
 or, from a clone, the same stack plus **ShopLab**
 (<http://localhost:8090>), a demo shop with six real performance problems
@@ -146,11 +151,12 @@ worker in under a millisecond on a local network. With `--worker-mtls`
 a CA built into the server, and the join token never crosses the network.
 
 **Control plane and UI.** `stampede server` with PostgreSQL/TimescaleDB:
-REST API ([OpenAPI](api/openapi.yaml)), web UI with a scenario editor and
-journey graph, live runs and reports, projects, targets, encrypted secrets,
-users and roles, single sign-on (OIDC), API tokens, audit log, integrations and notification settings,
-reports with target metrics and trace links, and a kill switch that is always on
-screen.
+REST API ([OpenAPI](api/openapi.yaml)), projects, targets, encrypted secrets,
+users and roles, single sign-on (OIDC), API tokens, audit log, integrations and
+notification settings, all managed with the CLI, and a read-only web UI for
+analysis: live runs and reports with target metrics and trace links,
+comparisons, scenarios with their journey graph, schedules and settings, and
+a kill switch that is always on screen.
 
 **Reports and CI.** Self-contained HTML, PDF, CSV, JSON, JUnit XML and Markdown;
 exit code 3 when a target fails. `stampede compare` judges repeated runs of
@@ -161,8 +167,8 @@ runs a scenario, writes the job summary, uploads the reports and fails the
 step on a failed target; CI exercises it by building from source (release
 downloads are untested until a release is published).
 
-**Scheduled runs.** Schedules, managed from the web UI, `stampede schedules`
-or the API, start a saved scenario against a target on a cron expression in
+**Scheduled runs.** Schedules, managed with `stampede schedules` or the API
+(and shown read only in the web UI), start a saved scenario against a target on a cron expression in
 UTC or any IANA time zone. Each firing gets the same checks as a run
 started by hand, never overlaps the previous run, and fires at most once
 however many replicas or restarts are involved

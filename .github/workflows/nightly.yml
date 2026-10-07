@@ -51,6 +51,13 @@ jobs:
           sudo install "$RUNNER_TEMP/wrk2/wrk" /usr/local/bin/wrk2
       - name: compare with k6 and wrk2
         run: go run ./bench/compare -out compare-${{ github.run_number }}.json
+      - name: publish the figures as annotations
+        # Annotations can be read without signing in, unlike artifacts, so
+        # the website's benchmarks page can be updated from them.
+        run: |
+          jq -r '.cases[] as $c | $c.tools[] | select(.ran) |
+            "::notice title=compare \($c.name)::\(.tool) (\(.measures)) p50 \(.latency.p50)ms p95 \(.latency.p95)ms p99 \(.latency.p99)ms; truth p50 \(.truth.p50)ms p95 \(.truth.p95)ms p99 \(.truth.p99)ms; within tolerance \(.withinTolerance)"' \
+            compare-${{ github.run_number }}.json
       - uses: actions/upload-artifact@v4
         if: always()
         with:
@@ -63,6 +70,10 @@ jobs:
     # and starts Stampede from the bundle alone.
     runs-on: ubuntu-latest
     timeout-minutes: 45
+    env:
+      # The bundle's Compose file refuses to load without it, for every
+      # docker compose command, not only up.
+      STAMPEDE_JOIN_TOKEN: nightly-airgap-join-token-0123456789
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-go@v5
@@ -78,7 +89,7 @@ jobs:
           cd stampede-airgap-nightly-linux-amd64
           ./install.sh
           mkdir -p compose/data
-          STAMPEDE_JOIN_TOKEN=nightly-airgap-join-token-0123456789 docker compose -f compose/docker-compose.yml up -d --wait
+          docker compose -f compose/docker-compose.yml up -d --wait
           curl -fsS http://localhost:8080/readyz
           "bin/stampede-linux-amd64" version
       - name: workers connected

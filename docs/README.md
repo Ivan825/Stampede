@@ -12,6 +12,10 @@ not built yet are marked **planned**.
 - [Your first real target](guides/first-target.md)
 - [Using Stampede from the CLI](guides/cli.md): setup, projects, targets, runs, reports, schedules, AI and notifications from the terminal
 
+Everything is done with the `stampede` CLI. A server's web UI is read only,
+for analysis and reporting, apart from the Stop, Kill and Kill all safety
+controls.
+
 ## Concepts
 
 - [Scenarios and journeys](concepts/scenarios.md)

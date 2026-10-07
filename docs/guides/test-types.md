@@ -1,8 +1,8 @@
 # Test types
 
 Traffic shapes are presets on one engine. Set `load.shape` in a scenario,
-pass `--shape` to `stampede run`, choose it in the web UI's new-run dialog,
-or type `/run <shape>` in the console. `start` and `max` are rates in rate
+pass `--shape` to `stampede run` or `stampede start`, or type
+`/run <shape>` in the console. `start` and `max` are rates in rate
 mode (`50/s`) and user counts in vus mode. `duration` stretches or shrinks
 the preset, except where noted.
 

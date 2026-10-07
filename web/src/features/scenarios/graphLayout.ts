@@ -1,5 +1,7 @@
 import { parse } from 'yaml';
-import type { YamlPath } from './scenarioEdit';
+
+/** A path into the parsed YAML: keys and list indexes. */
+export type YamlPath = (string | number)[];
 
 /**
  * Builds a graph of journeys and their steps from scenario YAML:
@@ -21,9 +23,9 @@ export interface GraphNode {
   method?: string;
   /** Where a step sits in the YAML: its list of steps and its index there. */
   seq?: { path: YamlPath; index: number };
-  /** The list of steps a journey or block holds, for adding steps inside it. */
+  /** The list of steps a journey or block holds. */
   body?: YamlPath;
-  /** The step's own fields, for editing. */
+  /** The step's own fields, shown when it is selected. */
   fields?: { name?: string; url?: string; think?: string; group?: string };
 }
 
@@ -40,23 +42,6 @@ export function nodeKey(g: GraphNode): string | null {
   if (p) return pathKey(p);
   if (g.kind === 'journey' && g.body) return `journey:${pathKey(g.body)}`;
   return null;
-}
-
-const NODE_H = 44;
-
-/**
- * Where a dragged step lands among its siblings (the steps of the same
- * list): the number of other siblings whose top is above its top.
- */
-export function dropIndex(siblings: GraphNode[], dragged: GraphNode, y: number): number {
-  return siblings.filter((o) => o.id !== dragged.id && o.y + NODE_H / 2 < y + NODE_H / 2).length;
-}
-
-/** A short hash of a text, to notice any change to it cheaply. */
-export function textHash(s: string): string {
-  let h = 0;
-  for (let i = 0; i < s.length; i++) h = (Math.imul(h, 31) + s.charCodeAt(i)) | 0;
-  return (h >>> 0).toString(36);
 }
 
 export interface GraphEdge {

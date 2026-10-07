@@ -1,5 +1,5 @@
 import '@testing-library/jest-dom/vitest';
-import { cleanup } from '@testing-library/react';
+import { cleanup, configure } from '@testing-library/react';
 import { afterAll, afterEach, beforeAll } from 'vitest';
 import { server } from './server';
 
@@ -24,6 +24,10 @@ if (!('ResizeObserver' in window)) {
     disconnect() {}
   };
 }
+
+// Whole-app renders load routes lazily; give findBy* and waitFor room when
+// every test file runs in parallel on a busy machine.
+configure({ asyncUtilTimeout: 5000 });
 
 beforeAll(() => server.listen({ onUnhandledRequest: 'error' }));
 afterEach(() => {

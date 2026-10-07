@@ -13,8 +13,12 @@ the whole stack on one machine:
 ```sh
 git clone https://github.com/Ivan825/Stampede && cd Stampede
 docker compose up -d
-open http://localhost:8080        # the first visit creates the owner account
+stampede setup                    # create the organisation and the owner account
+open http://localhost:8080        # the web UI: runs, reports and settings, read only
 ```
+
+Everything else (projects, targets, scenarios, runs) is done with the
+`stampede` CLI; the web UI is for analysis.
 
 The image is built from the repository's `Dockerfile` (distroless, nonroot)
 and tagged `ghcr.io/ivan825/stampede:${STAMPEDE_VERSION:-local}`. Once

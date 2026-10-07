@@ -1,14 +1,12 @@
 import { Link } from '@tanstack/react-router';
-import { useState, type FormEvent, type ReactNode } from 'react';
-import { useLimitSettings, useMe, useOrgCaps, usePutOrgCaps, useSSOSettings } from '@/api/queries';
-import type { Caps, LimitCaps, ProjectLimits } from '@/api/types';
+import type { ReactNode } from 'react';
+import { useLimitSettings, useOrgCaps, useSSOSettings } from '@/api/queries';
+import type { LimitCaps, ProjectLimits } from '@/api/types';
 import { Chip, RoleChip } from '@/components/chips';
-import { useToast } from '@/components/toast';
-import { Button, Card, CardHeader, ErrorAlert, Loading, Notice, Table } from '@/components/ui';
+import { CliHint } from '@/components/cliHint';
+import { Card, CardHeader, ErrorAlert, Loading, Notice, Table } from '@/components/ui';
+import { cli } from '@/lib/cli';
 import { humanDuration, pct } from '@/lib/format';
-import { permissions } from '@/lib/roles';
-import { CapsFields } from './CapsFields';
-import { capsErrors, capsForm, toCaps } from './capsForm';
 
 function Row({ label, children }: { label: string; children: ReactNode }) {
   return (
@@ -107,65 +105,20 @@ const capHeads = (
   </>
 );
 
-function OrgCapsForm({ initial }: { initial: Caps }) {
-  const me = useMe();
-  const put = usePutOrgCaps();
-  const toast = useToast();
-  const [form, setForm] = useState(() => capsForm(initial));
-  const [touched, setTouched] = useState(false);
-  const errors = capsErrors(form);
-  const valid = Object.values(errors).every((e) => !e);
-  const submit = (e: FormEvent) => {
-    e.preventDefault();
-    setTouched(true);
-    if (!valid) return;
-    put.mutate(toCaps(form), {
-      onSuccess: (c) => {
-        setForm(capsForm(c));
-        setTouched(false);
-        toast.success('Organisation caps saved.');
-      },
-    });
-  };
-  return (
-    <form
-      onSubmit={submit}
-      className="flex flex-col gap-3 px-4 py-3"
-      aria-label="Organisation caps"
-      noValidate
-    >
-      <CapsFields
-        form={form}
-        setForm={setForm}
-        errors={touched ? errors : {}}
-        legend={`Caps on every run in ${me.orgName}`}
-      />
-      <ErrorAlert error={put.error} />
-      <div>
-        <Button type="submit" variant="primary" loading={put.isPending}>
-          Save caps
-        </Button>
-      </div>
-    </form>
-  );
-}
-
-/** The organisation's caps; admins edit them. */
+/** The organisation's caps, read-only; stampede caps set changes them. */
 function OrgCapsCard() {
   const caps = useOrgCaps();
-  const can = permissions(useMe().role);
   return (
     <Card>
       <CardHeader
         title="Organisation caps"
         description="Every run must fit within these as well as the server's, its project's and its target's caps."
+        actions={<CliHint command={cli.capsSet}>Change them</CliHint>}
       />
       {caps.isPending ? (
         <Loading />
       ) : caps.error ? (
         <ErrorAlert error={caps.error} className="m-4" />
-      ) : can.manageUsers ? (
-        <OrgCapsForm initial={caps.data} />
       ) : (
         <Table aria-label="Organisation caps">
           <thead>
@@ -189,7 +142,7 @@ function ProjectsCapsCard({ projects }: { projects: ProjectLimits[] }) {
     <Card>
       <CardHeader
         title="Projects"
-        description="Each project's caps and whether its runs must pass a dry run before load. Change them in the project's settings."
+        description="Each project's caps and whether its runs must pass a dry run before load. Open a project to see its role overrides."
       />
       {projects.length === 0 ? (
         <p className="px-4 py-3 text-[13px] text-muted">No projects yet.</p>

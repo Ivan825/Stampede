@@ -16,7 +16,9 @@ func TestCSPHashesInlineScripts(t *testing.T) {
 	if !strings.Contains(csp, "'sha256-"+base64.StdEncoding.EncodeToString(sum[:])+"'") {
 		t.Errorf("inline script hash missing: %s", csp)
 	}
-	if strings.Count(csp, "sha256-") != 1 || strings.Contains(csp, "unsafe-inline';") && strings.Contains(csp, "script-src 'self' blob: 'unsafe-inline'") {
+	// The UI has no web workers or blob scripts since the YAML editor was
+	// replaced by a read-only viewer.
+	if strings.Count(csp, "sha256-") != 1 || strings.Contains(csp, "blob:") || strings.Contains(csp, "unsafe-inline';") && strings.Contains(csp, "script-src 'self' 'unsafe-inline'") {
 		t.Errorf("unexpected policy: %s", csp)
 	}
 }

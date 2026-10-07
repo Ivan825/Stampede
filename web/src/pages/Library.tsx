@@ -1,24 +1,21 @@
-import { Link, useNavigate, useParams } from '@tanstack/react-router';
-import { ChevronDown, ChevronRight, FilePlus2 } from 'lucide-react';
+import { Link, useParams } from '@tanstack/react-router';
+import { ChevronDown, ChevronRight } from 'lucide-react';
 import { Fragment, useState } from 'react';
-import { useCreateScenario, useMe, usePack, usePacks, useProjects } from '@/api/queries';
-import type { PackFile } from '@/api/types';
+import { usePack, usePacks, useProjects } from '@/api/queries';
 import { Chip } from '@/components/chips';
-import { CopyButton } from '@/components/misc';
-import { useToast } from '@/components/toast';
+import { CliCommand, CliHint } from '@/components/cliHint';
 import {
-  Button,
   Card,
   CardHeader,
   EmptyState,
   ErrorAlert,
   Loading,
   PageHeader,
-  Select,
   Table,
 } from '@/components/ui';
+import { YamlView } from '@/features/scenarios/YamlView';
+import { cli } from '@/lib/cli';
 import { lastProject } from '@/lib/lastProject';
-import { permissions } from '@/lib/roles';
 
 /** The product packs built into the server. */
 export function LibraryPage() {
@@ -89,63 +86,12 @@ export function LibraryPage() {
   );
 }
 
-function CreateFromFile({ file }: { file: PackFile }) {
-  const projects = useProjects();
-  const navigate = useNavigate();
-  const toast = useToast();
-  const remembered = lastProject.get();
-  const [projectId, setProjectId] = useState(
-    () => projects.data?.find((p) => p.id === remembered)?.id ?? projects.data?.[0]?.id ?? '',
-  );
-  const chosen = projectId || projects.data?.[0]?.id || '';
-  const create = useCreateScenario(chosen);
-  if (!projects.data?.length) return null;
-  return (
-    <div className="flex flex-col gap-2">
-      <div className="flex flex-wrap items-center gap-2">
-        <Select
-          aria-label={`Project for ${file.scenario}`}
-          className="w-56"
-          value={chosen}
-          onChange={(e) => setProjectId(e.target.value)}
-        >
-          {projects.data.map((p) => (
-            <option key={p.id} value={p.id}>
-              {p.name}
-            </option>
-          ))}
-        </Select>
-        <Button
-          size="sm"
-          loading={create.isPending}
-          onClick={() =>
-            create.mutate(
-              { yaml: file.yaml, message: `From the ${file.path} pack file` },
-              {
-                onSuccess: (s) => {
-                  toast.success(`Created ${s.name}.`);
-                  void navigate({
-                    to: '/projects/$projectId/scenarios/$scenarioId',
-                    params: { projectId: chosen, scenarioId: s.id },
-                  });
-                },
-              },
-            )
-          }
-        >
-          <FilePlus2 className="size-3.5" aria-hidden /> Create scenario
-        </Button>
-      </div>
-      <ErrorAlert error={create.error} />
-    </div>
-  );
-}
-
 /** A pack's description, variables and scenario files. */
 export function PackPage() {
   const { packName } = useParams({ from: '/app/library/$packName' });
-  const me = useMe();
-  const can = permissions(me.role);
+  const projects = useProjects();
+  const remembered = lastProject.get();
+  const project = projects.data?.find((x) => x.id === remembered) ?? projects.data?.[0];
   const pack = usePack(packName);
   const [open, setOpen] = useState<string | null>(null);
   if (pack.isPending) return <Loading />;
@@ -180,8 +126,10 @@ export function PackPage() {
             <dd className="font-mono">{p.referenceApp}</dd>
           </>
         )}
-        <dt className="text-muted">Install</dt>
-        <dd className="font-mono text-xs">stampede pack install {p.name}</dd>
+        <dt className="self-center text-muted">Install</dt>
+        <dd>
+          <CliCommand command={cli.packInstall(p.name)} />
+        </dd>
       </dl>
       {p.variables.length > 0 && (
         <Card className="mb-5">
@@ -256,16 +204,17 @@ export function PackPage() {
                     <tr id={id}>
                       <td colSpan={5} className="bg-surface-2/50">
                         <div className="flex flex-col gap-2 py-1">
-                          <div className="flex flex-wrap items-start gap-2">
-                            <CopyButton value={f.yaml} label="Copy YAML" />
-                            {can.editScenarios && <CreateFromFile file={f} />}
-                          </div>
-                          <pre
-                            className="max-h-96 overflow-auto rounded-md border border-line bg-bg p-3 font-mono text-xs leading-relaxed"
-                            aria-label={`${f.path} YAML`}
+                          <YamlView
+                            yaml={f.yaml}
+                            label={`${f.path} YAML`}
+                            className="max-h-96 overflow-hidden rounded-md border border-line bg-surface [&>pre]:max-h-96"
+                          />
+                          <CliHint
+                            command={cli.push(project?.slug)}
+                            className="self-start bg-surface"
                           >
-                            {f.yaml}
-                          </pre>
+                            Save it as a scenario: install the pack, then push the file with
+                          </CliHint>
                         </div>
                       </td>
                     </tr>

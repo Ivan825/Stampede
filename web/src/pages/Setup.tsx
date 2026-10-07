@@ -1,90 +1,63 @@
+import { useQueryClient } from '@tanstack/react-query';
 import { useNavigate } from '@tanstack/react-router';
-import { useState, type FormEvent } from 'react';
-import { useSetup } from '@/api/queries';
-import { Button, ErrorAlert, Field, Input } from '@/components/ui';
+import { RefreshCw } from 'lucide-react';
+import { useState } from 'react';
+import { versionQuery } from '@/api/queries';
+import { CliCommand } from '@/components/cliHint';
+import { Button } from '@/components/ui';
+import { cli } from '@/lib/cli';
 import { AuthLayout } from './AuthLayout';
 
-export const MIN_PASSWORD = 10;
-
+/**
+ * Shown while the server has no users. The organisation and the owner
+ * account are created from the terminal; this page says how and checks
+ * again when asked.
+ */
 export function SetupPage() {
+  const qc = useQueryClient();
   const navigate = useNavigate();
-  const setup = useSetup();
-  const [form, setForm] = useState({ organisation: '', name: '', email: '', password: '' });
-  const [touched, setTouched] = useState(false);
+  const [checking, setChecking] = useState(false);
+  const [still, setStill] = useState(false);
 
-  const set = (k: keyof typeof form) => (e: { target: { value: string } }) =>
-    setForm((f) => ({ ...f, [k]: e.target.value }));
-
-  const errors = {
-    organisation: form.organisation.trim() ? undefined : 'Enter an organisation name.',
-    name: form.name.trim() ? undefined : 'Enter your name.',
-    email: /^[^\s@]+@[^\s@]+$/.test(form.email.trim()) ? undefined : 'Enter a valid email address.',
-    password:
-      form.password.length >= MIN_PASSWORD ? undefined : `Use at least ${MIN_PASSWORD} characters.`,
-  };
-  const valid = Object.values(errors).every((e) => !e);
-  const show = (k: keyof typeof errors) => (touched ? errors[k] : undefined);
-
-  const submit = (e: FormEvent) => {
-    e.preventDefault();
-    setTouched(true);
-    if (!valid) return;
-    setup.mutate(
-      {
-        organisation: form.organisation.trim(),
-        name: form.name.trim(),
-        email: form.email.trim(),
-        password: form.password,
-      },
-      { onSuccess: () => void navigate({ to: '/projects' }) },
-    );
+  const check = async () => {
+    setChecking(true);
+    try {
+      qc.removeQueries({ queryKey: versionQuery.queryKey });
+      const v = await qc.query(versionQuery);
+      if (v.setupRequired) setStill(true);
+      else await navigate({ to: '/login' });
+    } finally {
+      setChecking(false);
+    }
   };
 
   return (
     <AuthLayout
       title="Set up Stampede"
-      subtitle="Create your organisation and the owner account. You can invite others afterwards."
+      subtitle="This server has no organisation yet. Create it and the owner account from the terminal; the web UI is for analysis and reporting."
     >
-      <form onSubmit={submit} className="flex flex-col gap-4" noValidate>
-        <Field label="Organisation" error={show('organisation')}>
-          {(p) => (
-            <Input {...p} autoFocus value={form.organisation} onChange={set('organisation')} />
-          )}
-        </Field>
-        <Field label="Your name" error={show('name')}>
-          {(p) => <Input {...p} autoComplete="name" value={form.name} onChange={set('name')} />}
-        </Field>
-        <Field label="Email" error={show('email')}>
-          {(p) => (
-            <Input
-              {...p}
-              type="email"
-              autoComplete="username"
-              value={form.email}
-              onChange={set('email')}
-            />
-          )}
-        </Field>
-        <Field
-          label="Password"
-          hint={`At least ${MIN_PASSWORD} characters.`}
-          error={show('password')}
-        >
-          {(p) => (
-            <Input
-              {...p}
-              type="password"
-              autoComplete="new-password"
-              value={form.password}
-              onChange={set('password')}
-            />
-          )}
-        </Field>
-        <ErrorAlert error={setup.error} />
-        <Button type="submit" variant="primary" loading={setup.isPending}>
-          Create owner account
+      <ol className="flex list-decimal flex-col gap-3 pl-5 text-[13px]">
+        <li>
+          Install the <span className="font-mono">stampede</span> CLI on a machine that can reach{' '}
+          <span className="font-mono break-all">{window.location.origin}</span>.
+        </li>
+        <li className="flex flex-col gap-1.5">
+          Run the setup and answer its questions:
+          <CliCommand command={cli.setup} className="self-start" />
+        </li>
+        <li>Come back here and sign in.</li>
+      </ol>
+      <div className="mt-5 flex flex-col gap-2">
+        <Button variant="primary" loading={checking} onClick={() => void check()}>
+          <RefreshCw className="size-3.5" aria-hidden /> I have run it, continue
         </Button>
-      </form>
+        {still && (
+          <p role="status" className="text-center text-xs text-muted">
+            The server still needs setting up. Run <code className="font-mono">stampede setup</code>{' '}
+            first.
+          </p>
+        )}
+      </div>
     </AuthLayout>
   );
 }

@@ -115,7 +115,7 @@ func contentSecurityPolicy(ui fs.FS) string {
 		}
 	}
 	return "default-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self' data:; " +
-		"worker-src 'self' blob:; script-src 'self' blob:" + hashes + "; connect-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'"
+		"worker-src 'none'; script-src 'self'" + hashes + "; connect-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'"
 }
 
 func securityHeaders(csp string) func(http.Handler) http.Handler {

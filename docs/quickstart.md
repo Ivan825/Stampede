@@ -15,19 +15,29 @@ This starts TimescaleDB, the Stampede server with its web UI on
 <http://localhost:8090>: a small shop API with six performance problems
 planted on purpose (see [examples/shoplab](../examples/shoplab/README.md)).
 
-## 2. Create your account
+## 2. Install the CLI and create your account
 
-Open <http://localhost:8080>. The first visit asks for an organisation name
-and an owner account. From the terminal, `stampede setup` does the same
-and signs the CLI in ([using Stampede from the CLI](guides/cli.md)).
+Everything is done with the `stampede` CLI; the web UI at
+<http://localhost:8080> is for watching runs and reading reports
+([using Stampede from the CLI](guides/cli.md)). Install the CLI:
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/Ivan825/Stampede/main/install.sh | sh
+```
+
+Then create the organisation and its owner account on the new server, which
+also signs the CLI in:
+
+```sh
+stampede setup
+```
+
+Until this has run, <http://localhost:8080> shows a page saying to run
+`stampede setup`. Afterwards it shows the sign-in page.
 
 ## 3. Run something from the command line
 
-The quickest path needs no server at all. Build or install the binary:
-
-```sh
-go install github.com/Ivan825/Stampede/cmd/stampede@latest
-```
+The quickest path needs no server at all.
 
 Let Stampede recognise ShopLab and set up the matching pack:
 
@@ -88,10 +98,12 @@ stampede login --server http://localhost:8080
 stampede start --file examples/shoplab/scenarios/shop-mix.yaml --target http://shoplab:8090
 ```
 
-The first time, create a project and a target (`http://shoplab:8090`, the
-address the workers see inside Compose) in the web UI. `start` saves the file
-as a new scenario version, splits the load across the two workers, and
-streams the run until it finishes. The web UI shows the same run live.
+The first time, create a project with `stampede projects create` and a
+target for `http://shoplab:8090` (the address the workers see inside
+Compose) with `stampede targets create`. `start` saves the file as a new
+scenario version, splits the load across the two workers, and streams the
+run until it finishes. The web UI on <http://localhost:8080> shows the same
+run live, with worker health and events, and its report when it ends.
 
 `stampede run --cluster` does the same with `run`'s flags and outputs:
 
