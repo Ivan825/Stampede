@@ -38,9 +38,24 @@ type Options struct {
 	DialContext func(ctx context.Context, network, addr string) (net.Conn, error)
 	// DNS caches lookups across connections; nil resolves on every dial.
 	DNS *DNSCache
+	// TLSResumption is where TLS sessions are kept for resumption: "shared"
+	// (one cache for the process, the default), "per-transport" (a cache
+	// per transport: per virtual user when each has its own) or "off"
+	// (every connection makes a full handshake).
+	TLSResumption string
 }
 
 var sessionCache = tls.NewLRUClientSessionCache(4096)
+
+func sessionCacheFor(mode string) tls.ClientSessionCache {
+	switch mode {
+	case "off":
+		return nil
+	case "per-transport":
+		return tls.NewLRUClientSessionCache(64)
+	}
+	return sessionCache
+}
 
 // NewTransport builds a transport. One per virtual user gives browser-like
 // connection behaviour; one shared transport behaves like a service client.
@@ -59,7 +74,7 @@ func NewTransport(o Options) *http.Transport {
 		ExpectContinueTimeout: time.Second,
 		TLSClientConfig: &tls.Config{
 			InsecureSkipVerify: o.InsecureSkipVerify, //nolint:gosec // opt-in for test targets
-			ClientSessionCache: sessionCache,
+			ClientSessionCache: sessionCacheFor(o.TLSResumption),
 			MinVersion:         tls.VersionTLS12,
 		},
 	}

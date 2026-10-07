@@ -40,6 +40,12 @@ func (s *Scenario) Validate() error {
 	default:
 		add("target.http.connections", "must be per-vu or shared")
 	}
+	switch r := s.Target.HTTP.TLSResumption; {
+	case r == "per-vu" && s.Target.HTTP.Connections == "shared":
+		add("target.http.tlsResumption", "per-vu needs per-vu connections; with shared connections use shared or off")
+	case r != "" && r != "per-vu" && r != "shared" && r != "off":
+		add("target.http.tlsResumption", "must be per-vu, shared or off")
+	}
 	if s.Target.BaseURL != "" && !strings.Contains(s.Target.BaseURL, "${") {
 		u, err := url.Parse(s.Target.BaseURL)
 		if err != nil || (u.Scheme != "http" && u.Scheme != "https") || u.Host == "" {

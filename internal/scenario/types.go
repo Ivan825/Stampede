@@ -190,6 +190,12 @@ type HTTPOptions struct {
 	// MaxRedirects caps followed redirects (default 10, 0 keeps the default,
 	// -1 disables following).
 	MaxRedirects int `yaml:"maxRedirects,omitempty" json:"maxRedirects,omitempty"`
+	// TLSResumption is "per-vu" (each user resumes only its own TLS
+	// sessions, like separate browsers; the default with per-vu
+	// connections), "shared" (any user resumes any session; the default
+	// with shared connections) or "off" (a full handshake on every new
+	// connection).
+	TLSResumption string `yaml:"tlsResumption,omitempty" json:"tlsResumption,omitempty"`
 }
 
 // Network emulates a slower network inside the load generator: a profile
