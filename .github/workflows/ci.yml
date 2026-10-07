@@ -397,6 +397,93 @@ jobs:
         if: failure()
         run: cat packlab.log
 
+  install:
+    # The one-line installers, the installed CLI running a test, and
+    # `stampede up` outside a clone, against a release built from this
+    # commit and served locally the way GitHub serves release assets.
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    env:
+      V: 9.9.9
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - name: a release built from this commit
+        shell: bash
+        run: |
+          os=$(go env GOOS) arch=$(go env GOARCH) exe=stampede
+          if [ "$os" = windows ]; then exe=stampede.exe; fi
+          mkdir -p "$RUNNER_TEMP/pkg" "$RUNNER_TEMP/rel"
+          go build -ldflags "-X github.com/Ivan825/Stampede/internal/version.Version=$V" -o "$RUNNER_TEMP/pkg/$exe" ./cmd/stampede
+          cp LICENSE "$RUNNER_TEMP/pkg/"
+          cd "$RUNNER_TEMP/pkg"
+          if [ "$os" = windows ]; then
+            7z a "../rel/stampede_${V}_${os}_${arch}.zip" "$exe" LICENSE >/dev/null
+          else
+            tar -czf "../rel/stampede_${V}_${os}_${arch}.tar.gz" "$exe" LICENSE
+          fi
+          cd ../rel
+          if command -v sha256sum >/dev/null; then sha256sum ./* | sed 's| \./| |' > "stampede_${V}_checksums.txt"; else shasum -a 256 ./* | sed 's| \./| |' > "stampede_${V}_checksums.txt"; fi
+          cat "stampede_${V}_checksums.txt"
+      - name: install.sh
+        if: runner.os != 'Windows'
+        run: |
+          python3 -m http.server 18788 --bind 127.0.0.1 --directory "$RUNNER_TEMP/rel" >/dev/null 2>&1 &
+          sleep 1
+          STAMPEDE_VERSION=v$V STAMPEDE_DOWNLOAD_BASE=http://127.0.0.1:18788 STAMPEDE_INSTALL_DIR="$RUNNER_TEMP/bin" sh install.sh
+          "$RUNNER_TEMP/bin/stampede" version | grep -q "stampede $V"
+          # A tampered archive is refused.
+          echo x >> "$RUNNER_TEMP"/rel/*.tar.gz
+          if STAMPEDE_VERSION=v$V STAMPEDE_DOWNLOAD_BASE=http://127.0.0.1:18788 STAMPEDE_INSTALL_DIR="$RUNNER_TEMP/bin2" sh install.sh; then
+            echo "a tampered archive was installed"; exit 1
+          fi
+      - name: install.ps1
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $server = Start-Process python -ArgumentList '-m','http.server','18788','--bind','127.0.0.1','--directory',"$env:RUNNER_TEMP\rel" -PassThru -WindowStyle Hidden
+          Start-Sleep 2
+          $env:STAMPEDE_VERSION = "v$env:V"
+          $env:STAMPEDE_DOWNLOAD_BASE = 'http://127.0.0.1:18788'
+          $env:STAMPEDE_INSTALL_DIR = "$env:RUNNER_TEMP\bin"
+          ./install.ps1
+          $out = & "$env:RUNNER_TEMP\bin\stampede.exe" version
+          if ($out -notmatch "stampede $env:V") { throw "unexpected version: $out" }
+          Stop-Process $server
+      - name: the installed CLI runs a test
+        shell: bash
+        run: |
+          work="$RUNNER_TEMP/work"
+          mkdir -p "$work/site" && echo ok > "$work/site/index.html"
+          cd "$work"
+          py=$(command -v python3 || command -v python)
+          "$py" -m http.server 18789 --bind 127.0.0.1 --directory site >/dev/null 2>&1 &
+          sleep 1
+          cat > smoke.yaml <<'YAML'
+          metadata: {name: install-smoke}
+          target: {baseURL: "http://127.0.0.1:18789"}
+          journeys: [{name: home, steps: [{get: /, check: {status: 200}}]}]
+          load: {iterations: 20, vus: 2}
+          targets: ["errors < 1%"]
+          YAML
+          "$RUNNER_TEMP/bin/stampede" run smoke.yaml -o report.html --csv steps.csv
+          test -s report.html && grep -q "home,GET /,20,0" steps.csv
+      - name: stampede up outside a clone
+        if: runner.os == 'Linux'
+        run: |
+          docker build -t "ghcr.io/ivan825/stampede:$V" .
+          cd "$RUNNER_TEMP"
+          "$RUNNER_TEMP/bin/stampede" up
+          curl -fsS http://localhost:8080/readyz
+          docker compose -p stampede ps
+          test "$(docker compose -p stampede ps --status running -q | wc -l)" -eq 4
+          "$RUNNER_TEMP/bin/stampede" down --volumes
+
   security:
     runs-on: ubuntu-latest
     steps:
