@@ -30,7 +30,10 @@ needs the editor role; starting one by hand needs runner.`,
 	cmd.PersistentFlags().StringVar(&project, "project", "", "project name, slug or id (default: the only project)")
 	cmd.AddCommand(
 		newSchedulesListCmd(&project),
+		newSchedulesShowCmd(&project),
 		newSchedulesCreateCmd(&project),
+		newSchedulesUpdateCmd(&project),
+		newSchedulesPreviewCmd(),
 		newSchedulesToggleCmd(&project, true),
 		newSchedulesToggleCmd(&project, false),
 		newSchedulesDeleteCmd(&project),
@@ -40,7 +43,8 @@ needs the editor role; starting one by hand needs runner.`,
 }
 
 func newSchedulesListCmd(project *string) *cobra.Command {
-	return &cobra.Command{
+	var asJSON bool
+	cmd := &cobra.Command{
 		Use:   "list",
 		Short: "List a project's schedules",
 		Args:  cobra.NoArgs,
@@ -54,6 +58,9 @@ func newSchedulesListCmd(project *string) *cobra.Command {
 				return err
 			}
 			out := cmd.OutOrStdout()
+			if asJSON {
+				return writeJSON(out, ss)
+			}
 			if len(ss) == 0 {
 				fmt.Fprintln(out, "No schedules. Create one with stampede schedules create.")
 				return nil
@@ -74,6 +81,8 @@ func newSchedulesListCmd(project *string) *cobra.Command {
 			return tw.Flush()
 		},
 	}
+	jsonFlag(cmd, &asJSON)
+	return cmd
 }
 
 func deref0(s *string) string {
