@@ -48,7 +48,7 @@ reports where your product breaks.`,
 	root.AddCommand(newGenerateCmd(), newGenDocsCmd(), newAgentCmd(), newCoverageCmd(), newDriftCmd(), newBackupCmd(), newRestoreCmd())
 	root.AddCommand(newSetupCmd(), newLogoutCmd(), newWhoamiCmd(), newPasswordCmd(),
 		newUsersCmd(), newTokensCmd(), newProjectsCmd(), newCapsCmd(), newSecretsCmd(), newScenariosCmd(),
-		newAICmd(), newNarrativeCmd(), newIntegrationsCmd(), newNotifyCmd())
+		newAICmd(), newNarrativeCmd(), newIntegrationsCmd(), newNotifyCmd(), newAuditCmd(), newSettingsCmd())
 	return root
 }
 
