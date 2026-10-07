@@ -11,7 +11,7 @@ groups:
       - { name: "Saturated and lost-worker windows shaded on the report charts", status: shipped, doc: docs/guides/reports }
       - { name: "Accuracy gate against a calibrated server in CI", status: shipped, doc: benchmarks }
       - { name: "Side-by-side accuracy comparison with k6, published nightly", status: shipped, doc: benchmarks }
-      - { name: "wrk2 in the side-by-side comparison", status: planned }
+      - { name: "wrk2 in the side-by-side comparison (published as measured)", status: shipped }
   - name: Load
     features:
       - { name: "Open (arrival rate) and closed (virtual users) models", status: shipped, doc: docs/concepts/load-models }

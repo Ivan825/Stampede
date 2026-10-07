@@ -70,7 +70,13 @@ truth of its own run. The table says where each tool starts its clock:
 On an idle generator both agree with the truth; the scheduled clock is the
 one that stays honest when the generator is overloaded. A tool that is not
 installed is reported as such, never guessed. The nightly CI job installs
-k6, builds wrk2 and uploads the JSON results.
+k6, builds wrk2 and uploads the JSON results, and fails if any tool did not
+run. wrk2 gets one connection for every three requests a second: it gives
+each connection its own schedule, so with fewer a slow reply delays the
+requests queued behind it. It reads about 1 ms high in every case (its
+event loop schedules sends on a millisecond timer and counts from the
+scheduled time), just outside the 1 ms tolerance; the website publishes its
+figures as measured.
 
 Example (Apple M-series laptop, busy with other work, 5-second case):
 

@@ -12,8 +12,8 @@ const ms = (v: number) => v.toFixed(2);
       <p class="lede">A calibrated echo server delays each response by a value from a known distribution (fixed, uniform, lognormal, bimodal) and records exactly how long it held every request. Stampede drives it at a fixed arrival rate from a separate process, and its p50, p95 and p99 must land within 2% or 1 ms of the server's exact values, whichever is larger. A case also fails if a single request is dropped or counted twice.</p>
       <p><a href={`${GITHUB}/tree/main/bench`}>The harness and its README →</a></p>
     </section>
-    <section class="block"><span class="num">02</span><h2>Side by side with k6</h2>
-      <p class="lede">The nightly job runs the same workloads through Stampede and k6 against the echo server. Each tool is judged against the server's exact values for its own run ({compare.rule}). Latest run: <a href={compare.run}>{compare.date}</a>, commit <code>{compare.commit}</code>, on a {compare.runner}.</p>
+    <section class="block"><span class="num">02</span><h2>Side by side with k6 and wrk2</h2>
+      <p class="lede">The nightly job runs the same workloads through Stampede, k6 and wrk2 against the echo server. Each tool is judged against the server's exact values for its own run ({compare.rule}). Latest run: <a href={compare.run}>{compare.date}</a>, commit <code>{compare.commit}</code>, on a {compare.runner}.</p>
       {compare.cases.map((c) => (
         <div class="table-wrap" style="margin-top:20px"><table>
           <caption style="text-align:left;padding:12px 16px;font-weight:600">{c.name}</caption>
@@ -25,7 +25,7 @@ const ms = (v: number) => v.toFixed(2);
           </tbody>
         </table></div>
       ))}
-      <p class="muted" style="margin-top:16px">"From scheduled send" counts any wait inside the load generator (no coordinated omission); "service time" starts when the request actually left, as k6 measures. Each tool's truth differs slightly because each tool drives its own run.</p>
+      <p class="muted" style="margin-top:16px">"From scheduled send" counts any wait inside the load generator (no coordinated omission); "service time" starts when the request actually left, as k6 measures. Each tool's truth differs slightly because each tool drives its own run. wrk2 reads about 1 ms high in every case, so it misses the 1 ms tolerance by a fraction of a millisecond; it schedules requests on its event loop's millisecond timer and counts from the scheduled time, so up to a millisecond of timer delay lands in its figures.</p>
     </section>
     <section class="block"><span class="num">03</span><h2>One process</h2>
       <p class="lede">How much load one Stampede process generates before it, rather than the target, becomes the limit. The nightly job raises the arrival rate against the echo server (1 ms fixed delay) running on the same {scale.cpus}-CPU {scale.runner} runner, for {scale.hold} per level; a level is clean when {scale.rule}. Latest run: <a href={scale.run}>{scale.date}</a>. Highest clean rate: <strong>{scale.maxCleanRps.toLocaleString('en-US')} requests per second</strong>. Generator and target share the machine, so a worker on a host of its own does at least this.</p>
