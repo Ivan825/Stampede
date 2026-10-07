@@ -31,6 +31,9 @@ func TestSetupWhoamiPasswordLogout(t *testing.T) {
 	if out != "ada@acme.test (Ada), owner of Acme on "+url+"\n" {
 		t.Errorf("whoami: %q", out)
 	}
+	if out := mustCLI(t, "version", "--server"); !strings.Contains(out, "server "+url+": ") {
+		t.Errorf("version --server: %q", out)
+	}
 	var me struct{ Server, Email, Role, OrgName string }
 	cliJSON(t, &me, "whoami")
 	if me.Server != url || me.Email != "ada@acme.test" || me.Role != "owner" || me.OrgName != "Acme" {

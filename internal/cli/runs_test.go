@@ -61,6 +61,11 @@ func TestRunsCommands(t *testing.T) {
 		}
 	}
 
+	// follow prints the report of a finished run straight away.
+	if out, err := runCLI(t, "runs", "follow", id[:8]); err != nil || !strings.Contains(out, "list") || !strings.Contains(out, "requests") {
+		t.Errorf("follow: %v\n%s", err, out)
+	}
+
 	out = mustCLI(t, "runs", "timeline", id)
 	if !strings.HasPrefix(out, "T   RPS  P50") || !strings.Contains(out, "0s ") {
 		t.Errorf("timeline:\n%s", out)

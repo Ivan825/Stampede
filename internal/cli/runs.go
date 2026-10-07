@@ -28,7 +28,7 @@ stampede report <run> prints or downloads a finished run's report.`,
 	}
 	cmd.PersistentFlags().StringVar(&project, "project", "", "project name, slug or id (default: the default or only project)")
 	cmd.Flags().AddFlagSet(list.Flags())
-	cmd.AddCommand(list, newRunShowCmd(), newRunEventsCmd(), newRunTimelineCmd(), newRunWorkersCmd())
+	cmd.AddCommand(list, newRunShowCmd(), newRunFollowCmd(), newRunEventsCmd(), newRunTimelineCmd(), newRunWorkersCmd())
 	return cmd
 }
 
@@ -160,6 +160,28 @@ func writeRun(w io.Writer, r gen.Run) error {
 		fmt.Fprintf(w, "Report:    stampede report %s\n", r.Id.String()[:8])
 	}
 	return nil
+}
+
+func newRunFollowCmd() *cobra.Command {
+	var md string
+	cmd := &cobra.Command{
+		Use:   "follow <run>",
+		Short: "Follow a run live, then print its report",
+		Long: `Follow a running run's live progress, as stampede start does, then print
+its report. Ctrl-C stops following; the run continues. Exits like
+stampede start: 0 pass, 3 targets failed. For a run that has already
+finished, prints the report straight away.`,
+		Args: cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			c, id, err := runClient(cmd, args[0])
+			if err != nil {
+				return err
+			}
+			return followRun(cmd.Context(), cmd, c, id, md)
+		},
+	}
+	cmd.Flags().StringVar(&md, "md", "", "write the report as Markdown when done (- for stdout)")
+	return cmd
 }
 
 func newRunEventsCmd() *cobra.Command {
