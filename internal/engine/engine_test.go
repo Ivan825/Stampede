@@ -126,7 +126,10 @@ load: {mode: rate, rate: 200/s, duration: 2s}`, srv.URL), nil)
 	if out.total.Dropped != 0 {
 		t.Errorf("dropped %d", out.total.Dropped)
 	}
-	if lag := out.total.SchedLag.Quantile(0.99); lag > 20000 {
+	// A sanity bound only: shared CI runners, busy with other packages'
+	// tests (and their Chrome), stall for tens of milliseconds. Pacing
+	// precision is measured by the accuracy job on a quiet machine.
+	if lag := out.total.SchedLag.Quantile(0.99); lag > 50000 {
 		t.Errorf("p99 scheduling lag %dµs is too high", lag)
 	}
 }
