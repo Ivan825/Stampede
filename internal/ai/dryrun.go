@@ -458,6 +458,14 @@ func (p *pass) check(c *scenario.CCheck, res *httpx.Result) ([]CheckResult, stri
 			add("json "+jc.Path, ok, fmt.Sprintf("got %s, expected %v", Truncate(p.d.Redactor.Text(got.Raw), 120), jc.Expected))
 		}
 	}
+	if c.Schema != nil {
+		problem := c.SchemaProblem(res.Body)
+		detail := "the body matches the schema"
+		if problem != "" {
+			detail = p.d.Redactor.Text(problem)
+		}
+		add("schema", problem == "", detail)
+	}
 	if c.Expr != nil {
 		ok, err := c.Expr.EvalBool(&dryResp{parent: p.vars, res: res})
 		detail := c.Expr.String()

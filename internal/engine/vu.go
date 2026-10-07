@@ -536,6 +536,12 @@ func (v *VU) check(c *scenario.CCheck, res *httpx.Result, s *metrics.Sample) str
 		}
 		s.ChecksPassed++
 	}
+	if c.Schema != nil {
+		if c.SchemaProblem(res.Body) != "" {
+			return fail("schema")
+		}
+		s.ChecksPassed++
+	}
 	if c.Expr != nil {
 		ra := &respVars{parent: v.vars, res: res}
 		ok, err := c.Expr.EvalBool(ra)

@@ -529,6 +529,28 @@ func confineDataFiles(s *scenario.Scenario, dataDir string) error {
 		}
 		s.Data[name] = f
 	}
+	var schemaErr error
+	s.EachStep(func(st scenario.Step) {
+		for _, ch := range st.Checks() {
+			p, ok := ch.Schema.(string)
+			if !ok || schemaErr != nil {
+				continue
+			}
+			if dataDir == "" {
+				schemaErr = errInvalid("a check's schema names a file, which needs the server to be started with --data-dir; write the schema inline instead")
+				return
+			}
+			full := filepath.Join(dataDir, filepath.Clean("/"+p))
+			if rel, err := filepath.Rel(dataDir, full); err != nil || strings.HasPrefix(rel, "..") {
+				schemaErr = errInvalid(fmt.Sprintf("check schema %q is outside the data directory", p))
+				return
+			}
+			ch.Schema = full
+		}
+	})
+	if schemaErr != nil {
+		return schemaErr
+	}
 	if r := s.Load.Replay; r != nil && r.File != "" {
 		if dataDir == "" {
 			return errInvalid("load.replay reads a file, which needs the server to be started with --data-dir")
