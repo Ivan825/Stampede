@@ -153,14 +153,15 @@ func checkLinks(t *testing.T, md string) {
 
 func TestSlug(t *testing.T) {
 	s := slugger{}
-	for in, want := range map[string]string{
-		"GET /runs/{runId}/report": "get-runsrunidreport",
-		"POST /runs/kill-all":      "post-runskill-all",
-		"Run":                      "run",
-		"run":                      "run-1",
+	// In order: a repeated slug gets a suffix, so the cases depend on it.
+	for _, c := range []struct{ in, want string }{
+		{"GET /runs/{runId}/report", "get-runsrunidreport"},
+		{"POST /runs/kill-all", "post-runskill-all"},
+		{"Run", "run"},
+		{"run", "run-1"},
 	} {
-		if got := s.slug(in); got != want {
-			t.Errorf("%q: got %q want %q", in, got, want)
+		if got := s.slug(c.in); got != c.want {
+			t.Errorf("%q: got %q want %q", c.in, got, c.want)
 		}
 	}
 }
