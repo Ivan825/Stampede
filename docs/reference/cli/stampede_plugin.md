@@ -1,6 +1,6 @@
 ## stampede plugin
 
-List, install and remove protocol plugins
+List, install, remove and create protocol plugins
 
 ### Synopsis
 
@@ -20,6 +20,7 @@ worker that runs scenarios using it.
 ### SEE ALSO
 
 * [stampede](stampede.md)	 - Self-hosted, distributed load testing
+* [stampede plugin create](stampede_plugin_create.md)	 - Scaffold a plugin: a Go module with one step, a README and a conformance test
 * [stampede plugin install](stampede_plugin_install.md)	 - Build and install a plugin
 * [stampede plugin list](stampede_plugin_list.md)	 - List installed plugins and the steps they offer
 * [stampede plugin remove](stampede_plugin_remove.md)	 - Remove an installed plugin

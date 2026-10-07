@@ -21,7 +21,7 @@ func newPluginCmd() *cobra.Command {
 	var dir string
 	cmd := &cobra.Command{
 		Use:   "plugin",
-		Short: "List, install and remove protocol plugins",
+		Short: "List, install, remove and create protocol plugins",
 		Long: `Plugins add step types such as mqtt.publish or kafka.produce. Each is an
 executable named stampede-plugin-<name>, looked for in the plugin directory
 ($STAMPEDE_PLUGIN_DIR, or plugins/ under your user config directory) and
@@ -31,6 +31,7 @@ worker that runs scenarios using it.`,
 	cmd.PersistentFlags().StringVar(&dir, "dir", "", "plugin directory (default $STAMPEDE_PLUGIN_DIR or the user config directory)")
 
 	quiet := slog.New(slog.NewTextHandler(io.Discard, nil))
+	cmd.AddCommand(newPluginCreateCmd())
 	cmd.AddCommand(&cobra.Command{
 		Use:   "list",
 		Short: "List installed plugins and the steps they offer",

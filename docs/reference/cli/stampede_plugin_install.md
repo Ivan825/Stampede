@@ -38,5 +38,5 @@ stampede plugin install <name | directory | file | go-package[@version]> [flags]
 
 ### SEE ALSO
 
-* [stampede plugin](stampede_plugin.md)	 - List, install and remove protocol plugins
+* [stampede plugin](stampede_plugin.md)	 - List, install, remove and create protocol plugins
 
