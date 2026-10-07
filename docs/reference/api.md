@@ -29,13 +29,15 @@ Operations marked **no authentication** can be called without either.
 - [Projects](#projects): [`GET /projects`](#get-projects), [`POST /projects`](#post-projects), [`GET /projects/{projectId}`](#get-projectsprojectid), [`PATCH /projects/{projectId}`](#patch-projectsprojectid), [`DELETE /projects/{projectId}`](#delete-projectsprojectid)
 - [Targets](#targets): [`GET /projects/{projectId}/targets`](#get-projectsprojectidtargets), [`POST /projects/{projectId}/targets`](#post-projectsprojectidtargets), [`GET /targets/{targetId}`](#get-targetstargetid), [`PATCH /targets/{targetId}`](#patch-targetstargetid), [`DELETE /targets/{targetId}`](#delete-targetstargetid), [`POST /targets/{targetId}/verify`](#post-targetstargetidverify)
 - [Secrets](#secrets): [`GET /projects/{projectId}/secrets`](#get-projectsprojectidsecrets), [`PUT /projects/{projectId}/secrets`](#put-projectsprojectidsecrets), [`DELETE /projects/{projectId}/secrets/{name}`](#delete-projectsprojectidsecretsname)
-- [Scenarios](#scenarios): [`POST /scenarios/validate`](#post-scenariosvalidate), [`GET /projects/{projectId}/scenarios`](#get-projectsprojectidscenarios), [`POST /projects/{projectId}/scenarios`](#post-projectsprojectidscenarios), [`GET /scenarios/{scenarioId}`](#get-scenariosscenarioid), [`DELETE /scenarios/{scenarioId}`](#delete-scenariosscenarioid), [`GET /scenarios/{scenarioId}/versions`](#get-scenariosscenarioidversions), [`POST /scenarios/{scenarioId}/versions`](#post-scenariosscenarioidversions), [`GET /scenarios/{scenarioId}/versions/{version}`](#get-scenariosscenarioidversionsversion)
-- [Runs](#runs): [`GET /projects/{projectId}/runs`](#get-projectsprojectidruns), [`POST /projects/{projectId}/runs`](#post-projectsprojectidruns), [`GET /runs/{runId}`](#get-runsrunid), [`POST /runs/{runId}/stop`](#post-runsrunidstop), [`POST /runs/{runId}/kill`](#post-runsrunidkill), [`POST /runs/kill-all`](#post-runskill-all), [`GET /runs/{runId}/live`](#get-runsrunidlive), [`GET /runs/{runId}/timeline`](#get-runsrunidtimeline), [`GET /runs/{runId}/report`](#get-runsrunidreport), [`POST /compare`](#post-compare)
+- [Scenarios](#scenarios): [`POST /scenarios/validate`](#post-scenariosvalidate), [`GET /projects/{projectId}/scenarios`](#get-projectsprojectidscenarios), [`POST /projects/{projectId}/scenarios`](#post-projectsprojectidscenarios), [`GET /scenarios/{scenarioId}`](#get-scenariosscenarioid), [`DELETE /scenarios/{scenarioId}`](#delete-scenariosscenarioid), [`GET /scenarios/{scenarioId}/versions`](#get-scenariosscenarioidversions), [`POST /scenarios/{scenarioId}/versions`](#post-scenariosscenarioidversions), [`GET /scenarios/{scenarioId}/versions/{version}`](#get-scenariosscenarioidversionsversion), [`POST /scenarios/{scenarioId}/coverage`](#post-scenariosscenarioidcoverage), [`POST /scenarios/{scenarioId}/drift`](#post-scenariosscenarioiddrift)
+- [Runs](#runs): [`GET /projects/{projectId}/runs`](#get-projectsprojectidruns), [`POST /projects/{projectId}/runs`](#post-projectsprojectidruns), [`GET /runs/{runId}`](#get-runsrunid), [`POST /runs/{runId}/stop`](#post-runsrunidstop), [`POST /runs/{runId}/kill`](#post-runsrunidkill), [`POST /runs/kill-all`](#post-runskill-all), [`GET /runs/{runId}/live`](#get-runsrunidlive), [`GET /runs/{runId}/timeline`](#get-runsrunidtimeline), [`GET /runs/{runId}/report`](#get-runsrunidreport), [`POST /compare`](#post-compare), [`GET /runs/{runId}/workers`](#get-runsrunidworkers)
 - [Schedules](#schedules): [`GET /projects/{projectId}/schedules`](#get-projectsprojectidschedules), [`POST /projects/{projectId}/schedules`](#post-projectsprojectidschedules), [`GET /schedules/preview`](#get-schedulespreview), [`GET /schedules/{scheduleId}`](#get-schedulesscheduleid), [`PATCH /schedules/{scheduleId}`](#patch-schedulesscheduleid), [`DELETE /schedules/{scheduleId}`](#delete-schedulesscheduleid), [`POST /schedules/{scheduleId}/run`](#post-schedulesscheduleidrun)
 - [Workers](#workers): [`GET /workers`](#get-workers)
 - [Audit](#audit): [`GET /audit`](#get-audit)
 - [AI](#ai): [`GET /ai/providers`](#get-aiproviders), [`POST /ai/providers`](#post-aiproviders), [`DELETE /ai/providers/{providerId}`](#delete-aiprovidersproviderid), [`GET /projects/{projectId}/ai/jobs`](#get-projectsprojectidaijobs), [`POST /projects/{projectId}/ai/jobs`](#post-projectsprojectidaijobs), [`POST /runs/{runId}/narrative`](#post-runsrunidnarrative), [`GET /ai/jobs/{jobId}`](#get-aijobsjobid), [`POST /ai/jobs/{jobId}/approve`](#post-aijobsjobidapprove)
 - [Integrations](#integrations): [`GET /integrations`](#get-integrations), [`POST /integrations`](#post-integrations), [`DELETE /integrations/{integrationId}`](#delete-integrationsintegrationid), [`GET /notifications/channels`](#get-notificationschannels), [`POST /notifications/channels`](#post-notificationschannels), [`DELETE /notifications/channels/{channelId}`](#delete-notificationschannelschannelid), [`POST /notifications/channels/{channelId}/test`](#post-notificationschannelschannelidtest), [`GET /notifications/channels/{channelId}/deliveries`](#get-notificationschannelschanneliddeliveries)
+- [Packs](#packs): [`GET /packs`](#get-packs), [`GET /packs/{packName}`](#get-packspackname)
+- [Settings](#settings): [`GET /settings/sso`](#get-settingssso), [`GET /settings/limits`](#get-settingslimits)
 
 ## System
 
@@ -518,6 +520,57 @@ Operation `getScenarioVersion`.
 | 200 | The version | `application/json` [ScenarioVersion](#scenarioversion) |
 | 404 | Not found | `application/json` [Error](#error) |
 
+### POST /scenarios/{scenarioId}/coverage
+
+Which endpoints of an API the scenario's journeys exercise.
+
+The same mapping as `stampede coverage`: every endpoint of the API
+with the journeys that call it, and requests that match no
+endpoint. No model and no requests to the target are needed. Give
+the API as an OpenAPI document, or as `specURL` on the host of one
+of the project's targets (or a host it allows); fetching by URL needs
+the editor role.
+
+Operation `scenarioCoverage`.
+
+| Parameter | In | Type | Required | Description |
+|---|---|---|---|---|
+| `scenarioId` | path | string (uuid) | yes |  |
+
+**Request body** (required): `application/json` [CoverageRequest](#coveragerequest)
+
+| Status | Description | Body |
+|---|---|---|
+| 200 | Coverage | `application/json` [ScenarioCoverage](#scenariocoverage) |
+| 403 | The caller's role does not allow this | `application/json` [Error](#error) |
+| 404 | Not found | `application/json` [Error](#error) |
+| 422 | The request is well-formed but invalid | `application/json` [Error](#error) |
+
+### POST /scenarios/{scenarioId}/drift
+
+Find journeys an API change broke.
+
+The same checks as `stampede drift`: with a previous version of the
+API, endpoints removed since and the journeys that call them;
+requests that use no endpoint of the current API; and with
+`targetId`, a dry run of every journey with one user (real requests,
+which needs the runner role).
+
+Operation `scenarioDrift`.
+
+| Parameter | In | Type | Required | Description |
+|---|---|---|---|---|
+| `scenarioId` | path | string (uuid) | yes |  |
+
+**Request body** (required): `application/json` [DriftRequest](#driftrequest)
+
+| Status | Description | Body |
+|---|---|---|
+| 200 | Drift | `application/json` [ScenarioDrift](#scenariodrift) |
+| 403 | The caller's role does not allow this | `application/json` [Error](#error) |
+| 404 | Not found | `application/json` [Error](#error) |
+| 422 | The request is well-formed but invalid | `application/json` [Error](#error) |
+
 ## Runs
 
 ### GET /projects/{projectId}/runs
@@ -682,6 +735,27 @@ Operation `compareRuns`.
 | 200 | The comparison | `application/json` [Comparison](#comparison) |
 | 403 | The caller's role does not allow this | `application/json` [Error](#error) |
 | 422 | The request is well-formed but invalid | `application/json` [Error](#error) |
+
+### GET /runs/{runId}/workers
+
+Health of the load generators running a run.
+
+Each worker's latest self-monitoring while the run executes on this
+server: CPU, scheduling lag, whether it reports itself saturated and
+its last heartbeat. A run executed in-process lists the server
+itself. `live` is false once the run has ended, or while another
+replica runs it; the list is then empty.
+
+Operation `listRunWorkers`.
+
+| Parameter | In | Type | Required | Description |
+|---|---|---|---|---|
+| `runId` | path | string (uuid) | yes |  |
+
+| Status | Description | Body |
+|---|---|---|
+| 200 | Worker health | `application/json` [RunWorkers](#runworkers) |
+| 404 | Not found | `application/json` [Error](#error) |
 
 ## Schedules
 
@@ -1127,6 +1201,65 @@ Operation `listNotificationDeliveries`.
 | 200 | Attempts | `application/json` array of [NotificationDelivery](#notificationdelivery) |
 | 403 | The caller's role does not allow this | `application/json` [Error](#error) |
 | 404 | Not found | `application/json` [Error](#error) |
+
+## Packs
+
+The product packs built into the server.
+
+### GET /packs
+
+The product packs built into this server.
+
+Operation `listPacks`.
+
+| Status | Description | Body |
+|---|---|---|
+| 200 | The pack catalogue, shipped and planned | `application/json` array of [PackEntry](#packentry) |
+
+### GET /packs/{packName}
+
+A shipped pack with its journey and stress scenarios.
+
+Operation `getPack`.
+
+| Parameter | In | Type | Required | Description |
+|---|---|---|---|---|
+| `packName` | path | string | yes |  |
+
+| Status | Description | Body |
+|---|---|---|
+| 200 | The pack | `application/json` [PackDetail](#packdetail) |
+| 404 | Not found | `application/json` [Error](#error) |
+
+## Settings
+
+Read-only server configuration. Admin only.
+
+### GET /settings/sso
+
+The server's single sign-on configuration (admin).
+
+Read-only. Set with `stampede server --oidc-*` flags; the client secret is never returned.
+
+Operation `getSSOSettings`.
+
+| Status | Description | Body |
+|---|---|---|
+| 200 | SSO configuration | `application/json` [SSOSettings](#ssosettings) |
+| 403 | The caller's role does not allow this | `application/json` [Error](#error) |
+
+### GET /settings/limits
+
+The server's load caps and every target's caps (admin).
+
+Read-only. A run must fit the server's caps, the caps for unverified public targets when they apply, and its target's own caps.
+
+Operation `getLimitSettings`.
+
+| Status | Description | Body |
+|---|---|---|
+| 200 | Limits | `application/json` [LimitSettings](#limitsettings) |
+| 403 | The caller's role does not allow this | `application/json` [Error](#error) |
 
 ## Schemas
 
@@ -1880,4 +2013,185 @@ string: `run.finished`, `run.target_failed`, `run.killed`
 | `error` | string | yes |  |
 | `durationMs` | integer | yes |  |
 | `at` | string (date-time) | yes |  |
+
+### RunWorkers
+
+| Field | Type | Required | Description |
+|---|---|---|---|
+| `live` | boolean | yes | The run is executing on this server, so health is current. |
+| `workers` | array of [RunWorkerHealth](#runworkerhealth) | yes |  |
+
+### RunWorkerHealth
+
+| Field | Type | Required | Description |
+|---|---|---|---|
+| `id` | string | yes |  |
+| `name` | string | yes |  |
+| `region` | string | no |  |
+| `status` | string: `running`, `saturated`, `lost` | yes | lost means the worker stopped sending heartbeats during the run. |
+| `saturated` | boolean | yes | The worker reports itself saturated |
+| `reasons` | array of string | no | Why it is saturated, such as cpu or sched-lag. |
+| `cpuPercent` | number (double) | yes | Process CPU use; 100 is one core. |
+| `schedLagP99` | number (double) | yes | 99th percentile of how late iterations were dispatched |
+| `gcPauseP99` | number (double) | no | Seconds. |
+| `dropped` | integer (int64) | no | Iterations dropped in the last sample because no virtual user was free. |
+| `lastHeartbeatAt` | string (date-time), nullable | no |  |
+
+### PackEntry
+
+| Field | Type | Required | Description |
+|---|---|---|---|
+| `name` | string | yes |  |
+| `title` | string | yes |  |
+| `status` | string | yes | shipped: built in and tested against a reference app in CI; planned: not yet available. |
+| `signature` | string | yes | What the pack's journeys and stresses cover. |
+| `drivers` | array of string | yes |  |
+
+### PackDetail
+
+| Field | Type | Required | Description |
+|---|---|---|---|
+| `name` | string | yes |  |
+| `title` | string | yes |  |
+| `description` | string | yes |  |
+| `status` | string | yes |  |
+| `protocols` | array of string | yes |  |
+| `referenceApp` | string | no |  |
+| `variables` | array of object | yes |  |
+| `files` | array of [PackFile](#packfile) | yes |  |
+
+### PackFile
+
+| Field | Type | Required | Description |
+|---|---|---|---|
+| `path` | string | yes |  |
+| `kind` | string: `journey`, `stress` | yes |  |
+| `scenario` | string | yes | The scenario's metadata.name. |
+| `description` | string | no |  |
+| `journeys` | array of string | yes |  |
+| `shape` | string | no | The load shape |
+| `yaml` | string | yes |  |
+
+### CoverageRequest
+
+| Field | Type | Required | Description |
+|---|---|---|---|
+| `openapi` | string | no | OpenAPI 3.x document (YAML or JSON). |
+| `specURL` | string | no | Fetch the OpenAPI document from this URL; its host must be one of the project's targets or a host a target allows. Needs the editor role. |
+| `version` | integer | no | Scenario version to check; default the latest. |
+
+### CoverageEndpoint
+
+| Field | Type | Required | Description |
+|---|---|---|---|
+| `method` | string | yes |  |
+| `path` | string | yes |  |
+| `summary` | string | no |  |
+| `journeys` | array of string | yes | Journeys that call the endpoint; empty when none does. |
+
+### RequestRef
+
+| Field | Type | Required | Description |
+|---|---|---|---|
+| `journey` | string | yes |  |
+| `method` | string | yes |  |
+| `url` | string | yes |  |
+
+### ScenarioCoverage
+
+| Field | Type | Required | Description |
+|---|---|---|---|
+| `version` | integer | yes | The scenario version checked. |
+| `endpoints` | array of [CoverageEndpoint](#coverageendpoint) | yes |  |
+| `unmatched` | array of [RequestRef](#requestref) | yes | Requests that use no endpoint of the API, often a typo or a renamed endpoint. |
+| `templated` | integer | yes | Requests whose whole URL is an expression |
+| `covered` | integer | yes |  |
+| `total` | integer | yes |  |
+
+### DriftRequest
+
+| Field | Type | Required | Description |
+|---|---|---|---|
+| `openapi` | string | no | The current OpenAPI document. |
+| `specURL` | string | no | Fetch the current document from a target's host |
+| `previousOpenapi` | string | no | The previous OpenAPI document |
+| `previousSpecURL` | string | no |  |
+| `targetId` | string (uuid) | no | Dry-run every journey once against this target (sends real requests). |
+| `version` | integer | no |  |
+
+### DriftEndpoint
+
+| Field | Type | Required | Description |
+|---|---|---|---|
+| `method` | string | yes |  |
+| `path` | string | yes |  |
+
+### DriftJourneyCheck
+
+| Field | Type | Required | Description |
+|---|---|---|---|
+| `journey` | string | yes |  |
+| `ok` | boolean | yes |  |
+| `step` | string | no | The first step that failed. |
+| `error` | string | no |  |
+| `status` | integer | no |  |
+
+### ScenarioDrift
+
+| Field | Type | Required | Description |
+|---|---|---|---|
+| `version` | integer | yes |  |
+| `drifted` | boolean | yes | Something broke; stampede drift exits with code 4. |
+| `added` | array of [DriftEndpoint](#driftendpoint) | no | Endpoints added since the previous version (only with a previous version). |
+| `removed` | array of [DriftEndpoint](#driftendpoint) | no |  |
+| `broken` | array of object | no | Journeys that call a removed endpoint. |
+| `unmatched` | array of [RequestRef](#requestref) | yes |  |
+| `dryRun` | array of [DriftJourneyCheck](#driftjourneycheck) | no | Set when targetId was given. |
+
+### SSOSettings
+
+| Field | Type | Required | Description |
+|---|---|---|---|
+| `enabled` | boolean | yes |  |
+| `passwordLogin` | boolean | yes | Email and password sign-in is available too. |
+| `name` | string | no | Label of the sign-in button. |
+| `issuer` | string | no |  |
+| `redirectURL` | string | no |  |
+| `allowedDomains` | array of string | yes | Email domains allowed to sign in; empty means any. |
+| `defaultRole` | string | no | Role given on first sign-in; empty means only existing accounts may sign in. |
+| `scopes` | array of string | yes |  |
+
+### LimitCaps
+
+| Field | Type | Required | Description |
+|---|---|---|---|
+| `maxRate` | number (double) | no | Iterations per second; absent means no cap. |
+| `maxVUs` | integer | no |  |
+| `maxDurationSeconds` | integer | no |  |
+
+### LimitSettings
+
+| Field | Type | Required | Description |
+|---|---|---|---|
+| `server` | [LimitCaps](#limitcaps) | yes |  |
+| `unverifiedPublic` | [LimitCaps](#limitcaps) | yes |  |
+| `abortFloor` | object, nullable | no | Stops any run whose target is clearly failing, even when its scenario sets no abort limits. |
+| `abortFloor.errorRate` | number (double) | no |  |
+| `abortFloor.p95Seconds` | number (double) | no |  |
+| `abortFloor.forSeconds` | number (double) | yes |  |
+| `targets` | array of [TargetLimits](#targetlimits) | yes |  |
+
+### TargetLimits
+
+| Field | Type | Required | Description |
+|---|---|---|---|
+| `id` | string (uuid) | yes |  |
+| `name` | string | yes |  |
+| `projectId` | string (uuid) | yes |  |
+| `projectName` | string | yes |  |
+| `baseURL` | string | yes |  |
+| `private` | boolean | yes |  |
+| `verified` | boolean | yes |  |
+| `caps` | [LimitCaps](#limitcaps) | yes |  |
+| `effective` | [LimitCaps](#limitcaps) | yes |  |
 

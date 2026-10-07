@@ -972,6 +972,161 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/runs/{runId}/workers": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                runId: components["parameters"]["runId"];
+            };
+            cookie?: never;
+        };
+        /**
+         * Health of the load generators running a run
+         * @description Each worker's latest self-monitoring while the run executes on this
+         *     server: CPU, scheduling lag, whether it reports itself saturated and
+         *     its last heartbeat. A run executed in-process lists the server
+         *     itself. `live` is false once the run has ended, or while another
+         *     replica runs it; the list is then empty.
+         */
+        get: operations["listRunWorkers"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/packs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The product packs built into this server */
+        get: operations["listPacks"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/packs/{packName}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                packName: string;
+            };
+            cookie?: never;
+        };
+        /** A shipped pack with its journey and stress scenarios */
+        get: operations["getPack"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/scenarios/{scenarioId}/coverage": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                scenarioId: components["parameters"]["scenarioId"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Which endpoints of an API the scenario's journeys exercise
+         * @description The same mapping as `stampede coverage`: every endpoint of the API
+         *     with the journeys that call it, and requests that match no
+         *     endpoint. No model and no requests to the target are needed. Give
+         *     the API as an OpenAPI document, or as `specURL` on the host of one
+         *     of the project's targets (or a host it allows); fetching by URL needs
+         *     the editor role.
+         */
+        post: operations["scenarioCoverage"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/scenarios/{scenarioId}/drift": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                scenarioId: components["parameters"]["scenarioId"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Find journeys an API change broke
+         * @description The same checks as `stampede drift`: with a previous version of the
+         *     API, endpoints removed since and the journeys that call them;
+         *     requests that use no endpoint of the current API; and with
+         *     `targetId`, a dry run of every journey with one user (real requests,
+         *     which needs the runner role).
+         */
+        post: operations["scenarioDrift"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/settings/sso": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * The server's single sign-on configuration (admin)
+         * @description Read-only. Set with `stampede server --oidc-*` flags; the client secret is never returned.
+         */
+        get: operations["getSSOSettings"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/settings/limits": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * The server's load caps and every target's caps (admin)
+         * @description Read-only. A run must fit the server's caps, the caps for unverified public targets when they apply, and its target's own caps.
+         */
+        get: operations["getLimitSettings"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -1783,6 +1938,206 @@ export interface components {
             durationMs: number;
             /** Format: date-time */
             at: string;
+        };
+        RunWorkers: {
+            /** @description The run is executing on this server, so health is current. */
+            live: boolean;
+            workers: components["schemas"]["RunWorkerHealth"][];
+        };
+        RunWorkerHealth: {
+            id: string;
+            name: string;
+            region?: string;
+            /**
+             * @description lost means the worker stopped sending heartbeats during the run.
+             * @enum {string}
+             */
+            status: "running" | "saturated" | "lost";
+            /** @description The worker reports itself saturated */
+            saturated: boolean;
+            /** @description Why it is saturated, such as cpu or sched-lag. */
+            reasons?: string[];
+            /**
+             * Format: double
+             * @description Process CPU use; 100 is one core.
+             */
+            cpuPercent: number;
+            /**
+             * Format: double
+             * @description 99th percentile of how late iterations were dispatched
+             */
+            schedLagP99: number;
+            /**
+             * Format: double
+             * @description Seconds.
+             */
+            gcPauseP99?: number;
+            /**
+             * Format: int64
+             * @description Iterations dropped in the last sample because no virtual user was free.
+             */
+            dropped?: number;
+            /** Format: date-time */
+            lastHeartbeatAt?: string | null;
+        };
+        PackEntry: {
+            name: string;
+            title: string;
+            /** @description shipped: built in and tested against a reference app in CI; planned: not yet available. */
+            status: string;
+            /** @description What the pack's journeys and stresses cover. */
+            signature: string;
+            drivers: string[];
+        };
+        PackDetail: {
+            name: string;
+            title: string;
+            description: string;
+            status: string;
+            protocols: string[];
+            referenceApp?: string;
+            variables: {
+                name: string;
+                description: string;
+            }[];
+            files: components["schemas"]["PackFile"][];
+        };
+        PackFile: {
+            /** @example journeys/shop-mix.yaml */
+            path: string;
+            /** @enum {string} */
+            kind: "journey" | "stress";
+            /** @description The scenario's metadata.name. */
+            scenario: string;
+            description?: string;
+            journeys: string[];
+            /** @description The load shape */
+            shape?: string;
+            yaml: string;
+        };
+        CoverageRequest: {
+            /** @description OpenAPI 3.x document (YAML or JSON). */
+            openapi?: string;
+            /** @description Fetch the OpenAPI document from this URL; its host must be one of the project's targets or a host a target allows. Needs the editor role. */
+            specURL?: string;
+            /** @description Scenario version to check; default the latest. */
+            version?: number;
+        };
+        CoverageEndpoint: {
+            method: string;
+            path: string;
+            summary?: string;
+            /** @description Journeys that call the endpoint; empty when none does. */
+            journeys: string[];
+        };
+        RequestRef: {
+            journey: string;
+            method: string;
+            url: string;
+        };
+        ScenarioCoverage: {
+            /** @description The scenario version checked. */
+            version: number;
+            endpoints: components["schemas"]["CoverageEndpoint"][];
+            /** @description Requests that use no endpoint of the API, often a typo or a renamed endpoint. */
+            unmatched: components["schemas"]["RequestRef"][];
+            /** @description Requests whose whole URL is an expression */
+            templated: number;
+            covered: number;
+            total: number;
+        };
+        DriftRequest: {
+            /** @description The current OpenAPI document. */
+            openapi?: string;
+            /** @description Fetch the current document from a target's host */
+            specURL?: string;
+            /** @description The previous OpenAPI document */
+            previousOpenapi?: string;
+            previousSpecURL?: string;
+            /**
+             * Format: uuid
+             * @description Dry-run every journey once against this target (sends real requests).
+             */
+            targetId?: string;
+            version?: number;
+        };
+        DriftEndpoint: {
+            method: string;
+            path: string;
+        };
+        DriftJourneyCheck: {
+            journey: string;
+            ok: boolean;
+            /** @description The first step that failed. */
+            step?: string;
+            error?: string;
+            status?: number;
+        };
+        ScenarioDrift: {
+            version: number;
+            /** @description Something broke; stampede drift exits with code 4. */
+            drifted: boolean;
+            /** @description Endpoints added since the previous version (only with a previous version). */
+            added?: components["schemas"]["DriftEndpoint"][];
+            removed?: components["schemas"]["DriftEndpoint"][];
+            /** @description Journeys that call a removed endpoint. */
+            broken?: {
+                journey: string;
+                endpoints: components["schemas"]["DriftEndpoint"][];
+            }[];
+            unmatched: components["schemas"]["RequestRef"][];
+            /** @description Set when targetId was given. */
+            dryRun?: components["schemas"]["DriftJourneyCheck"][];
+        };
+        SSOSettings: {
+            enabled: boolean;
+            /** @description Email and password sign-in is available too. */
+            passwordLogin: boolean;
+            /** @description Label of the sign-in button. */
+            name?: string;
+            issuer?: string;
+            redirectURL?: string;
+            /** @description Email domains allowed to sign in; empty means any. */
+            allowedDomains: string[];
+            /** @description Role given on first sign-in; empty means only existing accounts may sign in. */
+            defaultRole?: string;
+            scopes: string[];
+        };
+        LimitCaps: {
+            /**
+             * Format: double
+             * @description Iterations per second; absent means no cap.
+             */
+            maxRate?: number;
+            maxVUs?: number;
+            maxDurationSeconds?: number;
+        };
+        LimitSettings: {
+            server: components["schemas"]["LimitCaps"];
+            unverifiedPublic: components["schemas"]["LimitCaps"];
+            /** @description Stops any run whose target is clearly failing, even when its scenario sets no abort limits. */
+            abortFloor?: {
+                /** Format: double */
+                errorRate?: number;
+                /** Format: double */
+                p95Seconds?: number;
+                /** Format: double */
+                forSeconds: number;
+            } | null;
+            targets: components["schemas"]["TargetLimits"][];
+        };
+        TargetLimits: {
+            /** Format: uuid */
+            id: string;
+            name: string;
+            /** Format: uuid */
+            projectId: string;
+            projectName: string;
+            baseURL: string;
+            private: boolean;
+            verified: boolean;
+            caps: components["schemas"]["LimitCaps"];
+            effective: components["schemas"]["LimitCaps"];
         };
     };
     responses: {
@@ -3605,6 +3960,172 @@ export interface operations {
             };
             403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];
+        };
+    };
+    listRunWorkers: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                runId: components["parameters"]["runId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Worker health */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RunWorkers"];
+                };
+            };
+            404: components["responses"]["NotFound"];
+        };
+    };
+    listPacks: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The pack catalogue, shipped and planned */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PackEntry"][];
+                };
+            };
+        };
+    };
+    getPack: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                packName: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The pack */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PackDetail"];
+                };
+            };
+            404: components["responses"]["NotFound"];
+        };
+    };
+    scenarioCoverage: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                scenarioId: components["parameters"]["scenarioId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CoverageRequest"];
+            };
+        };
+        responses: {
+            /** @description Coverage */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ScenarioCoverage"];
+                };
+            };
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            422: components["responses"]["Invalid"];
+        };
+    };
+    scenarioDrift: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                scenarioId: components["parameters"]["scenarioId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DriftRequest"];
+            };
+        };
+        responses: {
+            /** @description Drift */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ScenarioDrift"];
+                };
+            };
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            422: components["responses"]["Invalid"];
+        };
+    };
+    getSSOSettings: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description SSO configuration */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SSOSettings"];
+                };
+            };
+            403: components["responses"]["Forbidden"];
+        };
+    };
+    getLimitSettings: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Limits */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LimitSettings"];
+                };
+            };
+            403: components["responses"]["Forbidden"];
         };
     };
 }
