@@ -5,6 +5,7 @@ import (
 	"encoding/base64"
 	"errors"
 	"os"
+	"strings"
 	"testing"
 )
 
@@ -71,5 +72,19 @@ func TestAutogenKeyFile(t *testing.T) {
 	}
 	if fi, _ := os.Stat(path); fi.Mode().Perm() != 0o600 {
 		t.Errorf("key file mode %v", fi.Mode().Perm())
+	}
+}
+
+func TestKeyFromCommand(t *testing.T) {
+	key := GenerateKey()
+	t.Setenv("STAMPEDE_MASTER_KEY", "")
+	t.Setenv("STAMPEDE_MASTER_KEY_FILE", "")
+	t.Setenv("STAMPEDE_MASTER_KEY_COMMAND", "echo "+key)
+	if _, err := FromEnv(); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("STAMPEDE_MASTER_KEY_COMMAND", "echo denied >&2; exit 3")
+	if _, err := FromEnv(); err == nil || !strings.Contains(err.Error(), "denied") {
+		t.Fatalf("err = %v", err)
 	}
 }

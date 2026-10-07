@@ -6,6 +6,7 @@ package keyring
 
 import (
 	"bytes"
+	"context"
 	"crypto/aes"
 	"crypto/cipher"
 	"crypto/hkdf"
@@ -16,7 +17,10 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"os/exec"
+	"runtime"
 	"strings"
+	"time"
 )
 
 // Keyring holds the master key.
@@ -66,6 +70,13 @@ func FromEnv() (*Keyring, error) {
 		}
 		raw = string(b)
 	}
+	if c := os.Getenv("STAMPEDE_MASTER_KEY_COMMAND"); raw == "" && c != "" {
+		out, err := runKeyCommand(c)
+		if err != nil {
+			return nil, err
+		}
+		raw = out
+	}
 	raw = strings.TrimSpace(raw)
 	if raw == "" {
 		return nil, ErrNoKey
@@ -75,6 +86,33 @@ func FromEnv() (*Keyring, error) {
 		return nil, fmt.Errorf("master key is not valid base64: %w", err)
 	}
 	return New(key)
+}
+
+// KeyCommandTimeout bounds STAMPEDE_MASTER_KEY_COMMAND.
+const KeyCommandTimeout = 30 * time.Second
+
+// runKeyCommand runs a shell command that prints the base64 master key,
+// such as a cloud KMS or secret manager CLI, so the key never sits in the
+// environment or on disk.
+func runKeyCommand(command string) (string, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), KeyCommandTimeout)
+	defer cancel()
+	shell, flag := "/bin/sh", "-c"
+	if runtime.GOOS == "windows" {
+		shell, flag = "cmd", "/C"
+	}
+	cmd := exec.CommandContext(ctx, shell, flag, command) //nolint:gosec // the operator chooses the command
+	var stderr bytes.Buffer
+	cmd.Stderr = &stderr
+	out, err := cmd.Output()
+	if err != nil {
+		msg := strings.TrimSpace(stderr.String())
+		if len(msg) > 300 {
+			msg = msg[:300]
+		}
+		return "", fmt.Errorf("STAMPEDE_MASTER_KEY_COMMAND failed: %w: %s", err, msg)
+	}
+	return string(out), nil
 }
 
 // GenerateKey returns a new random master key, base64 encoded.
