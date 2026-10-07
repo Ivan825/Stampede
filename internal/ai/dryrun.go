@@ -25,6 +25,7 @@ import (
 	"github.com/Ivan825/Stampede/internal/feed"
 	"github.com/Ivan825/Stampede/internal/protocol/httpx"
 	"github.com/Ivan825/Stampede/internal/scenario"
+	"github.com/Ivan825/Stampede/internal/script"
 )
 
 // The dry run executes each journey once with a single user and records
@@ -231,6 +232,18 @@ func (p *pass) step(ctx context.Context, st *scenario.CStep) error {
 		return nil
 	case scenario.StepGroup:
 		return p.steps(ctx, st.Steps)
+	case scenario.StepScript:
+		var r script.Runner
+		out, err := r.Run(ctx, st.Script, script.Input{
+			Vars: p.vars.local, Env: p.vars.env, Data: p.vars.data, VU: p.vars.vu, Iteration: p.vars.iter,
+		})
+		if err != nil {
+			p.trace.Steps = append(p.trace.Steps, StepTrace{Step: st.Name, Error: "script: " + p.d.Redactor.Text(err.Error())})
+			return errStop
+		}
+		p.vars.local = out
+		p.note(st, true, "script ran")
+		return nil
 	}
 	if st.Req == nil {
 		p.note(st, true, fmt.Sprintf("not executed: the dry run does not support %s steps yet", st.Kind))

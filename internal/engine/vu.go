@@ -25,6 +25,7 @@ import (
 	"github.com/Ivan825/Stampede/internal/pluginhost"
 	"github.com/Ivan825/Stampede/internal/protocol/httpx"
 	"github.com/Ivan825/Stampede/internal/scenario"
+	"github.com/Ivan825/Stampede/internal/script"
 )
 
 // errAbortIteration ends the current iteration early after a failed step.
@@ -46,6 +47,8 @@ type VU struct {
 	page *page
 	// plugins holds the user's session in each plugin it has used.
 	plugins map[string]*pluginhost.Session
+	// js runs the user's script steps.
+	js script.Runner
 }
 
 func newVU(e *Engine, id int) *VU {
@@ -190,6 +193,8 @@ func (v *VU) runStep(ctx context.Context, st *scenario.CStep, intended time.Time
 		return v.pluginStep(ctx, st, intended)
 	case scenario.StepThink:
 		return sleepCtx(ctx, v.think(st.Think))
+	case scenario.StepScript:
+		return v.runScript(ctx, st)
 	case scenario.StepBranch:
 		n := v.rng.IntN(st.BranchTotal)
 		for _, b := range st.Branches {
@@ -221,6 +226,23 @@ func (v *VU) runStep(ctx context.Context, st *scenario.CStep, intended time.Time
 	case scenario.StepGroup:
 		return v.runSteps(ctx, st.Steps, intended)
 	}
+	return nil
+}
+
+// runScript runs a script step. Its variables replace the user's; a
+// script that throws or calls fail() aborts the iteration.
+func (v *VU) runScript(ctx context.Context, st *scenario.CStep) error {
+	out, err := v.js.Run(ctx, st.Script, script.Input{
+		Vars: v.vars.local, Env: v.vars.env, Data: v.vars.data, VU: v.vars.vu, Iteration: v.vars.iter,
+		Log: func(msg string) { v.e.log.Debug("script", "journey", st.Journey, "step", st.Name, "message", msg) },
+	})
+	if err != nil {
+		if ctx.Err() == nil {
+			v.e.logStepError(st, err)
+		}
+		return errAbortIteration
+	}
+	v.vars.local = out
 	return nil
 }
 
