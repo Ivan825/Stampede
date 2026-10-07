@@ -55,6 +55,11 @@ release. Features still being built are listed as planned in
 - Server replicas, standby or all active.
 - Mutual TLS between server and workers with a built-in certificate
   authority.
+- A run's load split across worker regions by percentage (`load.regions`,
+  `--region`, or the New Run dialog), refused when a region has no
+  connected worker.
+- 10-second and 1-minute rollups of run metrics (continuous aggregates on
+  TimescaleDB) and `--metrics-retention` for per-second metrics.
 
 ### Workflow
 
@@ -68,6 +73,11 @@ release. Features still being built are listed as planned in
 - Optional AI report narratives that cite every figure.
 - A coverage map and drift detection for saved scenarios.
 - Scheduled runs.
+- Scheduled drift checks: a dry run of every journey and an OpenAPI diff
+  on a cron, `drift.detected` notifications, and an AI repair proposal
+  that a person approves.
+- AI generation of gRPC journeys from `.proto` files, dry-run against the
+  target.
 - Product packs for eleven kinds of product, detected by `stampede init`.
 - `stampede pack create` and `stampede plugin create` scaffold a new pack
   folder and a plugin module with a conformance test.
@@ -106,4 +116,10 @@ release. Features still being built are listed as planned in
 - Requests confined to the target and explicitly allowed hosts.
 - A kill switch in the web UI, CLI and API.
 - Roles, API tokens, encrypted secrets and an audit log.
+- Per-project role overrides.
+- Organisation and project caps on rate, virtual users and duration.
+- An optional project setting that requires a passing dry run before any
+  load.
+- Runs that would call payment, SMS, email or CAPTCHA services are refused
+  by the server and reported by `stampede validate`.
 - Single sign-on with OpenID Connect.
