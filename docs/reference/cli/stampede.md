@@ -15,7 +15,9 @@ stampede [flags]
 ### Options
 
 ```
-  -h, --help   help for stampede
+  -c, --continue        open the console in your last session
+  -h, --help            help for stampede
+      --resume string   open the console in a saved session (its id, or the start of it)
 ```
 
 ### SEE ALSO

@@ -49,7 +49,7 @@ groups:
       - { name: "Journey graph of a scenario's journeys and steps in the web UI", status: shipped }
       - { name: "Live worker health in the web UI: CPU, scheduling lag, saturation, heartbeat", status: shipped, doc: docs/guides/reports }
       - { name: "Pack library in the web UI", status: shipped, doc: docs/guides/packs }
-      - { name: "Terminal console with plain-language commands", status: shipped }
+      - { name: "Terminal console: every CLI command, plain language, saved sessions (stampede --continue)", status: shipped, doc: docs/guides/cli }
       - { name: "HTML, PDF, CSV, JSON, JUnit and Markdown reports; CI exit codes", status: shipped, doc: docs/guides/ci }
       - { name: "Release comparison with confidence intervals", status: shipped, doc: docs/guides/comparing }
       - { name: "Side-by-side run comparison in the web UI", status: shipped, doc: docs/guides/comparing }

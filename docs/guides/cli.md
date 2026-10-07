@@ -11,6 +11,39 @@ Every command that lists or shows something prints a table or a short
 summary, and the same data as JSON with `--json`, so scripts can use
 `jq`. The [CLI reference](../reference/cli/stampede.md) lists every flag.
 
+## The console
+
+Run `stampede` on its own to work in one place instead of typing separate
+commands. It opens with the Stampede mark, who you are signed in as and on
+which server, and what to try first, then waits for input until you leave:
+
+- **Slash commands.** Every command in this guide works as `/<command>`:
+  `/projects list`, `/targets create shop --base-url https://shop.example.com`,
+  `/compare --a before.json --b after.json`. The console also has its own
+  `/run` (with a live throughput and p95 panel), `/init`, `/runs`,
+  `/workers`, `/stop`, `/kill` and `/use <project>`; `/stampede <args>` runs
+  any command exactly as typed. `/help` lists them.
+- **Plain language.** "spike test checkout at 300 rps for 5 minutes" is
+  turned into a command and shown for confirmation before it runs.
+- **Prompts and secrets.** `/setup`, `/login`, `/password`, `/users`,
+  `/secrets`, `/tokens`, `/ai` and `/keygen` take over the terminal while
+  they ask for a password or show something secret, then wait for Enter and
+  return to the console. Their output is not kept.
+- **Sessions.** Each session is saved as you go: what you typed, the output
+  and the project you were in. `stampede --continue` (`-c`) reopens the last
+  one, `stampede --resume <id>` a particular one, and inside the console
+  `/sessions` lists them and `/resume [id]` switches. ↑ and ↓ recall what you
+  typed, across sessions. Sessions live in your user config directory
+  (`~/.config/stampede/console` on Linux), readable only by you, with the
+  values of flags such as `--token` and `--password` hidden; the last 50 are
+  kept.
+- **Leaving.** `/exit`, or type `exit` or `quit`, or press Ctrl-C twice.
+  Ctrl-C once stops the command that is running or stops following a run
+  (the run itself continues until `/stop` or `/kill`).
+
+Servers, workers and agents (`stampede server`, `worker`, `agent`) run until
+stopped, so start them in a terminal of their own.
+
 ## 1. Start a server and create the first account
 
 Start a server ([Docker Compose](../deploy/compose.md) or the other
