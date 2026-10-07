@@ -12,6 +12,11 @@ stampede pack test ecommerce --target http://localhost:8090
 stampede pack create fintech            # scaffold a new pack folder
 ```
 
+In the web UI, **Library** lists the packs built into the server. Each
+pack shows its variables and its journey and stress files with their
+scenario and journey names; a file's YAML can be copied or saved as a
+scenario in a project (`GET /api/v1/packs`, `GET /api/v1/packs/{name}`).
+
 ## Shipped packs
 
 All twenty packs are shipped. A pack is shipped only when its journeys
