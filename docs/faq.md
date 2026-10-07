@@ -4,9 +4,20 @@
 
 No. `stampede run scenario.yaml` runs a scenario with an in-process engine
 and writes the report; nothing else has to be running. The server
-(`stampede server`, or the [Compose stack](deploy/compose.md)) adds the web
-UI, saved scenarios and runs, schedules, distributed workers, roles and the
-audit log. See [installation](install.md).
+(`stampede server`, or the [Compose stack](deploy/compose.md)) adds saved
+scenarios and runs, schedules, distributed workers, roles, the audit log and
+a read-only web UI for watching runs and reading reports. Everything you do
+to the server is done with the CLI. See [installation](install.md).
+
+## Can I create scenarios or start runs in the web UI?
+
+No. The web UI is for analysis and reporting: runs, live views, reports and
+their downloads, comparisons, scenarios, schedules, drift results and
+settings, all read only. Where an action would be, it shows the CLI command
+to copy, such as `stampede start --scenario <name> --target <name>`,
+`stampede push`, `stampede schedules create` or `stampede secrets set`. The
+exceptions are the safety controls: **Stop** and **Kill** on a running run
+and **Kill all** in the header.
 
 ## Is there a released version?
 
@@ -32,10 +43,11 @@ explicitly. A scenario file cannot turn these rules off. See
 
 ## How do I stop a run straight away?
 
-`stampede kill <run>` (or `/kill` in the console, or the kill button in the
-web UI) stops a run's load immediately; `stampede kill --all` stops every
-active run in the organisation. A worker that loses the server for 10
-seconds stops its load by itself. See [safety](safety.md#stopping).
+`stampede kill <run>` (or `/kill` in the console, or the **Kill** button on
+the run's page in the web UI) stops a run's load immediately;
+`stampede kill --all` (or the **Kill all** switch in the web UI's header)
+stops every active run in the organisation. A worker that loses the server
+for 10 seconds stops its load by itself. See [safety](safety.md#stopping).
 
 ## Do I need an AI model?
 

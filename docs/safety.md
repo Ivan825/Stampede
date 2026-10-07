@@ -33,16 +33,17 @@ the project's caps, the low caps for unverified public targets, and the
 target's own caps. A run must fit within all of them; the request is refused
 (`403`) with the level and the reason if any is exceeded.
 
-Organisation caps are set by admins with `PUT /api/v1/organisation/caps`;
-project caps with `PUT /api/v1/projects/{projectId}/settings` (organisation
-admins, or members with the admin role in that project). Each takes
-`maxRate` (iterations per second), `maxVUs` and `maxDurationSeconds`; an
-empty object removes them. Changes are audited. There is no CLI command for
-them yet. In the web UI, admins edit the organisation's caps in
-**Settings → Limits**, which also lists every project's caps and each
-target's effective caps (the tightest of all the levels that apply to it),
-and a project's caps in **Project settings** in the project's navigation;
-other members see them read-only there.
+Organisation caps are set by admins with `stampede caps set` (or
+`PUT /api/v1/organisation/caps`); project caps with
+`stampede projects settings set` (or
+`PUT /api/v1/projects/{projectId}/settings`), by organisation admins or
+members with the admin role in that project. Each takes `maxRate`
+(iterations per second), `maxVUs` and `maxDurationSeconds`; an empty object
+removes them. Changes are audited. The web UI shows them read only:
+**Settings → Limits** lists the organisation's caps, every project's caps
+and each target's effective caps (the tightest of all the levels that
+apply to it), and **Project settings** in the project's navigation shows
+the project's caps.
 
 Bandwidth and open-connection caps are not implemented.
 
@@ -59,18 +60,25 @@ outcome is recorded as run events (`dryrun.started`, one `dryrun.journey`
 per journey, then `dryrun.passed` or `dryrun.failed`), listed by
 `GET /api/v1/runs/{runId}/events`. Stopping or killing a run during its dry
 run ends it `aborted` before any load. The dry run is bounded to 2 minutes.
-In the web UI the gate is a checkbox in **Project settings**, and the run
-page shows the dry run's result for each journey, with the problem of each
-one that failed, and the run's events.
+Turn the gate on or off with `stampede projects settings set`. In the web
+UI, **Project settings** shows whether it is on, and the run page shows the
+dry run's result for each journey, with the problem of each one that
+failed, and the run's events.
 
 ## Stopping
 
-- **Stop** ends a run gracefully: no new iterations, in-flight ones may
+- **Stop** (`stampede stop <run>`, or the **Stop** button on a running
+  run's page) ends a run gracefully: no new iterations, in-flight ones may
   finish within the graceful-stop period (30 s by default).
-- **Kill** stops all load immediately. In tests the kill reaches every
+- **Kill** (`stampede kill <run>`, or the **Kill** button on a running
+  run's page) stops all load immediately. In tests the kill reaches every
   worker in under a millisecond on a local network.
-- **Kill all** (the always-visible button in the web UI, `stampede kill --all`,
-  or `POST /api/v1/runs/kill-all`) kills every active run in the organisation.
+- **Kill all** (`stampede kill --all`, the **Kill all** switch in the web
+  UI's header whenever a run is active, or `POST /api/v1/runs/kill-all`)
+  kills every active run in the organisation.
+
+These safety controls are the only actions in the web UI, which is
+otherwise read only; they need the runner role.
 - **Dead man's switch:** a worker that cannot reach the server for 10
   seconds stops its load by itself.
 - **Breakpoint runs** stop at the first load level that misses a target.
@@ -87,6 +95,7 @@ Members have one organisation role: viewer (read), runner (also start,
 stop and kill runs), editor (also scenarios, targets, secrets and
 schedules), admin (also users, integrations, caps and settings) or owner.
 An admin can give a member a different role in one project with
+`stampede projects roles set` or
 `PUT /api/v1/projects/{projectId}/roles/{userId}` (`{"role": "editor"}`),
 higher or lower than their organisation role, and remove it with `DELETE`;
 `GET /api/v1/projects/{projectId}/roles` lists the overrides. Every check
@@ -98,7 +107,7 @@ created with. Organisation admins can always manage a project's roles and
 settings, even when an override lowers them there; deleting a project and
 the organisation-wide kill switch need the organisation role. In the web
 UI, **Project settings** lists every member with their organisation role
-and any override; admins set or remove overrides there.
+and any override, read only.
 
 ## Record
 
