@@ -41,14 +41,15 @@ jobs:
       - name: tests must pass before publishing
         # The same settings as the CI test job: Chrome without its own
         # sandbox (GitHub's Ubuntu runners forbid it) and time for the pack
-        # tests; failures are named in the annotation.
+        # tests; failures are named in the annotation. The log goes outside
+        # the checkout: GoReleaser refuses to release from a dirty tree.
         env:
           STAMPEDE_CHROME_NO_SANDBOX: "true"
         shell: bash
         run: |
           set -o pipefail
-          if ! go test -count=1 -timeout 30m ./... 2>&1 | tee test.log; then
-            echo "::error title=failing tests::$(grep -E -- '--- FAIL|^FAIL|panic:|_test\.go:[0-9]+:' test.log | cut -c1-300 | head -30 | tr '\n' ' ')"
+          if ! go test -count=1 -timeout 30m ./... 2>&1 | tee "$RUNNER_TEMP/test.log"; then
+            echo "::error title=failing tests::$(grep -E -- '--- FAIL|^FAIL|panic:|_test\.go:[0-9]+:' "$RUNNER_TEMP/test.log" | cut -c1-300 | head -30 | tr '\n' ' ')"
             exit 1
           fi
 
