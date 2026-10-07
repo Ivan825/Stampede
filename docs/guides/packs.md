@@ -13,9 +13,10 @@ stampede pack test ecommerce --target http://localhost:8090
 
 ## Shipped packs
 
-Seven packs are shipped. A pack is shipped only when its journeys and
-stresses run without errors against a reference app in CI; the other 13
-product types are listed as planned until each has one.
+Sixteen packs are shipped. A pack is shipped only when its journeys and
+stresses run without errors against a reference app in CI; the other four
+product types (gaming, IoT, event pipelines, databases) are listed as
+planned until each has one.
 
 | Pack | Protocols | What it tests | Reference app |
 |---|---|---|---|
@@ -26,6 +27,15 @@ product types are listed as planned until each has one.
 | [`ticketing`](../../packs/ticketing) | HTTP, WebSocket | Seat maps, holds and orders; a WebSocket waiting room; on-sale rush; seat-lock contention with an oversell check | [TicketLab](../../examples/packlab/README.md#ticketlab), port 8094 |
 | [`identity`](../../packs/identity) | HTTP | OAuth 2.0 / OpenID Connect password, refresh and client-credentials grants, introspection, revocation; login storm; refresh waves | [AuthLab](../../examples/packlab/README.md#authlab), port 8095 |
 | [`public-apis`](../../packs/public-apis) | HTTP | API keys, cursor pagination, idempotent creates, webhook deliveries; rate-limit burst (429 with Retry-After); noisy neighbour; webhook burst | [APILab](../../examples/packlab/README.md#apilab), port 8096 |
+| [`fintech`](../../packs/fintech) | HTTP | Balances, history, statements, transfers and bill payments with an Idempotency-Key; duplicate payments raced and reconciled; month-end peak | [BankLab](../../examples/packlab/README.md#banklab), port 8097 |
+| [`social`](../../packs/social) | HTTP, WebSocket | Feeds, posts, likes, comments, follows, notifications on a WebSocket; viral spike on a celebrity's post; morning feed rush | [SocialLab](../../examples/packlab/README.md#sociallab), port 8098 |
+| [`content`](../../packs/content) | HTTP | News pages, RSS and a JSON API behind a cache: conditional requests, social links with tracking parameters; breaking-news spike; cold cache | [NewsLab](../../examples/packlab/README.md#newslab), port 8099 |
+| [`streaming`](../../packs/streaming) | HTTP | HLS driven like a player: playback start, playlists, segments at real-time pace, rendition switches, heartbeats; premiere spike; 1,000-viewer live event | [StreamLab](../../examples/packlab/README.md#streamlab), port 8100 |
+| [`edtech`](../../packs/edtech) | HTTP, WebSocket | Courses, quizzes, a timed exam with autosave and a live channel for the timer and heartbeats, assignment submissions; everyone starting at 10:00; deadline rush | [ExamLab](../../examples/packlab/README.md#examlab), port 8101 |
+| [`government`](../../packs/government) | HTTP | Results by roll number with PDF marksheets, notices, applications with one-time-code sign-in, sections, uploads and receipts; results day; deadline day | [GovLab](../../examples/packlab/README.md#govlab), port 8102 |
+| [`delivery`](../../packs/delivery) | HTTP, WebSocket | Nearby cars, prices, rides and food orders matched and tracked live, drivers streaming locations; dinner rush; location flood | [RideLab](../../examples/packlab/README.md#ridelab), port 8103 |
+| [`mobile-backends`](../../packs/mobile-backends) | HTTP, GraphQL | Remote config and a minimum version, device registration, delta sync, analytics batches, a GraphQL home screen; a launch over 3G; push storm; offline catch-up | [MobileLab](../../examples/packlab/README.md#mobilelab), port 8104 |
+| [`serverless`](../../packs/serverless) | HTTP | Functions with cold starts, warm instances and idle reclaiming; bursts after quiet periods; a function past its concurrency limit (429 with Retry-After) | [EdgeLab](../../examples/packlab/README.md#edgelab), port 8105 |
 
 Each pack's README lists its files and what each one checks. The PackLab
 apps are small in-memory Go servers with planted bottlenecks, each with a
@@ -40,8 +50,9 @@ go run ./examples/packlab -product ticketing -fix all   # restart with the bottl
 
 How the packs are tested: `examples/packlab/packs_test.go` starts every
 PackLab app in-process, checks that `stampede init`'s probe picks the right
-pack, runs `stampede pack test` on it, and runs every journey and stress
-under load for a couple of seconds, failing on any failed request or
+pack with a clear margin (the runner-up may score at most half as much),
+runs `stampede pack test` on it, and runs every journey and stress under
+load for a couple of seconds, failing on any failed request or
 iteration. The CI `packlab` job repeats the detection and the dry run
 against the `packlab` binary with the packs exactly as shipped, one job per
 pack; the `packs` job does the same for e-commerce against ShopLab.

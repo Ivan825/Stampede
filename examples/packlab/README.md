@@ -32,8 +32,9 @@ go run ./examples/packlab -product ticketing -fix all       # or PACKLAB_FIX=all
 ```
 
 `-fast` shortens deliberate costs (token pacing, delivery and admission
-ticks, simulated database round trips, password-hashing rounds) so tests
-finish quickly; the bottlenecks stay in place.
+ticks, simulated database round trips, password-hashing rounds, render
+times, cold starts, the trip clock) so tests finish quickly; the
+bottlenecks stay in place.
 
 Each app has planted bottlenecks, and each has a fix behind a `-fix` name.
 The demo is the same as ShopLab's: run the pack's stress, find the
@@ -47,14 +48,15 @@ done or the most requests in a critical section at once, not by timing.
 `packs_test.go` starts every app in-process and, for its pack:
 
 1. probes it as `stampede init` does and checks the right pack scores
-   highest (and that `init` proposes it);
+   highest with a clear margin (the runner-up scores at most half as
+   much, and at least 6 points less), and that `init` proposes it;
 2. runs `stampede pack test` on the pack (think times cut to 10ms), which
    dry-runs every journey of every file once;
 3. runs every journey and stress file through the real runner for a
    couple of seconds (rates and user counts capped, think times cut to a
    tenth), and fails on any failed request or iteration. Stresses whose
-   point is a refusal (the rate-limit burst, the seat race) must also
-   provoke it.
+   point is a refusal (the rate-limit burst, the seat race, the
+   serverless concurrency limit) must also provoke it.
 
 The `packs` job in CI does step 2 again with the unmodified pack against
 the `packlab` binary, and step 1 through `stampede init`. A pack is marked
