@@ -65,7 +65,7 @@ func newCoverageCmd() *cobra.Command {
 	var sf serverSpecFlags
 	var asJSON bool
 	cmd := &cobra.Command{
-		Use:   "coverage <scenario.yaml>",
+		Use:   "coverage [scenario.yaml]",
 		Short: "Show which API endpoints a scenario's journeys exercise and which none does",
 		Long: `Map a scenario's requests onto the endpoints of an API: an OpenAPI spec, a
 GraphQL schema, or the endpoints seen in a HAR recording or access log. The
@@ -147,7 +147,7 @@ func newDriftCmd() *cobra.Command {
 		noDryRun   bool
 	)
 	cmd := &cobra.Command{
-		Use:   "drift <scenario.yaml>",
+		Use:   "drift [scenario.yaml]",
 		Short: "Find journeys an API change broke",
 		Long: `Check a saved scenario against the current version of an API, so journeys that
 broke after an API change are found before the next load test:
