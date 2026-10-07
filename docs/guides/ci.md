@@ -38,8 +38,8 @@ jobs:
 natively. `--md` writes a summary suitable for a pull request comment.
 
 To run against a shared Stampede server instead (for distributed load),
-create an API token in the web UI (Settings → API tokens, role `runner`)
-and use:
+create an API token with `stampede tokens create` (role `runner`) and
+use:
 
 ```sh
 export STAMPEDE_SERVER=https://stampede.example.com STAMPEDE_TOKEN=stp_...

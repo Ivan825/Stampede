@@ -84,8 +84,9 @@ observe:
     integration: jaeger
 ```
 
-Add integrations under **Settings → Integrations** in the web UI (admins
-only; every member can see their names), or with the API:
+Add integrations with `stampede integrations create` (admins only) or the
+API; every member can see their names under **Settings → Integrations** in
+the web UI:
 
 ```sh
 curl -X POST $STAMPEDE_SERVER/api/v1/integrations -H "Authorization: Bearer $TOKEN" \
@@ -135,7 +136,9 @@ iteration, which then does not match.
 ## Notifications
 
 Notification channels belong to the organisation and are managed by admins
-under **Settings → Notifications** or the API (`/api/v1/notifications/channels`).
+with `stampede notify channels create` or the API
+(`/api/v1/notifications/channels`); the web UI lists them under
+**Settings → Notifications**.
 
 | Kind | Body |
 |---|---|

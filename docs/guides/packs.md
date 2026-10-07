@@ -14,8 +14,10 @@ stampede pack create fintech            # scaffold a new pack folder
 
 In the web UI, **Library** lists the packs built into the server. Each
 pack shows its variables and its journey and stress files with their
-scenario and journey names; a file's YAML can be copied or saved as a
-scenario in a project (`GET /api/v1/packs`, `GET /api/v1/packs/{name}`).
+scenario and journey names, and a file's YAML can be copied
+(`GET /api/v1/packs`, `GET /api/v1/packs/{name}`). The page shows the
+command that copies the pack into a folder, `stampede pack install <name>`;
+save a file to a project as a scenario with `stampede push`.
 
 ## Shipped packs
 

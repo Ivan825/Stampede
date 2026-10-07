@@ -12,13 +12,9 @@ public target must be verified to lift the low caps.
 
 ## Create one
 
-In the web UI, open **Schedules** in the project and choose **New
-schedule**. Pick the scenario and target, write the cron expression (or
-use a preset), and the dialog shows the next three times it will fire in
-the schedule's time zone. Load overrides, environment variables, the
-number of workers and a note are optional.
-
-From the command line:
+Schedules are created and changed with the CLI (or the API). Load
+overrides, environment variables, the number of workers and a note are
+optional:
 
 ```sh
 stampede schedules create nightly --project shop --scenario checkout \
@@ -30,8 +26,13 @@ stampede schedules create weekday-soak --project shop --scenario browse \
 ```
 
 `stampede schedules list` shows each schedule's next run and how its last
-run went; `enable`, `disable`, `delete` and `run` take a schedule's name
-or id. See the [CLI reference](../reference/cli/stampede_schedules.md).
+run went; `update`, `enable`, `disable`, `delete` and `run` take a
+schedule's name or id. See the [CLI reference](../reference/cli/stampede_schedules.md).
+
+In the web UI, **Schedules** in the project lists every schedule, read
+only, with its cron expression and time zone, its next run, how its last
+run or check went, and whether it is enabled. Each action shows the
+matching CLI command to copy.
 
 When you save a schedule the server checks it in full, the same way it
 would check the run if it fired now, so a wrong override or a cap that
@@ -64,23 +65,23 @@ traces. When journeys broke, the server sends a `drift.detected`
 notification to channels subscribed to it (new channels subscribe to every
 event; existing ones keep their list).
 
-`POST /api/v1/drift-results/{driftId}/repair` hands the broken journeys to
+`stampede drift repair <id>` (or
+`POST /api/v1/drift-results/{driftId}/repair`) hands the broken journeys to
 [AI generation](../ai.md): the scenario is the starting point, the check's
 findings are the brief, the spec is fetched again when the schedule has
 one, and the job dry-runs and repairs as usual. The job's result is a
 proposed new version with a diff; nothing is saved until someone approves
-the job (`POST /api/v1/ai/jobs/{jobId}/approve`). It needs an AI provider
-and the editor role.
+the job with `stampede ai jobs approve` (or
+`POST /api/v1/ai/jobs/{jobId}/approve`). It needs an AI provider and the
+editor role.
 
-In the web UI, choose **Check for drift** in the **New schedule** dialog
-and, optionally, give the spec URL; a drift schedule's kind cannot be
-changed later, but its spec URL can. Drift schedules show their last check
-and a **Check now** button, and **Drift checks** below the schedules lists
-every result. Opening one shows each journey's dry-run result with its
-redacted trace, the removed and added endpoints and the requests that match
-none. When journeys broke, editors can choose **Propose a fix**, which
-starts the repair job and opens it in the AI studio, where the proposed
-version and its diff are reviewed and approved.
+A drift schedule's kind cannot be changed later, but its spec URL can
+(`stampede schedules update`). In the web UI, drift schedules show their
+last check, and **Drift checks** below the schedules lists every result.
+Opening one shows each journey's dry-run result with its redacted trace,
+the removed and added endpoints and the requests that match none. When
+journeys broke, it shows the command that proposes a fix,
+`stampede drift repair <id>`.
 
 ## Cron expressions
 
@@ -122,8 +123,8 @@ that zone's local clock, including daylight saving time:
 - A time that happens twice because the clocks go back fires once, the
   first time.
 
-The web UI and `GET /schedules/preview` show the next firings, which is
-the quickest way to check an expression.
+`GET /schedules/preview` returns the next firings, which is the quickest
+way to check an expression; the web UI shows each schedule's next run.
 
 ## When a schedule fires
 
@@ -164,13 +165,13 @@ next one runs normally.
 A schedule's runs start as its owner: whoever created it or last changed
 it. If the owner leaves or loses the runner role, the schedule is skipped
 until an editor saves it (enabling it is enough), which makes them the
-owner. **Run now** starts the run as you, and does not change when the
-schedule next fires.
+owner. `stampede schedules run` starts the run now as you, and does not
+change when the schedule next fires.
 
 Environment variables are stored with the schedule and anyone in the
 project can read them, unlike a run's, whose values are not kept. Put
-credentials in the project's secrets (**Secrets** in the web UI, read in a
-scenario as `${secret.NAME}`) instead.
+credentials in the project's secrets (set with `stampede secrets set`, read
+in a scenario as `${secret.NAME}`) instead.
 
 Deleting a schedule keeps the runs it started. Deleting its scenario or
 target deletes the schedule.

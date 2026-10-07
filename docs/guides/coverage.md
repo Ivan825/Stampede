@@ -72,17 +72,20 @@ anything is written.
 
 ## In the web UI
 
-A saved scenario's **API coverage** page (from the scenario editor) runs
-both checks on the server, against an OpenAPI document:
+A saved scenario's **API coverage** page (from the scenario's page) runs
+both checks on the server, against an OpenAPI document. They only read:
+nothing is saved and no requests are sent to a target.
 
 - Paste the document or load it from a file, or, with the editor role, give
   its URL. The server fetches it only from the host of one of the project's
   targets or a host a target allows.
 - **Coverage** lists every endpoint with the journeys that call it, and the
   requests that match no endpoint.
-- **Drift** takes the current document and optionally the previous one, and
-  with a target (runner role and above) dry-runs every journey once with
-  the project's secrets. The dry run is recorded in the audit log.
+- **Drift** takes the current document and optionally the previous one.
+  The dry run of every journey against a target sends real requests, so it
+  is not in the web UI: use `stampede drift <scenario.yaml> --target <url>`,
+  or the API with a target (runner role and above; recorded in the audit
+  log).
 
 The same checks are `POST /api/v1/scenarios/{id}/coverage` and
 `POST /api/v1/scenarios/{id}/drift` in the [REST API](../reference/api.md).
