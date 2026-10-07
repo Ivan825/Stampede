@@ -221,6 +221,7 @@ func DryRunScenario(ctx context.Context, s *scenario.Scenario, target string, al
 			return ""
 		},
 	}
+	defer dr.Close()
 	var out []JourneyCheck
 	for _, j := range prog.Journeys {
 		traces := dr.RunJourney(ctx, j)

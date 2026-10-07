@@ -335,7 +335,7 @@ func Generate(ctx context.Context, in Inputs, opts Options) (*Result, error) {
 				}
 			}
 			if opts.DryRun {
-				if err := cur.dryRun(ctx, opts, red, attempts); err != nil {
+				if err := cur.dryRun(ctx, opts, und, red, attempts); err != nil {
 					return res, err
 				}
 				passed := 0
@@ -403,7 +403,7 @@ func (r *round) parse(target *url.URL) {
 	}
 }
 
-func (r *round) dryRun(ctx context.Context, opts Options, red *Redactor, attempts map[string]int) error {
+func (r *round) dryRun(ctx context.Context, opts Options, und *Understanding, red *Redactor, attempts map[string]int) error {
 	prog, err := scenario.Compile(r.sc)
 	if err != nil {
 		r.static = append(r.static, Problem{Message: err.Error(), Fatal: true})
@@ -413,7 +413,7 @@ func (r *round) dryRun(ctx context.Context, opts Options, red *Redactor, attempt
 	policy := safety.NewHostPolicy(target.Hostname(), opts.AllowHosts)
 	runner := &DryRunner{
 		Program: prog, BaseURL: strings.TrimRight(opts.Target, "/"), Env: opts.Env, Secrets: opts.Secrets,
-		DataDir: opts.DataDir, ConfineData: opts.ConfineData, Redactor: red, Transport: opts.Transport,
+		DataDir: opts.DataDir, ConfineData: opts.ConfineData, Redactor: red, Transport: opts.Transport, GRPCFiles: protoFiles(und),
 		Allow: func(u *url.URL) string {
 			if cat := ThirdPartyCategory(u.Hostname()); cat != "" {
 				return fmt.Sprintf("%s is a blocked %s provider", u.Hostname(), cat)
@@ -424,6 +424,7 @@ func (r *round) dryRun(ctx context.Context, opts Options, red *Redactor, attempt
 			return ""
 		},
 	}
+	defer runner.Close()
 	for _, cj := range prog.Journeys {
 		if err := ctx.Err(); err != nil {
 			return err

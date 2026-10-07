@@ -55,6 +55,7 @@ func staticCheck(s *scenario.Scenario, und *Understanding, targetHost string, al
 	for _, h := range allowHosts {
 		allowed[strings.ToLower(h)] = true
 	}
+	out = append(out, grpcProblems(s, und)...)
 	for _, j := range s.Journeys {
 		seen := map[string]bool{}
 		walkRequests(j.Steps, func(r *scenario.Request) {
