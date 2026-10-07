@@ -44,8 +44,15 @@ jobs:
           sudo install "$RUNNER_TEMP"/k6-*-linux-amd64/k6 /usr/local/bin/k6
           k6 version
       - name: build wrk2
+        # The runner image usually has both libraries; apt-get update has
+        # hung for most of an hour on a slow mirror, so it runs only when one
+        # is missing, and under a time limit.
+        timeout-minutes: 10
         run: |
-          sudo apt-get update -qq && sudo apt-get install -y -qq libssl-dev zlib1g-dev
+          if ! dpkg -s libssl-dev zlib1g-dev >/dev/null 2>&1; then
+            sudo timeout 300 apt-get update -qq
+            sudo timeout 300 apt-get install -y -qq libssl-dev zlib1g-dev
+          fi
           git clone --depth 1 https://github.com/giltene/wrk2 "$RUNNER_TEMP/wrk2"
           make -C "$RUNNER_TEMP/wrk2" -j"$(nproc)"
           sudo install "$RUNNER_TEMP/wrk2/wrk" /usr/local/bin/wrk2
