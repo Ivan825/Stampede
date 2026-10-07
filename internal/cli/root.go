@@ -2,13 +2,19 @@
 package cli
 
 import (
+	"context"
 	"fmt"
+	"io"
+	"net/url"
 	"os"
+	"strings"
 
 	"github.com/spf13/cobra"
 	"golang.org/x/term"
 
 	"github.com/Ivan825/Stampede/internal/client"
+	"github.com/Ivan825/Stampede/internal/safety"
+	"github.com/Ivan825/Stampede/internal/scenario"
 	"github.com/Ivan825/Stampede/internal/tui"
 
 	"github.com/Ivan825/Stampede/internal/version"
@@ -33,7 +39,7 @@ reports where your product breaks.`,
 			if err != nil {
 				c = nil // local mode: /run works on files
 			}
-			return tui.Run(c)
+			return tui.Run(c, consoleOptions())
 		},
 	}
 	root.AddCommand(newVersionCmd(), newRunCmd(), newValidateCmd(), newTargetCmd(), newServerCmd(), newWorkerCmd(), newKeygenCmd(), newHealthcheckCmd(), newCompareCmd(), newReportCmd(),
@@ -41,6 +47,35 @@ reports where your product breaks.`,
 		newUpCmd(), newDownCmd(), newDoctorCmd(), newPackCmd(), newInitCmd(), newPluginCmd())
 	root.AddCommand(newGenerateCmd(), newGenDocsCmd(), newAgentCmd(), newCoverageCmd(), newDriftCmd(), newBackupCmd(), newRestoreCmd())
 	return root
+}
+
+// consoleOptions give the terminal console the CLI's init flow and the
+// safety rules of stampede run.
+func consoleOptions() tui.Options {
+	return tui.Options{
+		Init: func(ctx context.Context, w io.Writer, target, dir string, env []string) error {
+			// Typing /init is the confirmation.
+			return runInit(ctx, strings.NewReader(""), w, initOptions{target: target, dir: dir, env: env, yes: true})
+		},
+		CheckTarget: func(ctx context.Context, w io.Writer, s *scenario.Scenario, env map[string]string) (func(*url.URL) bool, error) {
+			_, secrets, err := runEnv(nil)
+			if err != nil {
+				return nil, err
+			}
+			base, err := renderBaseURL(s, env, secrets)
+			if err != nil {
+				return nil, err
+			}
+			if base == "" {
+				return safety.NewHostPolicy("", nil).Allow, nil
+			}
+			plan, err := s.Load.Plan()
+			if err != nil {
+				return nil, err
+			}
+			return checkTarget(ctx, w, base, plan, nil)
+		},
+	}
 }
 
 func newVersionCmd() *cobra.Command {

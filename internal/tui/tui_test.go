@@ -13,7 +13,7 @@ func typeLine(m *Model, line string) {
 }
 
 func TestModelLocalMode(t *testing.T) {
-	m := New(nil)
+	m := New(nil, Options{})
 	m.Update(tea.WindowSizeMsg{Width: 100, Height: 30})
 	typeLine(m, "/help")
 	if !strings.Contains(strings.Join(m.lines, "\n"), "/run <shape>") {
@@ -34,7 +34,7 @@ func TestModelLocalMode(t *testing.T) {
 }
 
 func TestPlainLanguageNeedsConfirmation(t *testing.T) {
-	m := New(nil)
+	m := New(nil, Options{})
 	m.scenarios = []string{"checkout-flow"}
 	typeLine(m, "find the breaking point for checkout")
 	if m.pending == nil || m.pending.String() != "/run breakpoint --scenario checkout-flow" {
