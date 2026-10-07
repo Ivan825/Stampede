@@ -491,6 +491,12 @@ func (h *handlers) ListWorkers(ctx context.Context, _ gen.ListWorkersRequestObje
 			Cpus: &w.CPUs, MemoryBytes: ptr(int(w.MemoryBytes)), Status: gen.WorkerStatus(strings.ToLower(w.Status)),
 			ConnectedAt: w.ConnectedAt, LastSeenAt: w.LastSeenAt,
 		}
+		if w.Protocols != nil {
+			gw.Protocols = &w.Protocols
+		}
+		if w.Plugins != nil {
+			gw.Plugins = &w.Plugins
+		}
 		if w.RunID != "" {
 			gw.RunId = &w.RunID
 		}

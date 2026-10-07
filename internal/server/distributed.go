@@ -106,8 +106,17 @@ func CoordinatorWorkers(c *coordinator.Coordinator) func() []WorkerInfo {
 			case w.CurrentRun != "":
 				status = "busy"
 			}
+			var protocols, plugins []string
+			for _, p := range w.Capacity.Protocols {
+				if name, ok := strings.CutPrefix(p, "plugin:"); ok {
+					plugins = append(plugins, name)
+				} else {
+					protocols = append(protocols, p)
+				}
+			}
 			out = append(out, WorkerInfo{
 				ID: w.ID, Name: w.Name, Region: w.Region, Version: w.Version, Labels: w.Labels,
+				Protocols: protocols, Plugins: plugins,
 				CPUs: w.Capacity.CPUs, MemoryBytes: int64(min(w.Capacity.MemoryBytes, 1<<62)), //nolint:gosec // bounded
 				Status: strings.ToLower(status), RunID: w.CurrentRun,
 				ConnectedAt: w.ConnectedSince, LastSeenAt: w.LastHeartbeat,

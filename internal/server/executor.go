@@ -80,10 +80,12 @@ type WorkerInfo struct {
 	Labels      map[string]string
 	CPUs        int
 	MemoryBytes int64
-	Status      string
-	RunID       string
-	ConnectedAt time.Time
-	LastSeenAt  time.Time
+	// Protocols are the worker's drivers; Plugins its installed plugins.
+	Protocols, Plugins []string
+	Status             string
+	RunID              string
+	ConnectedAt        time.Time
+	LastSeenAt         time.Time
 }
 
 // LocalExecutor runs load inside the server process. It suits a single

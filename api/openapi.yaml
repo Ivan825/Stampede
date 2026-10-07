@@ -1837,6 +1837,14 @@ components:
           additionalProperties: { type: string }
         cpus: { type: integer }
         memoryBytes: { type: integer }
+        protocols:
+          type: array
+          items: { type: string }
+          description: Drivers the worker supports, such as http, grpc or browser.
+        plugins:
+          type: array
+          items: { type: string }
+          description: Plugins installed on the worker, such as mqtt or kafka.
         status: { type: string, enum: [idle, busy, saturated, lost] }
         runId: { type: string, nullable: true }
         connectedAt: { type: string, format: date-time }
