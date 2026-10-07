@@ -27,6 +27,7 @@ type activeRun struct {
 	id     string
 	eng    *engine.Engine
 	t0     time.Time // in time.Now's clock
+	start  time.Time // t0, or later for a takeover
 	ctx    context.Context
 	cancel context.CancelFunc
 	done   chan struct{}
@@ -77,7 +78,7 @@ func (w *Worker) startRun(ctx context.Context, s *session, sr *workerv1.StartRun
 	w.mu.Unlock()
 	s.send(accepted)
 	w.log.Info("run accepted", "run", id, "share", fmt.Sprintf("[%.4f, %.4f)", sr.GetShareLo(), sr.GetShareHi()),
-		"index", sr.GetWorkerIndex(), "of", sr.GetWorkerCount(), "starts_in", time.Until(r.t0).Round(time.Millisecond))
+		"index", sr.GetWorkerIndex(), "of", sr.GetWorkerCount(), "starts_in", time.Until(r.start).Round(time.Millisecond))
 	if w.cfg.OnRunStart != nil {
 		w.cfg.OnRunStart(id, r.t0)
 	}
@@ -108,7 +109,7 @@ func (w *Worker) prepare(ctx context.Context, sr *workerv1.StartRun) (*activeRun
 	// matches a request host, so only the server's list applies.
 	policy := safety.NewHostPolicy("", sr.GetAllowHosts())
 
-	r := &activeRun{id: sr.GetRunId(), t0: t0, done: make(chan struct{})}
+	r := &activeRun{id: sr.GetRunId(), t0: t0, start: t0.Add(time.Duration(sr.GetResumeNs())), done: make(chan struct{})}
 	// The run belongs to the worker, not to the connection that started
 	// it: it keeps going across reconnects.
 	r.ctx, r.cancel = context.WithCancel(ctx)
@@ -118,6 +119,7 @@ func (w *Worker) prepare(ctx context.Context, sr *workerv1.StartRun) (*activeRun
 		ShareLo: sr.GetShareLo(), ShareHi: sr.GetShareHi(),
 		WorkerIndex: int(sr.GetWorkerIndex()), WorkerCount: int(sr.GetWorkerCount()),
 		T0: t0, Interval: time.Duration(sr.GetIntervalNs()),
+		Resume: time.Duration(sr.GetResumeNs()), Attempt: int(sr.GetAttempt()),
 		OnSnapshot: func(s *metrics.Snapshot) { w.onSnapshot(r, s) },
 		AllowHost:  policy.Allow, HTTP: w.cfg.HTTP, Logger: w.log, PluginDir: w.cfg.PluginDir,
 	})
@@ -237,7 +239,7 @@ func (w *Worker) stop(r *activeRun, kill bool, reason string) {
 		return
 	}
 	r.eng.Stop(reason)
-	if time.Now().Before(r.t0) {
+	if time.Now().Before(r.start) {
 		r.cancel()
 	}
 }

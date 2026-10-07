@@ -32,11 +32,16 @@ const MaxText = 64 << 20
 // that must not collide (email, username, seq) include the worker's index,
 // so rows never repeat within a run, even across workers.
 type Generator struct {
-	fields []field
-	index  uint64
-	count  uint64
-	n      atomic.Uint64
+	fields  []field
+	index   uint64
+	count   uint64
+	attempt uint64
+	n       atomic.Uint64
 }
+
+// SetAttempt marks a generator that takes over a lost worker's share
+// (attempt 1, 2 ...), so its unique values differ from the lost worker's.
+func (g *Generator) SetAttempt(a int) { g.attempt = uint64(max(a, 0)) }
 
 type field struct {
 	name string
@@ -98,8 +103,9 @@ func (g *Generator) Row() map[string]any {
 	return row
 }
 
-// unique returns a number no other row of this run gets.
-func (g *Generator) unique(n uint64) uint64 { return n*g.count + g.index }
+// unique returns a number no other row of this run gets: rows of a
+// takeover (attempt > 0) are numbered from attempt << 40.
+func (g *Generator) unique(n uint64) uint64 { return g.attempt<<40 | (n*g.count + g.index) }
 
 // Compile parses one kind.
 func Compile(kind string) (func(g *Generator, n uint64, row map[string]any) any, error) {

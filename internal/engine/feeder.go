@@ -35,9 +35,12 @@ type feeder struct {
 // use the same row in unique mode.
 // env and secrets expand a SQL feeder's DSN; allow (nil allows all) vets
 // the database host like a request host.
-func loadFeeder(ctx context.Context, name string, f scenario.Feeder, index, count int, env, secrets map[string]string, allow func(*url.URL) bool) (*feeder, error) {
+func loadFeeder(ctx context.Context, name string, f scenario.Feeder, index, count, attempt int, env, secrets map[string]string, allow func(*url.URL) bool) (*feeder, error) {
 	if len(f.Generate) > 0 {
 		g, err := feed.NewGenerator(f.Generate, index, count)
+		if err == nil {
+			g.SetAttempt(attempt)
+		}
 		if err != nil {
 			return nil, fmt.Errorf("data.%s: %w", name, err)
 		}

@@ -47,6 +47,12 @@ type Options struct {
 
 	// T0 is the synchronised start time. Zero starts immediately.
 	T0 time.Time
+	// Resume starts part-way through the plan, at T0 + Resume: the worker
+	// takes over a lost worker's share. Arrivals before then are skipped.
+	Resume time.Duration
+	// Attempt counts takeovers of this share; generated data mixes it in
+	// so values stay unique.
+	Attempt int
 	// Interval between snapshots (default 1s).
 	Interval time.Duration
 	// OnSnapshot receives each interval's metrics. It must not block for long.
@@ -178,7 +184,7 @@ func New(opts Options) (*Engine, error) {
 	}
 
 	for name, f := range s.Data {
-		fd, err := loadFeeder(context.Background(), name, f, opts.WorkerIndex, opts.WorkerCount, opts.Env, opts.Secrets, opts.AllowHost)
+		fd, err := loadFeeder(context.Background(), name, f, opts.WorkerIndex, opts.WorkerCount, opts.Attempt, opts.Env, opts.Secrets, opts.AllowHost)
 		if err != nil {
 			return nil, err
 		}
@@ -369,7 +375,7 @@ func (e *Engine) Run(ctx context.Context) (*Result, error) {
 	if e.t0.IsZero() {
 		e.t0 = time.Now()
 	}
-	if err := sleepCtx(ctx, time.Until(e.t0)); err != nil {
+	if err := sleepCtx(ctx, time.Until(e.t0.Add(e.opts.Resume))); err != nil {
 		return nil, err
 	}
 
@@ -441,7 +447,8 @@ func (e *Engine) Run(ctx context.Context) (*Result, error) {
 // final partial one when the run ends.
 func (e *Engine) flushLoop(stop <-chan struct{}, done chan<- struct{}) {
 	defer close(done)
-	k := int64(1)
+	// A takeover reports from the interval it resumes in.
+	k := int64(e.opts.Resume/e.opts.Interval) + 1
 	for {
 		t := time.NewTimer(time.Until(e.t0.Add(time.Duration(k) * e.opts.Interval)))
 		select {
@@ -666,6 +673,10 @@ func (e *Engine) runOpen(_, iterCtx context.Context) {
 			if f < lo || f >= hi {
 				continue
 			}
+		}
+		if at < e.opts.Resume {
+			// Before a takeover: the lost worker's part.
+			continue
 		}
 		intended := e.t0.Add(at)
 		// Only an early stop ends dispatch. Arrivals scheduled before the
