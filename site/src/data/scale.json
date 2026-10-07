@@ -1,0 +1,51 @@
+{
+  "run": "https://github.com/Ivan825/Stampede/actions/runs/37667809845",
+  "date": "2026-10-07",
+  "runner": "GitHub-hosted ubuntu-latest",
+  "cpus": 4,
+  "hold": "10s",
+  "maxCleanRps": 10000,
+  "rule": "nothing dropped, achieved rate within 2% of plan, errors under 0.1%, p99 scheduling lag under 10 ms",
+  "levels": [
+    {
+      "rate": 1000,
+      "achieved": 1000,
+      "dropped": 0,
+      "errorRate": 0,
+      "lagP99": 0.008,
+      "clean": true
+    },
+    {
+      "rate": 2000,
+      "achieved": 2000,
+      "dropped": 0,
+      "errorRate": 0,
+      "lagP99": 0.016,
+      "clean": true
+    },
+    {
+      "rate": 5000,
+      "achieved": 4999,
+      "dropped": 0,
+      "errorRate": 0,
+      "lagP99": 0.017,
+      "clean": true
+    },
+    {
+      "rate": 10000,
+      "achieved": 9999,
+      "dropped": 0,
+      "errorRate": 0,
+      "lagP99": 0.096,
+      "clean": true
+    },
+    {
+      "rate": 20000,
+      "achieved": 3993,
+      "dropped": 81550,
+      "errorRate": 0.00132,
+      "lagP99": 7438.335,
+      "clean": false
+    }
+  ]
+}

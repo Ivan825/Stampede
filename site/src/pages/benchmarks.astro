@@ -2,6 +2,7 @@
 import Site from '../layouts/Site.astro';
 import { GITHUB } from '../lib/data';
 import compare from '../data/compare.json';
+import scale from '../data/scale.json';
 const ms = (v: number) => v.toFixed(2);
 ---
 <Site title="Benchmarks" description="How Stampede checks its own accuracy against ground truth.">
@@ -26,8 +27,19 @@ const ms = (v: number) => v.toFixed(2);
       ))}
       <p class="muted" style="margin-top:16px">"From scheduled send" counts any wait inside the load generator (no coordinated omission); "service time" starts when the request actually left, as k6 measures. Each tool's truth differs slightly because each tool drives its own run.</p>
     </section>
-    <section class="block"><span class="num">03</span><h2>Still to be measured</h2>
-      <p class="lede">A quick accuracy check gates every push in CI and the full one runs nightly. wrk2 joins the comparison once its build runs in the nightly job, and the scale targets (200 workers, 100,000 requests per second, 50,000 WebSocket connections) appear here only once measured.</p>
+    <section class="block"><span class="num">03</span><h2>One process</h2>
+      <p class="lede">How much load one Stampede process generates before it, rather than the target, becomes the limit. The nightly job raises the arrival rate against the echo server (1 ms fixed delay) running on the same {scale.cpus}-CPU {scale.runner} runner, for {scale.hold} per level; a level is clean when {scale.rule}. Latest run: <a href={scale.run}>{scale.date}</a>. Highest clean rate: <strong>{scale.maxCleanRps.toLocaleString('en-US')} requests per second</strong>. Generator and target share the machine, so a worker on a host of its own does at least this.</p>
+      <div class="table-wrap" style="margin-top:20px"><table>
+        <thead><tr><th>Planned /s</th><th>Achieved /s</th><th>Dropped</th><th>Errors</th><th>p99 scheduling lag</th><th>Clean</th></tr></thead>
+        <tbody>
+          {scale.levels.map((l) => (
+            <tr><td>{l.rate.toLocaleString('en-US')}</td><td>{l.achieved.toLocaleString('en-US')}</td><td>{l.dropped.toLocaleString('en-US')}</td><td>{(l.errorRate * 100).toFixed(2)}%</td><td>{l.lagP99 < 1 ? `${(l.lagP99 * 1000).toFixed(0)} µs` : `${l.lagP99.toLocaleString('en-US')} ms`}</td><td>{l.clean ? 'yes' : 'no'}</td></tr>
+          ))}
+        </tbody>
+      </table></div>
+    </section>
+    <section class="block"><span class="num">04</span><h2>Still to be measured</h2>
+      <p class="lede">A quick accuracy check gates every push in CI and the full one runs nightly. The cluster targets (200 workers, 100,000 requests per second across them, 50,000 WebSocket connections) need several machines rather than one hosted runner, and appear here only once measured.</p>
     </section>
   </div>
 </Site>
