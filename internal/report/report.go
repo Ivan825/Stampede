@@ -44,7 +44,7 @@ type Report struct {
 	Knee  *Knee        `json:"knee,omitempty"`
 	// Recovery is set for spike and recovery shapes.
 	Recovery *Recovery `json:"recovery,omitempty"`
-	Notes []string     `json:"notes,omitempty"`
+	Notes    []string  `json:"notes,omitempty"`
 	// Workers describes each worker of a distributed run; an in-process
 	// run lists its machine only when it was saturated.
 	Workers []WorkerRow `json:"workers,omitempty"`
@@ -281,6 +281,17 @@ type Breakpoint struct {
 	FirstFail float64  `json:"firstFail,omitempty"`
 	Unit      string   `json:"unit"`
 	FailedOn  []string `json:"failedOn,omitempty"`
+	// Refined lists the confirmation holds that narrowed LastPass and
+	// FirstFail after the first failing step; the breakpoint lies
+	// between the two.
+	Refined []RefineStep `json:"refined,omitempty"`
+}
+
+// RefineStep is one confirmation hold of a breakpoint search.
+type RefineStep struct {
+	Level    float64  `json:"level"`
+	Pass     bool     `json:"pass"`
+	FailedOn []string `json:"failedOn,omitempty"`
 }
 
 // Input is everything needed to build a report.

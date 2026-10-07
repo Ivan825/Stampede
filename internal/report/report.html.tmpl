@@ -37,6 +37,7 @@ h2 { font-size: 13px; font-family: var(--mono); text-transform: uppercase; lette
 .tile span { color: var(--muted); font-size: 12.5px; }
 .card { background: var(--surface); border: 1px solid var(--line); border-radius: 8px; padding: 14px 14px 10px; margin-bottom: 12px; }
 .card h3 { margin: 0 0 8px; font-size: 14px; font-weight: 600; }
+.muted { color: var(--muted); }
 svg { width: 100%; height: auto; display: block; }
 @media print {
   /* Paper is light whatever the reader's theme. */
@@ -133,7 +134,8 @@ footer a, td a { color: var(--accent); }
 {{with .Breakpoint}}
 <h2>Breakpoint</h2>
 <div class="card">
-  {{if .Found}}<p>Targets held up to <b>{{num .LastPass}}{{.Unit}}</b> and failed at <b>{{num .FirstFail}}{{.Unit}}</b>{{if .FailedOn}} on {{range $i, $f := .FailedOn}}{{if $i}}, {{end}}<code>{{$f}}</code>{{end}}{{end}}.</p>
+  {{if .Found}}<p>Targets held up to <b>{{num .LastPass}}{{.Unit}}</b> and failed at <b>{{num .FirstFail}}{{.Unit}}</b>{{if .FailedOn}} on {{range $i, $f := .FailedOn}}{{if $i}}, {{end}}<code>{{$f}}</code>{{end}}{{end}}: the breakpoint is between the two.</p>
+  {{if .Refined}}<p class="muted">Narrowed by {{len .Refined}} confirmation holds after the first failing step: {{$u := .Unit}}{{range $i, $s := .Refined}}{{if $i}}, {{end}}{{num $s.Level}}{{$u}} {{if $s.Pass}}held{{else}}failed{{end}}{{end}}.</p>{{end}}
   {{else}}<p>Not reached: every target held at each level up to <b>{{num .LastPass}}{{.Unit}}</b>.</p>{{end}}
 </div>
 {{end}}

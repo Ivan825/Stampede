@@ -104,6 +104,17 @@ func (r *Report) WriteText(w io.Writer) {
 		if bp.Found {
 			fmt.Fprintf(w, "\n  breakpoint   targets held up to %s%s, failed at %s%s (%s)\n",
 				num(bp.LastPass), bp.Unit, num(bp.FirstFail), bp.Unit, strings.Join(bp.FailedOn, ", "))
+			if len(bp.Refined) > 0 {
+				var parts []string
+				for _, st := range bp.Refined {
+					res := "failed"
+					if st.Pass {
+						res = "held"
+					}
+					parts = append(parts, num(st.Level)+bp.Unit+" "+res)
+				}
+				fmt.Fprintf(w, "               narrowed by %d confirmation holds: %s\n", len(bp.Refined), strings.Join(parts, ", "))
+			}
 		} else {
 			fmt.Fprintf(w, "\n  breakpoint   not reached: targets held at every level up to %s%s\n", num(bp.LastPass), bp.Unit)
 		}

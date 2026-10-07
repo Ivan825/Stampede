@@ -126,12 +126,48 @@ func Run(ctx context.Context, o Options) (*report.Report, error) {
 	}
 	if bp != nil {
 		in.Breakpoint = bp.Result()
+		if in.Breakpoint.Found && ctx.Err() == nil {
+			mu.Unlock()
+			err := Refine(ctx, in.Breakpoint, plan.Mode, RefineRounds, func(ctx context.Context, level float64) (bool, []string, error) {
+				logger.Info("confirming the breakpoint", "level", level, "unit", in.Breakpoint.Unit)
+				return o.confirm(ctx, plan, level)
+			})
+			mu.Lock()
+			if err != nil && ctx.Err() == nil {
+				logger.Warn("breakpoint refinement stopped", "error", err)
+			}
+		}
 	}
 	rep := report.Build(in)
 	rep.Faults = events
 	self.Close()
 	self.Annotate(rep, time.Second)
 	return rep, nil
+}
+
+// confirm runs one breakpoint confirmation hold at level in-process.
+func (o Options) confirm(ctx context.Context, plan *scenario.Plan, level float64) (bool, []string, error) {
+	s, p, err := ConfirmScenario(o.Scenario, plan, level)
+	if err != nil {
+		return false, nil, err
+	}
+	prog, err := scenario.Compile(s)
+	if err != nil {
+		return false, nil, err
+	}
+	tr := NewBreakpointTracker(prog, p)
+	eng, err := engine.New(engine.Options{
+		Program: prog, Plan: p, RunID: o.RunID, Env: o.Env, Secrets: o.Secrets, AllowHost: o.AllowHost,
+		OnSnapshot: func(s *metrics.Snapshot) { tr.Observe(s) }, Logger: o.Logger,
+	})
+	if err != nil {
+		return false, nil, err
+	}
+	if _, err := eng.Run(ctx); err != nil {
+		return false, nil, err
+	}
+	r := tr.Result()
+	return !r.Found, r.FailedOn, nil
 }
 
 // BreakpointTracker evaluates targets at the end of each hold stage of a

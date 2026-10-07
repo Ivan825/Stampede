@@ -3,7 +3,9 @@ package server
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"strconv"
 	"sync"
 	"time"
 
@@ -256,7 +258,6 @@ func (m *runManager) execute(r *activeRun, spec ExecSpec, prog *scenario.Program
 	if err := m.s.st.SetRunWorkers(ctx, db.SetRunWorkersParams{ID: r.id, Workers: int32(res.Workers)}); err != nil { //nolint:gosec // small
 		m.s.log.Error("set run workers", "run", r.id, "error", err)
 	}
-	m.setStatus(ctx, r, statusAnalyzing)
 	span.AddEvent("load ended", trace.WithAttributes(attribute.String("stampede.stop_reason", res.StopReason), attribute.Int("stampede.workers", res.Workers)))
 
 	if res.Snapshots != nil {
@@ -269,7 +270,18 @@ func (m *runManager) execute(r *activeRun, spec ExecSpec, prog *scenario.Program
 	}
 	if bp != nil {
 		in.Breakpoint = bp.Result()
+		r.mu.Lock()
+		halted := r.killed || r.stopping
+		r.mu.Unlock()
+		if in.Breakpoint.Found && !halted && res.StopReason == "breakpoint reached" {
+			if err := runner.Refine(ctx, in.Breakpoint, plan.Mode, runner.RefineRounds, func(ctx context.Context, level float64) (bool, []string, error) {
+				return m.confirm(ctx, r, spec, plan, level)
+			}); err != nil {
+				m.s.log.Warn("breakpoint refinement stopped", "run", r.id, "error", err)
+			}
+		}
 	}
+	m.setStatus(ctx, r, statusAnalyzing)
 	rep := report.Build(in)
 	rep.Notes = append(rep.Notes, res.Notes...)
 	rep.Faults = faultEvents
@@ -455,4 +467,57 @@ func (m *runManager) shutdown(ctx context.Context) {
 			m.kill(id, "server shutdown")
 		}
 	}
+}
+
+var errStopped = errors.New("the run was stopped")
+
+// confirm runs one breakpoint confirmation hold at level on the run's
+// executor (in-process or on workers). Stop and kill reach it like the
+// main run.
+func (m *runManager) confirm(ctx context.Context, r *activeRun, spec ExecSpec, plan *scenario.Plan, level float64) (bool, []string, error) {
+	s, p, err := runner.ConfirmScenario(spec.Scenario, plan, level)
+	if err != nil {
+		return false, nil, err
+	}
+	prog, err := scenario.Compile(s)
+	if err != nil {
+		return false, nil, err
+	}
+	y, err := s.Marshal()
+	if err != nil {
+		return false, nil, err
+	}
+	cs := spec
+	cs.Scenario, cs.YAML = s, y
+	m.event(ctx, r, ExecEvent{Type: "breakpoint.confirm", Message: fmt.Sprintf("confirming the breakpoint at %s%s", strconv.FormatFloat(level, 'f', -1, 64), report.Unit(plan.Mode))})
+	exec, err := m.s.cfg.Executor.Start(ctx, cs)
+	if err != nil {
+		return false, nil, err
+	}
+	r.mu.Lock()
+	r.exec = exec
+	stop := r.killed || r.stopping
+	r.mu.Unlock()
+	if stop {
+		exec.Kill()
+	}
+	go func() {
+		for range exec.Events() {
+		}
+	}()
+	tr := runner.NewBreakpointTracker(prog, p)
+	for snap := range exec.Snapshots() {
+		tr.Observe(snap)
+	}
+	if _, err := exec.Wait(ctx); err != nil {
+		return false, nil, err
+	}
+	r.mu.Lock()
+	stop = stop || r.killed || r.stopping
+	r.mu.Unlock()
+	if stop {
+		return false, nil, errStopped
+	}
+	out := tr.Result()
+	return !out.Found, out.FailedOn, nil
 }
