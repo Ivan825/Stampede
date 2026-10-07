@@ -51,6 +51,9 @@ interface SpecValue {
 
 const emptySpec: SpecValue = { source: 'paste', text: '', url: '' };
 
+/** The server refuses larger documents. */
+const maxSpecBytes = 5 << 20;
+
 function specBody(v: SpecValue): { openapi?: string; specURL?: string } {
   if (v.source === 'url') return v.url.trim() ? { specURL: v.url.trim() } : {};
   return v.text.trim() ? { openapi: v.text } : {};
@@ -72,6 +75,7 @@ function SpecInput({
   optional?: boolean;
 }) {
   const name = useId();
+  const [fileError, setFileError] = useState<string | null>(null);
   const hosts = [...new Set(targets.map((t) => new URL(t.baseURL).origin))];
   return (
     <fieldset className="flex flex-col gap-2">
@@ -118,19 +122,45 @@ function SpecInput({
           )}
         </Field>
       ) : (
-        <Field label="OpenAPI document (YAML or JSON)">
-          {(p) => (
-            <Textarea
-              {...p}
-              rows={8}
-              spellCheck={false}
-              className="font-mono text-xs"
-              placeholder="openapi: 3.0.3&#10;paths:&#10;  /api/products:&#10;    get: …"
-              value={value.text}
-              onChange={(e) => onChange({ ...value, text: e.target.value })}
+        <>
+          <Field label="OpenAPI document (YAML or JSON)">
+            {(p) => (
+              <Textarea
+                {...p}
+                rows={8}
+                spellCheck={false}
+                className="font-mono text-xs"
+                placeholder="openapi: 3.0.3&#10;paths:&#10;  /api/products:&#10;    get: …"
+                value={value.text}
+                onChange={(e) => onChange({ ...value, text: e.target.value })}
+              />
+            )}
+          </Field>
+          <label className="flex items-center gap-2 text-xs text-muted">
+            Or load a file:
+            <input
+              type="file"
+              accept=".yaml,.yml,.json,application/json,application/yaml,text/yaml"
+              aria-label={`${label} file`}
+              className="text-xs"
+              onChange={(e) => {
+                const f = e.target.files?.[0];
+                if (!f) return;
+                if (f.size > maxSpecBytes) {
+                  setFileError(`${f.name} is larger than 5 MiB, the most the server accepts.`);
+                  return;
+                }
+                setFileError(null);
+                void f.text().then((text) => onChange({ ...value, source: 'paste', text }));
+              }}
             />
+          </label>
+          {fileError && (
+            <p role="alert" className="text-xs text-fail">
+              {fileError}
+            </p>
           )}
-        </Field>
+        </>
       )}
     </fieldset>
   );

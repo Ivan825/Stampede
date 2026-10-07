@@ -119,6 +119,24 @@ describe('Scenario coverage and drift', () => {
     expect(dry.queryByText('fails')).not.toBeInTheDocument();
   });
 
+  it('loads the document from a file', async () => {
+    const { url } = setup();
+    const user = userEvent.setup();
+    renderApp(url);
+    const form = within(await screen.findByRole('form', { name: 'Check coverage' }));
+    await user.upload(
+      form.getByLabelText('The API file'),
+      new File([mockShopSpec], 'openapi.yaml', { type: 'application/yaml' }),
+    );
+    await waitFor(() =>
+      expect(form.getByLabelText('OpenAPI document (YAML or JSON)')).toHaveValue(mockShopSpec),
+    );
+    const big = new File(['x'], 'huge.json');
+    Object.defineProperty(big, 'size', { value: 6 << 20 });
+    await user.upload(form.getByLabelText('The API file'), big);
+    expect(form.getByRole('alert')).toHaveTextContent('huge.json is larger than 5 MiB');
+  });
+
   it('refuses a URL that is not on a target', async () => {
     const { url } = setup();
     const user = userEvent.setup();
