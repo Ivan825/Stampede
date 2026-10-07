@@ -81,6 +81,10 @@ step that extracts it is a validation error, not a runtime surprise.
 | `json: { "$.items[0].id": 7, "$.token": exists }` | values at JSONPaths |
 | `maxLatency: 500ms` | per-request limit |
 | `expr: "status == 200 && json.items.size() > 0"` | any condition over `status`, `headers`, `body`, `json`, `latencyMs` |
+| `schema: { type: object, required: [id] }` or `schema: schemas/item.json` | the JSON body matches a JSON Schema (draft 2020-12 unless it says otherwise), inline or from a `.json`/`.yaml` file next to the scenario; the dry run names the first mismatch, such as `/id: got string, want integer` |
+
+On a server, schema files follow the same rule as CSV files: they must be
+inside the server's data directory. Inline schemas work everywhere.
 
 | Extractor | Reads |
 |---|---|
