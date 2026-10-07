@@ -1443,6 +1443,10 @@ export interface components {
             };
             cpus?: number;
             memoryBytes?: number;
+            /** @description Drivers the worker supports, such as http, grpc or browser. */
+            protocols?: string[];
+            /** @description Plugins installed on the worker, such as mqtt or kafka. */
+            plugins?: string[];
             /** @enum {string} */
             status: "idle" | "busy" | "saturated" | "lost";
             runId?: string | null;

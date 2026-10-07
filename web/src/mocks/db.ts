@@ -598,6 +598,8 @@ export function createDb(options: MockOptions): Db {
       labels: { pool: 'default', arch: 'arm64' },
       cpus: 16,
       memoryBytes: 32 * 2 ** 30,
+      protocols: ['http', 'websocket', 'sse', 'grpc'],
+      plugins: ['mqtt', 'kafka'],
       status: 'idle',
       runId: null,
       connectedAt: ago(1 * DAY),

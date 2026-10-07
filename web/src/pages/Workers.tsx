@@ -52,6 +52,7 @@ export function WorkersPage() {
                 <th>Status</th>
                 <th>Region</th>
                 <th>Labels</th>
+                <th>Plugins</th>
                 <th className="!text-right">CPUs</th>
                 <th className="!text-right">Memory</th>
                 <th>Version</th>
@@ -77,6 +78,15 @@ export function WorkersPage() {
                           {k}={v}
                         </Chip>
                       ))}
+                    </div>
+                  </td>
+                  <td>
+                    <div className="flex max-w-48 flex-wrap gap-1">
+                      {(w.plugins ?? []).length === 0 ? (
+                        <span className="text-muted">–</span>
+                      ) : (
+                        (w.plugins ?? []).map((p) => <Chip key={p}>{p}</Chip>)
+                      )}
                     </div>
                   </td>
                   <td className="num text-right">{w.cpus ?? '–'}</td>
