@@ -126,6 +126,10 @@ func TestDetectShopLab(t *testing.T) {
 	if len(m) == 0 || m[0].Pack.Name != "ecommerce" {
 		t.Fatalf("matches %+v", m)
 	}
+	// The same clear margin the PackLab apps are held to.
+	if len(m) > 1 && (2*m[1].Score > m[0].Score || m[0].Score-m[1].Score < 6) {
+		t.Fatalf("ecommerce (%d) wins only narrowly over %s (%d)", m[0].Score, m[1].Pack.Name, m[1].Score)
+	}
 
 	// A target with nothing shop-like matches no pack.
 	plain := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { w.WriteHeader(404) }))
