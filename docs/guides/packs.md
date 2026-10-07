@@ -9,6 +9,7 @@ stampede pack list                      # all 20 product types, shipped or plann
 stampede init --target http://localhost:8090   # detect, install, dry-run
 stampede pack install ecommerce --dir stampede
 stampede pack test ecommerce --target http://localhost:8090
+stampede pack create fintech            # scaffold a new pack folder
 ```
 
 ## Shipped packs
@@ -109,7 +110,13 @@ installed.
 
 ## Writing a pack
 
-1. Copy a shipped pack and edit `pack.yaml`.
+1. Run `stampede pack create <name>` (or copy a shipped pack) and edit
+   `pack.yaml`. `create` writes the layout above into `./<name>` (`--dir`
+   to choose the parent folder): a journey and a spike stress that request
+   the target's home page, `targets.yaml` and a CSV in `data/` that the
+   journey reads, all valid scenarios from the start, so
+   `stampede pack test ./<name> --target <url>` passes against any site
+   that answers `GET /` with 200 before you change anything.
 2. Write journeys as normal scenarios using `${env.TARGET_URL}`. Keep each
    file's journeys under two minutes for one user, think times included:
    that is the dry run's budget per file.

@@ -21,7 +21,8 @@ import (
 )
 
 func newPackCmd() *cobra.Command {
-	cmd := &cobra.Command{Use: "pack", Short: "List, install and test product packs"}
+	cmd := &cobra.Command{Use: "pack", Short: "List, install, test and create product packs"}
+	cmd.AddCommand(newPackCreateCmd())
 	cmd.AddCommand(&cobra.Command{
 		Use:   "list",
 		Short: "List product packs and whether each is shipped or planned",

@@ -32,7 +32,7 @@ stampede [flags]
 * [stampede keygen](stampede_keygen.md)	 - Print a new random master key for STAMPEDE_MASTER_KEY
 * [stampede kill](stampede_kill.md)	 - Kill switch: stop a run's load immediately
 * [stampede login](stampede_login.md)	 - Sign in to a Stampede server and store an API token for this CLI
-* [stampede pack](stampede_pack.md)	 - List, install and test product packs
+* [stampede pack](stampede_pack.md)	 - List, install, test and create product packs
 * [stampede plugin](stampede_plugin.md)	 - List, install and remove protocol plugins
 * [stampede push](stampede_push.md)	 - Save local scenario files to the server as new versions
 * [stampede report](stampede_report.md)	 - Render a saved JSON report as HTML, PDF, CSV, JUnit, Markdown or a summary
