@@ -1,9 +1,35 @@
 # Stampede web UI
 
-The browser UI for a Stampede server: projects, targets, secrets, versioned
-scenarios with a schema-aware YAML editor, runs with live charts, reports,
-workers and settings. It talks only to the public REST API in
-[`../api/openapi.yaml`](../api/openapi.yaml).
+The browser UI for a Stampede server, for analysis and reporting. Everything
+you do to a server (set it up, create projects, targets, secrets and
+scenarios, start runs, edit schedules, users, tokens and settings) is done
+with the `stampede` CLI; the UI shows the results. It talks only to the
+public REST API in [`../api/openapi.yaml`](../api/openapi.yaml).
+
+What it shows:
+
+- sign-in and sign-out, and who you are (Settings → Account);
+- each project's overview: recent runs, scenarios and targets;
+- runs: the list, the live view (charts, worker health, events), the full
+  report (charts, errors with examples, workers, knee, recovery,
+  breakpoint, the AI summary when one was written) and its downloads
+  (HTML, JSON, CSV, JUnit, Markdown, PDF by printing);
+- comparisons of runs;
+- scenarios: the YAML, read only and syntax highlighted, the journey graph,
+  the plan and the version history, and API coverage and drift checks;
+- AI generation jobs: each journey's dry-run trace, the proposed scenario
+  and its diff (jobs are started and approved with `stampede ai jobs`);
+- the library of packs;
+- targets with their verification status, workers, schedules and drift
+  check results;
+- settings, read only: API tokens, users, audit log, integrations,
+  notification channels, AI providers (without keys), SSO and limits.
+
+Where an action used to be, the UI shows the CLI command that does it, with
+a copy button, for example `stampede start --scenario <name> --target <name>`.
+The one exception is safety: **Stop** and **Kill** on a running run and the
+**Kill all** switch in the header stay in the UI. When the server has not
+been set up, the UI shows a page that says to run `stampede setup`.
 
 ![Live run](docs/screenshots/02-live-run.png)
 
@@ -13,13 +39,13 @@ More screenshots (light and dark) are in [`docs/screenshots`](docs/screenshots).
 
 React 18, TypeScript (strict), Vite, TanStack Router and Query, Tailwind CSS
 with Radix UI primitives, uPlot (live charts), Apache ECharts (report charts),
-Monaco with monaco-yaml (bound to [`../schema/scenario.schema.json`](../schema/scenario.schema.json)),
-React Flow (journey graph). The API client is generated from the OpenAPI spec
-with `openapi-typescript` and called through `openapi-fetch`.
+React Flow (journey graph) and a small built-in YAML highlighter
+(`src/features/scenarios/yamlTokens.ts`) for the read-only scenario view.
+The API client is generated from the OpenAPI spec with `openapi-typescript`
+and called through `openapi-fetch`.
 
 Nothing is loaded from the network at runtime: fonts are system fonts and
-Monaco, its workers and every chart library are bundled, so the UI works
-air-gapped.
+every chart library is bundled, so the UI works air-gapped.
 
 ## Develop
 
@@ -35,18 +61,16 @@ Set `STAMPEDE_API=http://host:port` to proxy to another server.
 
 In mock mode you are signed in as the owner of "Acme Retail" with three
 projects, a run in progress (streamed over SSE), run history with reports,
-workers, users, tokens and an audit log. Starting a run creates a new
-simulated run that finishes on its planned duration (use a short `duration`
-override to see the switch to the report). The Storefront project requires
+workers, users, tokens and an audit log. The Storefront project requires
 a passing dry run before load (one of its runs was refused by it), has two
 per-project role overrides, and has an hourly drift schedule whose last
 check found a broken journey. URL switches:
 
 | URL                      | Shows                                                           |
 | ------------------------ | --------------------------------------------------------------- |
-| `/?mock=setup`           | the first-run setup screen                                      |
+| `/?mock=setup`           | the page shown before `stampede setup` has run                  |
 | `/login?mock=signed-out` | the sign-in screen (`priya@acme.dev` / `correct-horse-battery`) |
-| `/?mock=viewer`          | the UI as a read-only viewer                                    |
+| `/?mock=viewer`          | the UI as a viewer (no Stop, Kill or Kill all)                  |
 
 The mock fixtures are typed with the generated OpenAPI types, so they fail to
 compile if they drift from the spec. The same handlers back the tests.
@@ -78,7 +102,7 @@ import "github.com/Ivan825/Stampede/web"
 Why commit build output: `go install github.com/Ivan825/Stampede/cmd/stampede@latest`
 and plain `go build` cannot run pnpm, and the product is a single binary, so
 the UI has to be in the module. To keep the repository from growing with every
-UI change, vendor code is split into content-hashed chunks (`monaco`, `echarts`,
+UI change, vendor code is split into content-hashed chunks (`echarts`,
 `flow`, `uplot`, `yaml`, `vendor`, plus Vite's preload helper in `runtime`)
 that never import app code, so they only change when dependencies change; an
 ordinary UI change rewrites a few small app chunks (tens of KB). The build is
@@ -87,35 +111,28 @@ reproducible: building the same sources twice gives byte-identical files.
 **After changing anything under `src/`, run `pnpm build` and commit `dist/`
 with the change.** A CI check that `dist/` is up to date is a good follow-up.
 
-Build size (Vite 8, minified): about 6.4 MB on disk, most of it Monaco
-(3.6 MB, 0.9 MB gzipped) and its YAML worker (1 MB), which load only on the
-scenario editor. The first page needs about 450 KB (140 KB gzipped): the app
-entry, the React/Router/Query/Radix vendor chunk and CSS. ECharts (550 KB)
-loads with run pages.
+Build size (Vite 8, minified): about 1.5 MB on disk. The first page needs
+about 460 KB (145 KB gzipped): the app entry, the React/Router/Query/Radix
+vendor chunk and CSS. ECharts (570 KB) loads with run pages and React Flow
+(176 KB) with scenario pages.
 
 ## End-to-end tests
 
 `pnpm test:e2e` runs the Playwright tests in [`e2e/`](e2e) in Chromium
 (`pnpm exec playwright install chromium` once). They build the UI in mock
 mode and serve it with `vite preview`, so no server is needed: sign in,
-create a project, target and scenario and run it to its report, compare
-runs, generate journeys in the AI studio, the library, coverage and drift,
-server settings, and editing the journey graph (including dragging a step).
+browse runs, open a live run and a report, compare runs, the library,
+scenarios, schedules, the settings pages, and the kill switch.
 The mock API lives in the page, so each test loads one URL and then
 navigates inside the app; a reload starts from fresh fixtures.
 
 ## Journey graph
 
-The graph beside the YAML editor edits the same YAML: drag a step to
-reorder it among its siblings, or select a step or journey to change a
-request's method, URL and name, a think duration or a group name, move it,
-add an HTTP request, think or group step, or remove it. The YAML stays the
-single source of truth: an edit parses it, rewrites only the lines of the
-steps it touches (`src/features/scenarios/scenarioEdit.ts`), and reaches
-the editor as one undoable change, so comments and formatting elsewhere are
-kept. Steps written in flow style (`steps: [{get: /}]`) are the exception:
-editing them reprints the document, which keeps comments but may change
-spacing. Branch, loop and while settings are edited in the YAML.
+The graph beside the YAML shows the scenario's journeys and their steps:
+a start node fans out to each journey by weight, steps chain downwards,
+branches fan out into one column per arm, and loop, while and group blocks
+show their body with a back edge for repeats. It is read only; change a
+scenario in its YAML file and save it as a new version with `stampede push`.
 
 ## Layout
 
@@ -124,8 +141,8 @@ src/
   api/        generated schema, typed client (CSRF header, ApiError), query hooks
   app/        shell, kill switch, route errors
   components/ UI primitives, chips, dialogs, toasts, theme
-  features/   runs (live view, report, new-run dialog), scenarios (editor, graph)
-  lib/        formatting (mirrors internal/report), roles, SSE hook, Monaco setup
+  features/   runs (live view, report, compare), scenarios (YAML view, graph)
+  lib/        formatting (mirrors internal/report), roles, SSE hook, CLI commands
   mocks/      MSW handlers, in-memory store and simulated runs
   pages/      one file per route
   test/       test setup, MSW server, render helpers
@@ -138,8 +155,12 @@ src/
   monospace.
 - Status and verdict colours are consistent everywhere: pass green, fail red,
   generator-limited amber.
-- Role-aware: actions the signed-in role cannot perform are hidden or
-  disabled (runner starts runs; editor edits scenarios, targets and secrets;
-  admin manages users and sees the audit log). The server enforces the same
-  rules.
+- Read only: the UI changes nothing on the server except the safety
+  controls (Stop, Kill, Kill all), which need the runner role, and signing
+  in and out. Admin-only settings (audit log, integrations, notifications,
+  AI providers, SSO, limits) are hidden from other roles. The server
+  enforces the same rules.
+- Where an action belongs to the CLI, the page shows the command in a small
+  copyable hint (`src/components/cliHint.tsx`). Every command comes from
+  one map, `src/lib/cli.ts`, so the hints match the CLI.
 - Errors show the API's `message` and every `details` line.
