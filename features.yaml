@@ -8,6 +8,7 @@ groups:
       - { name: "Merged HDR-style histograms, never averaged percentiles", status: shipped, doc: docs/concepts/measurement }
       - { name: "DNS, connect, TLS, wait and download timing per request", status: shipped }
       - { name: "Generator saturation detection and generator-limited verdicts", status: shipped }
+      - { name: "Saturated and lost-worker windows shaded on the report charts", status: shipped, doc: docs/guides/reports }
       - { name: "Accuracy gate against a calibrated server in CI", status: shipped, doc: benchmarks }
       - { name: "Side-by-side benchmarks with k6 and wrk2", status: planned }
   - name: Load
@@ -42,13 +43,16 @@ groups:
   - name: Workflow
     features:
       - { name: "Web UI with scenario editor, live runs and reports", status: shipped }
+      - { name: "Journey graph that edits the scenario YAML: reorder, add, remove and change steps", status: shipped }
+      - { name: "Live worker health in the web UI: CPU, scheduling lag, saturation, heartbeat", status: shipped, doc: docs/guides/reports }
+      - { name: "Pack library in the web UI", status: shipped, doc: docs/guides/packs }
       - { name: "Terminal console with plain-language commands", status: shipped }
       - { name: "HTML, PDF, CSV, JSON, JUnit and Markdown reports; CI exit codes", status: shipped, doc: docs/guides/ci }
       - { name: "Release comparison with confidence intervals", status: shipped, doc: docs/guides/comparing }
       - { name: "Side-by-side run comparison in the web UI", status: shipped, doc: docs/guides/comparing }
       - { name: "AI journey generation from specs, recordings, logs or a browser crawl, with dry-run validation", status: shipped, doc: docs/ai }
       - { name: "AI report narratives that cite every figure", status: shipped, doc: docs/ai }
-      - { name: "Coverage map and drift detection for saved scenarios", status: shipped, doc: docs/guides/coverage }
+      - { name: "Coverage map and drift detection for saved scenarios, in the CLI and the web UI", status: shipped, doc: docs/guides/coverage }
       - { name: "Scheduled runs", status: shipped, doc: docs/guides/schedules }
       - { name: "Scaffolds for new packs and plugins, checked by a dry run and the conformance suite", status: shipped, doc: docs/plugins }
       - { name: "Packaged GitHub Action", status: planned }
@@ -72,3 +76,4 @@ groups:
       - { name: "Kill switch in the UI, CLI and API", status: shipped, doc: safety }
       - { name: "Roles, API tokens, encrypted secrets, audit log", status: shipped }
       - { name: "Single sign-on with OpenID Connect", status: shipped, doc: docs/reference/configuration }
+      - { name: "SSO configuration and load caps shown read-only to admins in the web UI", status: shipped, doc: docs/reference/configuration }
