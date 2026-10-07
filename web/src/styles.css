@@ -32,6 +32,9 @@
   --s3: #9333ea;
   --s4: #71717a;
   --s5: #d12d2d;
+  --syntax-key: #9a3412;
+  --syntax-string: #17602f;
+  --syntax-number: #2463c4;
   color-scheme: light;
 }
 
@@ -63,6 +66,9 @@
     --s3: #c084fc;
     --s4: #a1a1aa;
     --s5: #ff5c5c;
+    --syntax-key: #ff9a5c;
+    --syntax-string: #7fd6a4;
+    --syntax-number: #8ab8ff;
     color-scheme: dark;
   }
 }
@@ -94,6 +100,9 @@
   --s3: #c084fc;
   --s4: #a1a1aa;
   --s5: #ff5c5c;
+  --syntax-key: #ff9a5c;
+  --syntax-string: #7fd6a4;
+  --syntax-number: #8ab8ff;
   color-scheme: dark;
 }
 
