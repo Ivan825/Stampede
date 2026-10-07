@@ -15,6 +15,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"time"
 
@@ -172,6 +173,12 @@ func (c *Client) Do(ctx context.Context, method, path string, body, out any) err
 		if s, ok := out.(*[]byte); ok {
 			*s = b
 			return nil
+		}
+		// Decode into a zero value: unmarshalling into a struct or map
+		// that holds the request's data would keep fields and keys the
+		// response leaves out.
+		if v := reflect.ValueOf(out); v.Kind() == reflect.Pointer && !v.IsNil() {
+			v.Elem().SetZero()
 		}
 		return json.Unmarshal(b, out)
 	}
