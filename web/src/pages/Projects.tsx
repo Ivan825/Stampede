@@ -1,116 +1,20 @@
-import { Link, useNavigate } from '@tanstack/react-router';
-import { Plus } from 'lucide-react';
-import { useState, type FormEvent } from 'react';
-import { useCreateProject, useMe, useProjects } from '@/api/queries';
-import { Modal } from '@/components/dialog';
-import {
-  Button,
-  Card,
-  EmptyState,
-  ErrorAlert,
-  Field,
-  Input,
-  Loading,
-  PageHeader,
-  Table,
-  Textarea,
-} from '@/components/ui';
+import { Link } from '@tanstack/react-router';
+import { useMe, useProjects } from '@/api/queries';
+import { CliHint } from '@/components/cliHint';
+import { Card, EmptyState, ErrorAlert, Loading, PageHeader, Table } from '@/components/ui';
+import { cli } from '@/lib/cli';
 import { dateTime } from '@/lib/format';
-import { permissions } from '@/lib/roles';
-
-export function NewProjectDialog({
-  open,
-  onOpenChange,
-}: {
-  open: boolean;
-  onOpenChange: (v: boolean) => void;
-}) {
-  const create = useCreateProject();
-  const navigate = useNavigate();
-  const [name, setName] = useState('');
-  const [description, setDescription] = useState('');
-  const submit = (e: FormEvent) => {
-    e.preventDefault();
-    create.mutate(
-      { name: name.trim(), ...(description.trim() ? { description: description.trim() } : {}) },
-      {
-        onSuccess: (p) => {
-          onOpenChange(false);
-          setName('');
-          setDescription('');
-          void navigate({ to: '/projects/$projectId', params: { projectId: p.id } });
-        },
-      },
-    );
-  };
-  return (
-    <Modal
-      open={open}
-      onOpenChange={onOpenChange}
-      title="New project"
-      description="Projects group scenarios, targets, secrets and runs."
-      footer={
-        <>
-          <Button onClick={() => onOpenChange(false)}>Cancel</Button>
-          <Button
-            variant="primary"
-            type="submit"
-            form="new-project"
-            loading={create.isPending}
-            disabled={!name.trim()}
-          >
-            Create project
-          </Button>
-        </>
-      }
-    >
-      <form id="new-project" onSubmit={submit} className="flex flex-col gap-4">
-        <Field label="Name">
-          {(p) => (
-            <Input
-              {...p}
-              autoFocus
-              maxLength={100}
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-            />
-          )}
-        </Field>
-        <Field label="Description" hint="Optional.">
-          {(p) => (
-            <Textarea
-              {...p}
-              rows={3}
-              maxLength={1000}
-              value={description}
-              onChange={(e) => setDescription(e.target.value)}
-            />
-          )}
-        </Field>
-        <ErrorAlert error={create.error} />
-      </form>
-    </Modal>
-  );
-}
 
 export function ProjectsPage() {
   const me = useMe();
-  const can = permissions(me.role);
   const projects = useProjects();
-  const [open, setOpen] = useState(false);
 
   return (
     <div className="mx-auto max-w-5xl px-6 py-6">
       <PageHeader
         title="Projects"
         description={me.orgName}
-        actions={
-          can.editProjects && (
-            <Button variant="primary" onClick={() => setOpen(true)}>
-              <Plus className="size-4" aria-hidden /> New project
-            </Button>
-          )
-        }
+        actions={<CliHint command={cli.projectsCreate}>Create a project</CliHint>}
       />
       <Card>
         {projects.isPending ? (
@@ -118,20 +22,12 @@ export function ProjectsPage() {
         ) : projects.error ? (
           <ErrorAlert error={projects.error} className="m-4" />
         ) : projects.data.length === 0 ? (
-          <EmptyState
-            title="No projects yet"
-            action={
-              can.editProjects && (
-                <Button variant="primary" onClick={() => setOpen(true)}>
-                  Create a project
-                </Button>
-              )
-            }
-          >
-            A project holds the scenarios, targets and secrets for one product or service.
+          <EmptyState title="No projects yet">
+            A project holds the scenarios, targets and secrets for one product or service. Create
+            one with <code className="font-mono text-xs">stampede projects create</code>.
           </EmptyState>
         ) : (
-          <Table>
+          <Table aria-label="Projects">
             <thead>
               <tr>
                 <th>Name</th>
@@ -163,7 +59,6 @@ export function ProjectsPage() {
           </Table>
         )}
       </Card>
-      <NewProjectDialog open={open} onOpenChange={setOpen} />
     </div>
   );
 }
