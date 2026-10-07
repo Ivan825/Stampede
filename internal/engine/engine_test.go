@@ -11,6 +11,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -129,7 +130,13 @@ load: {mode: rate, rate: 200/s, duration: 2s}`, srv.URL), nil)
 	// A sanity bound only: shared CI runners, busy with other packages'
 	// tests (and their Chrome), stall for tens of milliseconds. Pacing
 	// precision is measured by the accuracy job on a quiet machine.
-	if lag := out.total.SchedLag.Quantile(0.99); lag > 50000 {
+	lag := out.total.SchedLag.Quantile(0.99)
+	switch {
+	case runtime.GOOS == "darwin" && os.Getenv("CI") != "":
+		// GitHub's macOS runners stall for 20 to 70ms under load; the
+		// iteration count above is what this test is about.
+		t.Logf("p99 scheduling lag %dµs (not checked on macOS CI)", lag)
+	case lag > 50000:
 		t.Errorf("p99 scheduling lag %dµs is too high", lag)
 	}
 }

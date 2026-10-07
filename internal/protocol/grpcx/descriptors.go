@@ -4,6 +4,8 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"google.golang.org/protobuf/types/known/emptypb"
+	"io"
 	"os"
 	"sync"
 	"time"
@@ -346,7 +348,7 @@ func (s *v1Stream) files(name string, bySymbol bool) ([][]byte, error) {
 		req.MessageRequest = &reflectv1.ServerReflectionRequest_FileContainingSymbol{FileContainingSymbol: name}
 	}
 	if err := s.stream.Send(req); err != nil {
-		return nil, err
+		return nil, sendErr(s.stream, err)
 	}
 	resp, err := s.stream.Recv()
 	if err != nil {
@@ -385,7 +387,7 @@ func (s *v1alphaStream) files(name string, bySymbol bool) ([][]byte, error) {
 		req.MessageRequest = &reflectv1alpha.ServerReflectionRequest_FileContainingSymbol{FileContainingSymbol: name}
 	}
 	if err := s.stream.Send(req); err != nil {
-		return nil, err
+		return nil, sendErr(s.stream, err)
 	}
 	resp, err := s.stream.Recv()
 	if err != nil {
@@ -400,4 +402,17 @@ func (s *v1alphaStream) files(name string, bySymbol bool) ([][]byte, error) {
 func (s *v1alphaStream) close() {
 	_ = s.stream.CloseSend()
 	s.cancel()
+}
+
+// sendErr turns io.EOF from Send into the stream's real status: a server
+// without the service (Unimplemented, which triggers the v1alpha fallback)
+// can end the stream before the request is written, and gRPC then reports
+// the cause only from Recv.
+func sendErr(stream interface{ RecvMsg(any) error }, err error) error {
+	if errors.Is(err, io.EOF) {
+		if rerr := stream.RecvMsg(new(emptypb.Empty)); rerr != nil && !errors.Is(rerr, io.EOF) {
+			return rerr
+		}
+	}
+	return err
 }
