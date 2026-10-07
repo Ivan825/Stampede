@@ -25,6 +25,7 @@ import (
 	"github.com/Ivan825/Stampede/examples/packlab/authlab"
 	"github.com/Ivan825/Stampede/examples/packlab/banklab"
 	"github.com/Ivan825/Stampede/examples/packlab/chatlab"
+	"github.com/Ivan825/Stampede/examples/packlab/edgelab"
 	"github.com/Ivan825/Stampede/examples/packlab/examlab"
 	"github.com/Ivan825/Stampede/examples/packlab/govlab"
 	"github.com/Ivan825/Stampede/examples/packlab/labkit"
@@ -62,6 +63,7 @@ var products = map[string]product{
 	"government":      {pack: "government", addr: ":8102", new: govlab.New},
 	"delivery":        {pack: "delivery", addr: ":8103", new: ridelab.New},
 	"mobile-backends": {pack: "mobile-backends", addr: ":8104", new: mobilelab.New},
+	"serverless":      {pack: "serverless", addr: ":8105", new: edgelab.New},
 }
 
 func names() []string {

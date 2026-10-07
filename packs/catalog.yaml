@@ -19,6 +19,6 @@ packs:
   - { name: public-apis, title: "Public APIs, developer platforms", status: shipped, signature: "Rate limits, API keys, webhook delivery", drivers: [http] }
   - { name: identity, title: "Login and identity", status: shipped, signature: "Login storm; token refresh waves", drivers: [http] }
   - { name: mobile-backends, title: "Mobile app backends", status: shipped, signature: "Matching category, driven at the API", drivers: [http, graphql] }
-  - { name: serverless, title: "Serverless and edge", status: planned, signature: "Cold starts; concurrency limits", drivers: [http] }
+  - { name: serverless, title: "Serverless and edge", status: shipped, signature: "Cold starts; concurrency limits", drivers: [http] }
   - { name: event-pipelines, title: "Event pipelines, queues", status: planned, signature: "Ingest rate; consumer lag; backlog recovery", drivers: [kafka] }
   - { name: databases, title: "Databases, caches", status: planned, signature: "Query mix; connection-pool exhaustion", drivers: [sql, redis] }

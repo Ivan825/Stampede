@@ -1,0 +1,61 @@
+# Everyday traffic to an app built from functions: most visitors follow a
+# short link (a redirect), some shorten a link and try it, check a link's
+# stats, fetch a link-preview image or call a tiny hello function. Each
+# route is its own function with its own instances, so each warms up and
+# cools down on its own.
+apiVersion: stampede.dev/v1
+kind: Scenario
+metadata:
+  name: serverless-app-mix
+  description: Weighted redirect, create, stats, preview and hello journeys across several functions.
+  tags: [pack:serverless]
+target:
+  baseURL: ${env.TARGET_URL}
+  # Redirects point off-site; check them instead of following them.
+  http: { maxRedirects: -1 }
+journeys:
+  - name: visitor
+    weight: 55
+    steps:
+      - name: redirect
+        get: /r/go${rand(1000, 1999)}
+        check: { status: 301, expr: "headers['location'].startsWith('https://')" }
+  - name: shorten
+    weight: 15
+    steps:
+      - name: create link
+        post: /api/links
+        json: { url: "https://example.com/posts/${randString(10)}" }
+        check: { status: 201, json: { "$.code": exists } }
+        extract: { code: "$.code" }
+      - think: 1s..3s
+      - name: try it
+        get: /r/${code}
+        check: { status: 301 }
+  - name: stats
+    weight: 15
+    steps:
+      - name: link stats
+        get: /api/links/go${rand(1000, 1999)}/stats
+        check: { status: 200, json: { "$.clicks": exists } }
+  - name: preview
+    weight: 10
+    steps:
+      - name: preview image
+        get: /api/preview?url=https://example.com/posts/${rand(1, 500)}
+        check: { status: 200 }
+  - name: hello
+    weight: 5
+    steps:
+      - name: hello
+        get: /api/hello?name=${randString(5)}
+        check: { status: 200 }
+load:
+  mode: rate
+  rate: 10/s
+  duration: 5m
+targets:
+  - http.p95 < 300ms
+  - errors < 1%
+  - "visitor/redirect.p50 < 50ms"
+  - "visitor/redirect.p99 < 500ms"

@@ -221,6 +221,7 @@ func checkLoad(t *testing.T, target, name string) {
 var wantStatus = map[string]int{
 	"public-apis/stresses/rate-limit-burst.yaml":   429,
 	"ticketing/stresses/seat-lock-contention.yaml": 409,
+	"serverless/stresses/concurrency-limit.yaml":   429,
 }
 
 func shorten(s *scenario.Scenario) {

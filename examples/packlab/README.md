@@ -22,6 +22,7 @@ and as a single binary in CI. (The e-commerce pack's reference app is
 | `government` | [GovLab](#govlab) | 8102 | [government](../../packs/government) |
 | `delivery` | [RideLab](#ridelab) | 8103 | [delivery](../../packs/delivery) |
 | `mobile-backends` | [MobileLab](#mobilelab) | 8104 | [mobile-backends](../../packs/mobile-backends) |
+| `serverless` | [EdgeLab](#edgelab) | 8105 | [serverless](../../packs/serverless) |
 
 ```sh
 go run ./examples/packlab -product ticketing                # on :8094
@@ -290,3 +291,21 @@ is GraphQL at `/api/v1/graphql` with automatic persisted queries.
 | `config` | Every config request parses the whole 700 KB config document (300 flags with targeting rules) and evaluates it, and forbids caching | `push-storm.yaml`: `config` p95, and everything else as the CPU runs out |
 | `sync` | Delta sync ignores the token and sends every item the user has, every launch | `slow-network.yaml`: `delta sync` (about 570ms against 310ms with the fix on 3G); `push-storm.yaml`: `delta sync` |
 | `events` | Each analytics event is written on its own (200µs) under one global lock | `offline-catchup.yaml` and `push-storm.yaml`: `events` p95 |
+
+## EdgeLab
+
+A link shortener running as functions on a simulated serverless
+platform. Each route is a function with its own instances: a request
+takes a warm instance if one is free, otherwise starts a new one (a cold
+start), up to the function's reserved concurrency (100 for redirects, 5
+for the preview image, 50 for the rest; 200 across the account), beyond
+which it gets 429 with `Retry-After`. Instances idle for a minute are
+reclaimed. Responses carry `X-Cold-Start`, `X-Function-Instance` and
+`Server-Timing`; `/_platform/functions` shows instances, cold starts and
+throttles. Links `go1000` ... `go1999` exist.
+
+| Fix | Bottleneck | Where it shows |
+|---|---|---|
+| `init` | A cold start loads the whole bundle, 400 modules, before serving (800ms) instead of 40 up front and the rest when first needed (80ms) | `burst-after-idle.yaml`: `redirect` p99 (about 825ms against 7ms with every fix in a 150/s burst) |
+| `prewarm` | No instances are kept ready, so every burst starts cold | `burst-after-idle.yaml`: `redirect` p99 at the start of each burst |
+| `pool` | Every invocation opens its own database connection (20ms) instead of reusing the instance's | `app-mix.yaml` and both stresses: `redirect` and `link stats` p50 |

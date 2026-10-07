@@ -1,0 +1,25 @@
+apiVersion: stampede.dev/v1
+kind: Pack
+name: serverless
+title: Serverless and edge
+description: >
+  Apps running as functions (AWS Lambda, Google Cloud Functions, Vercel,
+  Netlify and edge runtimes): everyday traffic across several functions,
+  bursts after quiet periods that hit cold starts, and a function pushed
+  past its concurrency limit, where 429 with Retry-After is the right
+  answer. Built for apps shaped like EdgeLab; adjust paths to your
+  functions' routes.
+status: shipped
+protocols: [http]
+referenceApp: examples/packlab/edgelab
+detect:
+  # Function platforms announce themselves in response headers.
+  paths: ["/_platform/functions", "/.netlify/functions", "/api/functions", "/2015-03-31/functions"]
+  openapiTags: [functions, serverless, edge, lambda]
+  htmlMeta: []
+  headers: { Function-Execution-Id: "", X-Cold-Start: "", X-Amzn-RequestId: "", X-Amz-Apigw-Id: "", X-Vercel-Id: "", X-Nf-Request-Id: "" }
+variables:
+  TARGET_URL: { description: Base URL of the app (its function routes) }
+targets:
+  - http.p95 < 300ms
+  - errors < 1%
