@@ -213,6 +213,13 @@ func stepURL(st Step) (string, bool) {
 	return "", false
 }
 
+// EachStep calls fn for every step of every journey, nested ones included.
+func (s *Scenario) EachStep(fn func(Step)) {
+	for _, j := range s.Journeys {
+		walkSteps(j.Steps, fn)
+	}
+}
+
 func walkSteps(steps []Step, fn func(Step)) {
 	for _, st := range steps {
 		fn(st)

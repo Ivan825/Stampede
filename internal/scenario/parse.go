@@ -73,6 +73,11 @@ func (s *Scenario) ResolvePaths(dir string) {
 	}
 	for _, j := range s.Journeys {
 		walkSteps(j.Steps, func(st Step) {
+			for _, ch := range st.Checks() {
+				if p, ok := ch.Schema.(string); ok {
+					ch.Schema = abs(p)
+				}
+			}
 			if g := st.GRPC; g != nil {
 				g.Protoset = abs(g.Protoset)
 				// .proto files are found under the import paths, so only

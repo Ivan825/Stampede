@@ -520,6 +520,10 @@ type Check struct {
 	MaxLatency Duration       `yaml:"maxLatency,omitempty" json:"maxLatency,omitempty"`
 	// Expr is a boolean expression over status, headers, body and json.
 	Expr string `yaml:"expr,omitempty" json:"expr,omitempty"`
+	// Schema validates the JSON body against a JSON Schema (draft 2020-12
+	// unless the schema says otherwise): an inline object, or the path of
+	// a .json, .yaml or .yml file relative to the scenario.
+	Schema any `yaml:"schema,omitempty" json:"schema,omitempty"`
 	// AllowErrors (GraphQL only) accepts a response whose errors array is
 	// not empty; by default that fails the step.
 	AllowErrors bool `yaml:"allowErrors,omitempty" json:"allowErrors,omitempty"`
@@ -627,4 +631,46 @@ func (n *Network) Resolve() (netem.Profile, error) {
 		return p, fmt.Errorf("set a profile, rtt, down, up, jitter or loss")
 	}
 	return p, nil
+}
+
+// Checks returns the response checks this step carries (HTTP, GraphQL,
+// SSE and plugin steps), for code that adjusts them in place.
+func (st Step) Checks() []*Check {
+	var out []*Check
+	for _, c := range []*Check{
+		ptrCheck(st.Request), ptrCheck(gqlReq(st.GraphQL)), ptrCheck(sseReq(st.SSE)), pluginCheck(st.Plugin),
+	} {
+		if c != nil {
+			out = append(out, c)
+		}
+	}
+	return out
+}
+
+func ptrCheck(r *Request) *Check {
+	if r == nil {
+		return nil
+	}
+	return r.Check
+}
+
+func gqlReq(g *GraphQL) *Request {
+	if g == nil {
+		return nil
+	}
+	return &g.Request
+}
+
+func sseReq(s *SSE) *Request {
+	if s == nil {
+		return nil
+	}
+	return &s.Request
+}
+
+func pluginCheck(p *PluginStep) *Check {
+	if p == nil {
+		return nil
+	}
+	return p.Check
 }

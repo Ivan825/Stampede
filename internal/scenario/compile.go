@@ -1,10 +1,15 @@
 package scenario
 
 import (
+	"bytes"
 	"crypto/sha256"
 	"encoding/hex"
+	"encoding/json"
+	"errors"
 	"fmt"
 	"net/url"
+	"os"
+	"path/filepath"
 	"regexp"
 	"slices"
 	"sort"
@@ -12,6 +17,10 @@ import (
 
 	"cel.dev/cel-go/interpreter"
 	"github.com/andybalholm/cascadia"
+	"github.com/santhosh-tekuri/jsonschema/v6"
+	"go.yaml.in/yaml/v3"
+	"golang.org/x/text/language"
+	"golang.org/x/text/message"
 )
 
 // Program is a scenario compiled for execution: every template and
@@ -217,8 +226,40 @@ type CCheck struct {
 	JSON         []JSONCheck
 	MaxLatency   Duration
 	Expr         *Expr
+	// Schema validates the body; see SchemaProblem.
+	Schema *jsonschema.Schema
 	// NeedsJSON is set when the check reads the parsed body.
 	NeedsJSON bool
+}
+
+// SchemaProblem validates body against the check's schema and returns ""
+// when it passes, or the first problem.
+func (c *CCheck) SchemaProblem(body []byte) string {
+	doc, err := jsonschema.UnmarshalJSON(bytes.NewReader(body))
+	if err != nil {
+		return "the body is not JSON"
+	}
+	if err := c.Schema.Validate(doc); err != nil {
+		var ve *jsonschema.ValidationError
+		if errors.As(err, &ve) {
+			if leaf := firstLeaf(ve); leaf != nil {
+				loc := "/" + strings.Join(leaf.InstanceLocation, "/")
+				return loc + ": " + leaf.ErrorKind.LocalizedString(schemaPrinter)
+			}
+		}
+		return err.Error()
+	}
+	return ""
+}
+
+var schemaPrinter = message.NewPrinter(language.English)
+
+// firstLeaf returns the deepest first cause, the most specific problem.
+func firstLeaf(ve *jsonschema.ValidationError) *jsonschema.ValidationError {
+	for len(ve.Causes) > 0 {
+		ve = ve.Causes[0]
+	}
+	return ve
 }
 
 // JSONCheck asserts a value at a path.
@@ -912,7 +953,65 @@ func (c *compiler) check(path string, ch *Check, vars []string) *CCheck {
 			cc.NeedsJSON = true
 		}
 	}
+	if ch.Schema != nil {
+		cc.Schema = c.responseSchema(path+".schema", ch.Schema)
+		cc.NeedsJSON = true
+	}
 	return cc
+}
+
+// responseSchema compiles a check's JSON Schema, inline or from a file.
+func (c *compiler) responseSchema(path string, v any) *jsonschema.Schema {
+	var raw []byte
+	loc := "stampede-check:///" + path + ".json"
+	switch x := v.(type) {
+	case string:
+		b, err := os.ReadFile(x) //nolint:gosec // a file the scenario names; the server confines it to its data directory
+		if err != nil {
+			c.errf(path, "%v", err)
+			return nil
+		}
+		if ext := strings.ToLower(filepath.Ext(x)); ext == ".yaml" || ext == ".yml" {
+			var doc any
+			if err := yaml.Unmarshal(b, &doc); err != nil {
+				c.errf(path, "%s: %v", x, err)
+				return nil
+			}
+			if b, err = json.Marshal(doc); err != nil {
+				c.errf(path, "%s: %v", x, err)
+				return nil
+			}
+		}
+		raw = b
+		loc = (&url.URL{Scheme: "file", Path: filepath.ToSlash(x)}).String()
+	case map[string]any:
+		b, err := json.Marshal(x)
+		if err != nil {
+			c.errf(path, "%v", err)
+			return nil
+		}
+		raw = b
+	default:
+		c.errf(path, "must be an inline JSON Schema object or the path of a schema file")
+		return nil
+	}
+	doc, err := jsonschema.UnmarshalJSON(bytes.NewReader(raw))
+	if err != nil {
+		c.errf(path, "not JSON: %v", err)
+		return nil
+	}
+	comp := jsonschema.NewCompiler()
+	comp.DefaultDraft(jsonschema.Draft2020)
+	if err := comp.AddResource(loc, doc); err != nil {
+		c.errf(path, "%v", err)
+		return nil
+	}
+	s, err := comp.Compile(loc)
+	if err != nil {
+		c.errf(path, "invalid JSON Schema: %v", err)
+		return nil
+	}
+	return s
 }
 
 func (c *compiler) jsonTemplate(scope *Scope, path string, v any) *JSONTemplate {

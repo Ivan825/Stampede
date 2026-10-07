@@ -224,6 +224,7 @@
         "json": { "type": "object", "description": "JSONPath -> expected value, or \"exists\"." },
         "maxLatency": { "$ref": "#/$defs/duration" },
         "expr": { "type": "string", "description": "Boolean expression over status, headers, body, json, latencyMs." },
+        "schema": { "type": ["object", "string"], "description": "A JSON Schema the body must match: inline, or a .json/.yaml file path relative to the scenario." },
         "allowErrors": { "type": "boolean", "description": "GraphQL only: accept a response whose errors array is not empty." }
       }
     },
