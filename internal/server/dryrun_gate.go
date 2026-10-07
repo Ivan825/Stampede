@@ -62,7 +62,7 @@ func (m *runManager) dryRunGate(ctx context.Context, r *activeRun, spec ExecSpec
 			err = fmt.Errorf("it took longer than %s", DryRunGateTimeout)
 		}
 		m.event(ctx, r, ExecEvent{Type: "dryrun.failed", Message: "the dry run could not finish: " + err.Error()})
-		return fmt.Errorf("the required dry run could not finish (%v), so no load was started", err)
+		return fmt.Errorf("the required dry run could not finish (%w), so no load was started", err)
 	}
 	var failed []string
 	for _, c := range checks {
