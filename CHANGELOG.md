@@ -75,7 +75,7 @@ release. Features still being built are listed as planned in
 - Scheduled runs.
 - Scheduled drift checks: a dry run of every journey and an OpenAPI diff
   on a cron, `drift.detected` notifications, and an AI repair proposal
-  that a person approves.
+  that a person approves, in the CLI, the API and the web UI.
 - AI generation of gRPC journeys from `.proto` files, dry-run against the
   target.
 - Product packs for eleven kinds of product, detected by `stampede init`.
@@ -116,10 +116,13 @@ release. Features still being built are listed as planned in
 - Requests confined to the target and explicitly allowed hosts.
 - A kill switch in the web UI, CLI and API.
 - Roles, API tokens, encrypted secrets and an audit log.
-- Per-project role overrides.
-- Organisation and project caps on rate, virtual users and duration.
+- Per-project role overrides, set in the API or a project's settings in the
+  web UI.
+- Organisation and project caps on rate, virtual users and duration, edited
+  in the API or the web UI, which shows each target's effective caps.
 - An optional project setting that requires a passing dry run before any
-  load.
+  load; the run page shows each journey's dry-run result and the run's
+  events.
 - Runs that would call payment, SMS, email or CAPTCHA services are refused
   by the server and reported by `stampede validate`.
 - Single sign-on with OpenID Connect.
