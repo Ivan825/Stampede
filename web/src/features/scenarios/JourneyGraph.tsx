@@ -110,9 +110,9 @@ function flowNodes(result: GraphResult, editable: boolean, selected: string | nu
 /**
  * The journeys as a graph. With `onChange` it also edits the YAML: drag a
  * step to reorder it among its siblings, select a node to change it, add
- * steps or remove it in the side panel. Every edit parses the YAML,
- * changes it and prints it again, so the YAML stays the single source of
- * truth and the editor and the graph never disagree.
+ * steps or remove it in the side panel. Every edit parses the YAML and
+ * rewrites the lines it changes (see scenarioEdit.ts), so the YAML stays
+ * the single source of truth and the editor and the graph never disagree.
  */
 export function JourneyGraphView({
   yaml,
@@ -194,8 +194,8 @@ export function JourneyGraphView({
         {editable && (
           <span className="font-sans">
             {' '}
-            · Drag a step to reorder it; select one to edit it. Graph edits rewrite the YAML:
-            comments are kept, spacing may change.
+            · Drag a step to reorder it; select one to edit it. Graph edits change only the YAML
+            lines of the steps they touch.
           </span>
         )}
       </p>
