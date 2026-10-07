@@ -37,7 +37,10 @@ In mock mode you are signed in as the owner of "Acme Retail" with three
 projects, a run in progress (streamed over SSE), run history with reports,
 workers, users, tokens and an audit log. Starting a run creates a new
 simulated run that finishes on its planned duration (use a short `duration`
-override to see the switch to the report). URL switches:
+override to see the switch to the report). The Storefront project requires
+a passing dry run before load (one of its runs was refused by it), has two
+per-project role overrides, and has an hourly drift schedule whose last
+check found a broken journey. URL switches:
 
 | URL                      | Shows                                                           |
 | ------------------------ | --------------------------------------------------------------- |
