@@ -42,6 +42,8 @@ details.ex summary { cursor: pointer; }
 .exchange { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 10px; }
 .exchange pre { margin: 0; padding: 10px; background: var(--bg); border: 1px solid var(--line); border-radius: 6px; font: 12px/1.45 var(--mono); white-space: pre-wrap; word-break: break-word; max-height: 320px; overflow: auto; }
 .exchange p { grid-column: 1 / -1; margin: 0; font: 12px var(--mono); }
+.exchange img.shot { grid-column: 1 / -1; max-width: 100%; border: 1px solid var(--line); border-radius: 6px; }
+.exchange pre.console { grid-column: 1 / -1; }
 @media (max-width: 720px) { .exchange { grid-template-columns: 1fr; } }
 svg { width: 100%; height: auto; display: block; }
 @media print {
@@ -256,6 +258,10 @@ footer a, td a { color: var(--accent); }
 
 {{.ResponseBody}}{{end}}</pre>
 {{if .TraceID}}<p class="muted">trace {{.TraceID}}</p>{{end}}
+{{if .Screenshot}}<img class="shot" alt="The page when the step failed" src="{{jpeg .Screenshot}}">{{end}}
+{{if .Console}}<pre class="console">{{range .Console}}{{.}}
+{{end}}</pre>{{end}}
+{{if .HAR}}<p><a download="stampede-failure.har" href="{{har .HAR}}">Download the page's HAR</a></p>{{end}}
 </div>{{end}}
 </details>
 {{end}}{{end}}

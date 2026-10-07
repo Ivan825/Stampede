@@ -253,6 +253,12 @@ byte, first contentful paint, largest contentful paint, cumulative layout
 shift and the load event; clicks and key presses record interaction to
 next paint. Reports show them per step as mean and p95 under *Web vitals*.
 
+**Failures.** When a browser step fails, the first three failures of each
+kind keep a JPEG screenshot of the page, its console errors, warnings and
+uncaught exceptions (up to 50 lines), and a HAR of the requests the page
+made (no bodies; credential headers and the run's secrets redacted). The
+HTML report shows them under *Errors*, with the HAR as a download.
+
 **Chrome.** The worker or CLI running the scenario needs Chrome or
 Chromium: it is found on `PATH` (`chromium`, `google-chrome`, ...), in the
 standard install location, or at `STAMPEDE_CHROME`. A run with browser

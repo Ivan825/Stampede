@@ -2,6 +2,7 @@ package report
 
 import (
 	_ "embed"
+	"encoding/base64"
 	"fmt"
 	"html/template"
 	"io"
@@ -22,6 +23,13 @@ var htmlTmpl = template.Must(template.New("report").Funcs(template.FuncMap{
 	"rate":    func(f float64) string { return strconv.FormatFloat(f, 'f', 1, 64) },
 	"when":    func(t time.Time) string { return t.Format("2 Jan 2006 15:04:05 MST") },
 	"secs":    func(f float64) string { return fmtSecs(f) },
+	// Data URLs for browser failure artifacts kept in the report.
+	"jpeg": func(b []byte) template.URL {
+		return template.URL("data:image/jpeg;base64," + base64.StdEncoding.EncodeToString(b)) //nolint:gosec // our own encoding of image bytes
+	},
+	"har": func(s string) template.URL {
+		return template.URL("data:application/json;base64," + base64.StdEncoding.EncodeToString([]byte(s))) //nolint:gosec // our own encoding
+	},
 	"vital": func(ps *PhaseStat, cls bool) string {
 		if ps == nil {
 			return "–"

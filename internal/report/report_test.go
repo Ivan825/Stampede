@@ -248,3 +248,18 @@ func TestCSV(t *testing.T) {
 		t.Fatalf("timeline %v %v", err, rows)
 	}
 }
+
+func TestHTMLShowsBrowserArtifacts(t *testing.T) {
+	r := build(t, 150*time.Millisecond, 10)
+	r.Errors[0].Examples = []metrics.ErrorExample{{Request: "BROWSER http://shop.test/", Screenshot: []byte{0xFF, 0xD8, 0xFF}, Console: []string{"error: boom"}, HAR: `{"log":{}}`}}
+	var buf bytes.Buffer
+	if err := r.WriteHTML(&buf); err != nil {
+		t.Fatal(err)
+	}
+	h := buf.String()
+	for _, want := range []string{`src="data:image/jpeg;base64,/9j/`, "error: boom", `href="data:application/json;base64,`, "BROWSER http://shop.test/"} {
+		if !strings.Contains(h, want) {
+			t.Errorf("HTML missing %q", want)
+		}
+	}
+}
