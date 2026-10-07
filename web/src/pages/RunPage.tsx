@@ -1,21 +1,24 @@
 import { useQueryClient } from '@tanstack/react-query';
 import { Link, useParams } from '@tanstack/react-router';
-import { OctagonX, Square } from 'lucide-react';
+import { OctagonX, ShieldAlert, Square } from 'lucide-react';
 import { useCallback, useEffect, useMemo } from 'react';
 import { ApiError } from '@/api/client';
 import {
   keys,
   useKillRun,
   useMe,
+  useProject,
   useReport,
   useRun,
   useRunEvents,
   useStopRun,
+  useTargets,
   useTimeline,
 } from '@/api/queries';
 import type { Run } from '@/api/types';
 import { isTerminal } from '@/api/types';
 import { StatusChip, VerdictChip } from '@/components/chips';
+import { CliHint } from '@/components/cliHint';
 import { Confirm } from '@/components/dialog';
 import { useToast } from '@/components/toast';
 import { Button, ErrorAlert, Loading, Notice } from '@/components/ui';
@@ -23,6 +26,7 @@ import { LiveView } from '@/features/runs/LiveView';
 import { Downloads, ReportView } from '@/features/runs/ReportView';
 import { DryRunGatePanel, EventFeed } from '@/features/runs/RunEvents';
 import { dryRunGate, mergeEvents } from '@/features/runs/eventLog';
+import { cli } from '@/lib/cli';
 import { dateTime } from '@/lib/format';
 import { permissions } from '@/lib/roles';
 import { useRunStream } from '@/lib/useRunStream';
@@ -33,6 +37,8 @@ function RunHeader({ run }: { run: Run }) {
   const stop = useStopRun();
   const kill = useKillRun();
   const toast = useToast();
+  const project = useProject(run.projectId);
+  const target = useTargets(run.projectId).data?.find((t) => t.id === run.targetId);
   const active = !isTerminal(run.status);
   return (
     <div className="mb-5 flex flex-wrap items-start gap-3">
@@ -73,10 +79,18 @@ function RunHeader({ run }: { run: Run }) {
         </p>
         {run.note && <p className="mt-1 text-[13px]">{run.note}</p>}
       </div>
-      <div className="flex flex-wrap items-center gap-2">
+      <div className="flex flex-col items-end gap-2">
         {active && can.stopRuns && (
-          <>
+          <div
+            role="group"
+            aria-label="Safety controls"
+            className="flex items-center gap-2 rounded-md border border-fail/40 bg-fail-bg/50 py-1 pr-1 pl-2.5"
+          >
+            <span className="flex items-center gap-1.5 text-xs font-medium text-fail">
+              <ShieldAlert className="size-3.5" aria-hidden /> Safety
+            </span>
             <Button
+              size="sm"
               onClick={() =>
                 stop.mutate(run.id, {
                   onSuccess: () => toast.success('Stopping. In-flight iterations may finish.'),
@@ -90,7 +104,7 @@ function RunHeader({ run }: { run: Run }) {
             </Button>
             <Confirm
               trigger={
-                <Button variant="danger-solid">
+                <Button size="sm" variant="danger-solid" aria-label="Kill switch: kill this run">
                   <OctagonX className="size-4" aria-hidden /> Kill
                 </Button>
               }
@@ -103,16 +117,26 @@ function RunHeader({ run }: { run: Run }) {
                 toast.success('Run killed.');
               }}
             />
-          </>
+          </div>
         )}
         {!active && <Downloads runId={run.id} />}
+        {!active && (
+          <CliHint
+            command={cli.start({
+              project: project.data?.slug,
+              scenario: run.scenarioName,
+              target: target?.name,
+            })}
+          >
+            Run it again
+          </CliHint>
+        )}
       </div>
     </div>
   );
 }
 
 export function RunPage() {
-  const canNarrate = permissions(useMe().role).editScenarios;
   const { runId } = useParams({ from: '/app/runs/$runId' });
   const qc = useQueryClient();
   const runQ = useRun(runId, (q) =>
@@ -178,7 +202,7 @@ export function RunPage() {
           <ErrorAlert error={report.error} />
         )
       ) : (
-        <ReportView report={report.data} runId={run.id} canNarrate={canNarrate} />
+        <ReportView report={report.data} runId={run.id} />
       )}
       {finished && (
         <div className="mt-4">

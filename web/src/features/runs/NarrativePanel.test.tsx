@@ -1,13 +1,7 @@
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { render, screen, within } from '@testing-library/react';
-import type { ReactNode } from 'react';
 import { describe, expect, it } from 'vitest';
 import type { Narrative } from '@/api/types';
 import { NarrativePanel } from './NarrativePanel';
-
-function wrap(children: ReactNode) {
-  return <QueryClientProvider client={new QueryClient()}>{children}</QueryClientProvider>;
-}
 
 const narrative: Narrative = {
   model: 'claude-sonnet-5-5',
@@ -24,7 +18,7 @@ const narrative: Narrative = {
 
 describe('NarrativePanel', () => {
   it('shows each claim with its label and citations', () => {
-    render(wrap(<NarrativePanel runId="r1" narrative={narrative} canWrite={false} />));
+    render(<NarrativePanel runId="r1" narrative={narrative} />);
     expect(screen.getByText('The run missed its checkout target.')).toBeInTheDocument();
     const claims = screen.getAllByRole('listitem');
     expect(claims).toHaveLength(2);
@@ -36,10 +30,14 @@ describe('NarrativePanel', () => {
     expect(screen.queryByRole('button')).not.toBeInTheDocument();
   });
 
-  it('offers to write a summary only to those allowed', () => {
-    const { rerender } = render(wrap(<NarrativePanel runId="r1" canWrite />));
-    expect(screen.getByRole('button', { name: /write a summary/i })).toBeInTheDocument();
-    rerender(wrap(<NarrativePanel runId="r1" canWrite={false} />));
-    expect(screen.queryByText('AI summary')).not.toBeInTheDocument();
+  it('points to the CLI when there is no summary, without a button to write one', () => {
+    render(<NarrativePanel runId="r1" />);
+    expect(screen.getByText('stampede narrative r1')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /write/i })).not.toBeInTheDocument();
+  });
+
+  it('shows nothing without a summary or a run', () => {
+    const { container } = render(<NarrativePanel />);
+    expect(container).toBeEmptyDOMElement();
   });
 });

@@ -222,15 +222,7 @@ export function WebVitals({ journeys }: { journeys: ReportJourney[] }) {
   );
 }
 
-export function ReportView({
-  report,
-  runId,
-  canNarrate = false,
-}: {
-  report: Report;
-  runId?: string;
-  canNarrate?: boolean;
-}) {
+export function ReportView({ report, runId }: { report: Report; runId?: string }) {
   const o = report.overall;
   const unit = report.load.mode === 'rate' ? '/s' : ' VUs';
   const thresholds = report.thresholds ?? [];
@@ -267,7 +259,7 @@ export function ReportView({
         </Notice>
       ))}
 
-      <NarrativePanel runId={runId} narrative={report.narrative} canWrite={canNarrate} />
+      <NarrativePanel runId={runId} narrative={report.narrative} />
 
       {thresholds.length > 0 && (
         <>
