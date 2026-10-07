@@ -799,6 +799,16 @@ paths:
     get:
       tags: [runs]
       operationId: getRunTimeline
+      parameters:
+        - name: resolution
+          in: query
+          description: |
+            1s (default) returns the per-second points. 10s and 1m return
+            rollups: requests summed, rps averaged, p50 the mean and p95/p99
+            the worst per-second value in each bucket. With TimescaleDB the
+            rollups are continuous aggregates kept after per-second points
+            expire (stampede server --metrics-retention).
+          schema: { type: string, enum: [1s, 10s, 1m], default: 1s, x-enum-varnames: [Resolution1s, Resolution10s, Resolution1m] }
       responses:
         "200":
           description: Per-interval points recorded so far

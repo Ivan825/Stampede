@@ -63,6 +63,7 @@ type serverFlags struct {
 	oidcDomains   []string
 	oidcRole      string
 	schedInterval time.Duration
+	retention     string
 }
 
 func newServerCmd() *cobra.Command {
@@ -114,7 +115,25 @@ Environment:
 	fl.StringVar(&f.oidcRole, "oidc-default-role", os.Getenv("STAMPEDE_OIDC_DEFAULT_ROLE"), "role for people signing in for the first time (viewer, runner, editor, admin); empty allows only existing accounts")
 	fl.DurationVar(&f.schedInterval, "scheduler-interval", durationEnv("STAMPEDE_SCHEDULER_INTERVAL", server.DefaultSchedulerInterval), "how often to look for due schedules (0 disables scheduled runs)")
 	fl.StringSliceVar(&f.trusted, "trusted-proxy", splitEnv("STAMPEDE_TRUSTED_PROXIES"), "CIDR of a reverse proxy whose X-Forwarded-For is trusted (repeatable)")
+	fl.StringVar(&f.retention, "metrics-retention", envOr("STAMPEDE_METRICS_RETENTION", "0"), "how long to keep per-second run metrics, e.g. 30d (0 keeps them forever; at least 1d). Reports, and with TimescaleDB the 10s and 1m rollups, are kept")
 	return cmd
+}
+
+// parseRetention reads --metrics-retention: 0 (or empty) keeps metrics
+// forever; otherwise a duration of at least a day, such as 30d or 720h.
+func parseRetention(s string) (time.Duration, error) {
+	s = strings.TrimSpace(s)
+	if s == "" || s == "0" {
+		return 0, nil
+	}
+	d, err := scenario.ParseDuration(s)
+	if err != nil {
+		return 0, fmt.Errorf("--metrics-retention: %w", err)
+	}
+	if d.D() < store.MinMetricsRetention {
+		return 0, fmt.Errorf("--metrics-retention must be 0 (keep forever) or at least 1d, got %s", s)
+	}
+	return d.D(), nil
 }
 
 func splitEnv(k string) []string {
@@ -157,6 +176,10 @@ func runServer(cmd *cobra.Command, f *serverFlags) error {
 	slog.SetDefault(log)
 	if f.databaseURL == "" {
 		return errors.New("set --database-url or STAMPEDE_DATABASE_URL")
+	}
+	retention, err := parseRetention(f.retention)
+	if err != nil {
+		return err
 	}
 	st, err := openStoreWithRetry(ctx, log, f.databaseURL, 60*time.Second)
 	if err != nil {
@@ -321,6 +344,9 @@ func runServer(cmd *cobra.Command, f *serverFlags) error {
 		srv.StartScheduler(ctx)
 	} else {
 		log.Info("scheduled runs disabled (--scheduler-interval 0)")
+	}
+	if err := srv.StartMetricsRetention(ctx, retention); err != nil {
+		return fmt.Errorf("--metrics-retention: %w", err)
 	}
 	if err := srv.ListenAndServe(ctx, f.addr); err != nil {
 		return err

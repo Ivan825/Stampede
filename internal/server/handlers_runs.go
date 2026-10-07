@@ -512,6 +512,9 @@ func (h *handlers) GetRunTimeline(ctx context.Context, req gen.GetRunTimelineReq
 	if err != nil {
 		return nil, err
 	}
+	if res := req.Params.Resolution; res != nil && *res != gen.Resolution1s {
+		return h.rolledUpTimeline(ctx, r, string(*res))
+	}
 	rows, err := h.st.ListRunPoints(ctx, r.ID)
 	if err != nil {
 		return nil, err
