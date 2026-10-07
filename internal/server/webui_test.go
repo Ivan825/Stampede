@@ -373,9 +373,9 @@ func TestSettingsAPI(t *testing.T) {
 
 	type caps struct{ MaxRate, MaxVUs, MaxDurationSeconds *float64 }
 	var lim struct {
-		Server           struct{ MaxRate, MaxVUs, MaxDurationSeconds *float64 }
-		Organisation     caps
-		Projects         []struct {
+		Server       struct{ MaxRate, MaxVUs, MaxDurationSeconds *float64 }
+		Organisation caps
+		Projects     []struct {
 			Name          string
 			Caps          caps
 			RequireDryRun bool
