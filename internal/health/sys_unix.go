@@ -1,6 +1,6 @@
 //go:build unix
 
-package worker
+package health
 
 import (
 	"os"

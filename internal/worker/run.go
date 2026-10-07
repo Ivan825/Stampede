@@ -137,7 +137,7 @@ func (w *Worker) onSnapshot(r *activeRun, s *metrics.Snapshot) {
 	if s.SchedLag != nil {
 		lag = time.Duration(s.SchedLag.Quantile(0.99)) * time.Microsecond
 	}
-	h := w.mon.observe(lag, s.Dropped)
+	h := w.mon.Observe(lag, s.Dropped)
 	p, err := wire.SnapshotToProto(r.id, s, &h)
 	if err != nil {
 		w.log.Error("cannot encode snapshot", "run", r.id, "interval", s.Interval, "error", err)
@@ -188,7 +188,7 @@ func (w *Worker) execute(r *activeRun) {
 // finishLocal records the end of the run and sends RunFinished; it is
 // resent on reconnect until the server acknowledges it.
 func (w *Worker) finishLocal(r *activeRun, fin *workerv1.RunFinished) {
-	w.mon.idle()
+	w.mon.Idle()
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	if fin == nil {

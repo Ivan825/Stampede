@@ -1,4 +1,4 @@
-package worker
+package health
 
 import (
 	"strings"
@@ -29,6 +29,10 @@ func TestEvaluateThresholds(t *testing.T) {
 		{name: "fds near limit", s: with(calm, func(s *sysSample) { s.openFDs = 900 }), reason: "900 of 1024 file descriptors", saturate: true},
 		{name: "fds at 80%", s: with(calm, func(s *sysSample) { s.openFDs, s.fdLimit = 800, 1000 })},
 		{name: "fd limit unknown", s: with(calm, func(s *sysSample) { s.openFDs, s.fdLimit = 5000, 0 })},
+		{name: "ephemeral ports", s: with(calm, func(s *sysSample) { s.portsUsed, s.portRange = 25000, 28232 }), reason: "25000 of 28232 ephemeral ports", saturate: true},
+		{name: "ports fine", s: with(calm, func(s *sysSample) { s.portsUsed, s.portRange = 1000, 28232 })},
+		{name: "network near link speed", s: with(calm, func(s *sysSample) { s.busiest, s.netUse, s.linkBits = "eth0", 0.92, 1_000_000_000 }), reason: "network eth0 at 92% of its 1000 Mbit/s link", saturate: true},
+		{name: "link speed unknown", s: with(calm, func(s *sysSample) { s.busiest, s.netUse, s.linkBits = "eth0", 0.92, 0 })},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -61,7 +65,7 @@ func TestEvaluateReportsEveryReason(t *testing.T) {
 }
 
 func TestMonitorSamplesProcess(t *testing.T) {
-	m := newMonitor(DefaultThresholds)
+	m := NewMonitor(DefaultThresholds)
 	// Burn a little CPU and allocate so the sample has something to see.
 	deadline := time.Now().Add(50 * time.Millisecond)
 	var sink []byte
@@ -70,7 +74,7 @@ func TestMonitorSamplesProcess(t *testing.T) {
 	}
 	_ = sink
 	m.sample()
-	h := m.current()
+	h := m.Current()
 	if h.Goroutines <= 0 {
 		t.Errorf("goroutines = %d", h.Goroutines)
 	}
@@ -80,14 +84,14 @@ func TestMonitorSamplesProcess(t *testing.T) {
 	if _, limit, ok := fdUsage(); ok && (h.FDLimit != limit || h.OpenFDs == 0) {
 		t.Errorf("fds %d of %d", h.OpenFDs, h.FDLimit)
 	}
-	if got := m.observe(20*time.Millisecond, 0); got.Saturated {
+	if got := m.Observe(20*time.Millisecond, 0); got.Saturated {
 		t.Errorf("one interval of 20ms lag should not saturate yet: %+v", got)
 	}
-	if got := m.observe(20*time.Millisecond, 0); !got.Saturated {
+	if got := m.Observe(20*time.Millisecond, 0); !got.Saturated {
 		t.Errorf("20ms scheduling lag for two intervals should saturate: %+v", got)
 	}
-	m.idle()
-	if got := m.current(); got.SchedLagP99 != 0 {
+	m.Idle()
+	if got := m.Current(); got.SchedLagP99 != 0 {
 		t.Errorf("idle kept lag %v", got.SchedLagP99)
 	}
 }
@@ -105,5 +109,23 @@ func TestSingleLagIntervalIsNotSaturation(t *testing.T) {
 	h = evaluate(DefaultThresholds, sysSample{}, 0, 50*time.Millisecond, 2, 0)
 	if !h.Saturated {
 		t.Error("sustained lag should count")
+	}
+}
+
+func TestNetSampleFindsBusiestInterface(t *testing.T) {
+	m := &Monitor{prevNet: map[string]ifaceCount{
+		"eth0": {rx: 0, tx: 0, speed: 1_000_000_000},
+		"eth1": {rx: 0, tx: 0, speed: 100_000_000},
+		"veth": {rx: 0, tx: 0},
+	}}
+	cur := map[string]ifaceCount{
+		"eth0": {rx: 50_000_000, tx: 1_000, speed: 1_000_000_000}, // 400 Mbit/s of 1 Gbit/s
+		"eth1": {rx: 10_000, tx: 11_250_000, speed: 100_000_000},  // 90 Mbit/s of 100
+		"veth": {rx: 1 << 40, tx: 0},                              // speed unknown: skipped
+	}
+	var s sysSample
+	m.netUse(cur, &s, time.Second)
+	if s.busiest != "eth1" || s.netUse < 0.89 || s.netUse > 0.91 {
+		t.Fatalf("busiest %s at %v", s.busiest, s.netUse)
 	}
 }

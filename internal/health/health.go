@@ -1,10 +1,16 @@
-package worker
+// Package health watches the load generator itself: CPU, scheduling lag,
+// dropped iterations, GC pauses, file descriptors, ephemeral ports and
+// network throughput. A saturated generator may be what limits the
+// measured load, so latencies it measured then say as much about the
+// generator as about the target.
+package health
 
 import (
 	"fmt"
 	"math"
 	"runtime"
 	"runtime/metrics"
+	"strings"
 	"sync"
 	"time"
 
@@ -24,16 +30,23 @@ type Thresholds struct {
 	GCPauseP99 time.Duration
 	// FDFraction of the open-file limit.
 	FDFraction float64
+	// PortFraction of the ephemeral port range in use (Linux).
+	PortFraction float64
+	// NetFraction of a network interface's link speed, in either
+	// direction (Linux, when the speed is known).
+	NetFraction float64
 	// Any dropped iteration (no virtual user free) always saturates.
 }
 
 // DefaultThresholds are the limits from the distributed-execution plan.
 var DefaultThresholds = Thresholds{
-	CPUPercent:  85,
-	CPUFor:      5 * time.Second,
-	SchedLagP99: 10 * time.Millisecond,
-	GCPauseP99:  5 * time.Millisecond,
-	FDFraction:  0.8,
+	CPUPercent:   85,
+	CPUFor:       5 * time.Second,
+	SchedLagP99:  10 * time.Millisecond,
+	GCPauseP99:   5 * time.Millisecond,
+	FDFraction:   0.8,
+	PortFraction: 0.8,
+	NetFraction:  0.8,
 }
 
 // sysSample is one reading of the process.
@@ -44,6 +57,18 @@ type sysSample struct {
 	openFDs    uint64
 	fdLimit    uint64
 	goroutines int
+	portsUsed  uint64
+	portRange  uint64
+	// busiest is the interface closest to its link speed, and netUse
+	// that fraction.
+	busiest  string
+	netUse   float64
+	linkBits uint64
+}
+
+// ifaceCount is one interface's byte counters and link speed (bits/s).
+type ifaceCount struct {
+	rx, tx, speed uint64
 }
 
 // lagIntervals is how many consecutive intervals scheduling lag must stay
@@ -74,13 +99,19 @@ func evaluate(th Thresholds, s sysSample, cpuHighFor, schedLag time.Duration, la
 	if s.fdLimit > 0 && float64(s.openFDs) > th.FDFraction*float64(s.fdLimit) {
 		h.Reasons = append(h.Reasons, fmt.Sprintf("%d of %d file descriptors open", s.openFDs, s.fdLimit))
 	}
+	if s.portRange > 0 && float64(s.portsUsed) > th.PortFraction*float64(s.portRange) {
+		h.Reasons = append(h.Reasons, fmt.Sprintf("%d of %d ephemeral ports in use", s.portsUsed, s.portRange))
+	}
+	if s.linkBits > 0 && s.netUse > th.NetFraction {
+		h.Reasons = append(h.Reasons, fmt.Sprintf("network %s at %.0f%% of its %d Mbit/s link", s.busiest, 100*s.netUse, s.linkBits/1_000_000))
+	}
 	h.Saturated = len(h.Reasons) > 0
 	return h
 }
 
-// monitor samples the process once a second. The engine-level signals
+// Monitor samples the process once a second. The engine-level signals
 // (scheduling lag, dropped iterations) come from each snapshot.
-type monitor struct {
+type Monitor struct {
 	th Thresholds
 
 	mu        sync.Mutex
@@ -93,12 +124,13 @@ type monitor struct {
 	lastLag   time.Duration
 	lagStreak int
 	lastDrops uint64
+	prevNet   map[string]ifaceCount
 }
 
 const gcPauses = "/sched/pauses/total/gc:seconds"
 
-func newMonitor(th Thresholds) *monitor {
-	m := &monitor{th: th, gcSample: []metrics.Sample{{Name: gcPauses}}}
+func NewMonitor(th Thresholds) *Monitor {
+	m := &Monitor{th: th, gcSample: []metrics.Sample{{Name: gcPauses}}}
 	m.prevCPU, _ = processCPU()
 	m.prevWall = time.Now()
 	metrics.Read(m.gcSample)
@@ -108,8 +140,8 @@ func newMonitor(th Thresholds) *monitor {
 	return m
 }
 
-// loop samples every second until done is closed.
-func (m *monitor) loop(done <-chan struct{}) {
+// Loop samples every second until done is closed.
+func (m *Monitor) Loop(done <-chan struct{}) {
 	t := time.NewTicker(time.Second)
 	defer t.Stop()
 	for {
@@ -122,7 +154,7 @@ func (m *monitor) loop(done <-chan struct{}) {
 	}
 }
 
-func (m *monitor) sample() {
+func (m *Monitor) sample() {
 	now := time.Now()
 	s := sysSample{goroutines: runtime.NumGoroutine()}
 	cpu, ok := processCPU()
@@ -138,15 +170,40 @@ func (m *monitor) sample() {
 			m.cpuHigh = 0
 		}
 	}
+	m.netSample(&s, now.Sub(m.prevWall))
 	m.prevCPU, m.prevWall = cpu, now
 	s.gcPauseP99 = m.gcP99()
 	s.openFDs, s.fdLimit, _ = fdUsage()
+	s.portsUsed, s.portRange, _ = portUsage()
 	m.last = s
+}
+
+// netSample finds the interface closest to its link speed since the
+// previous sample. Interfaces with an unknown speed are skipped.
+func (m *Monitor) netSample(s *sysSample, elapsed time.Duration) {
+	m.netUse(ifaceCounters(), s, elapsed)
+}
+
+func (m *Monitor) netUse(cur map[string]ifaceCount, s *sysSample, elapsed time.Duration) {
+	wall := elapsed.Seconds()
+	if m.prevNet != nil && wall > 0 {
+		for name, c := range cur {
+			p, ok := m.prevNet[name]
+			if !ok || c.speed == 0 || c.rx < p.rx || c.tx < p.tx {
+				continue
+			}
+			bits := 8 * float64(max(c.rx-p.rx, c.tx-p.tx)) / wall
+			if use := bits / float64(c.speed); use > s.netUse {
+				s.busiest, s.netUse, s.linkBits = name, use, c.speed
+			}
+		}
+	}
+	m.prevNet = cur
 }
 
 // gcP99 returns the p99 GC pause since the previous call, using the
 // upper bound of the bucket that holds it.
-func (m *monitor) gcP99() time.Duration {
+func (m *Monitor) gcP99() time.Duration {
 	metrics.Read(m.gcSample)
 	v := m.gcSample[0].Value
 	if v.Kind() != metrics.KindFloat64Histogram {
@@ -181,9 +238,9 @@ func (m *monitor) gcP99() time.Duration {
 	return 0
 }
 
-// observe records the engine-level signals of a snapshot and returns the
+// Observe records the engine-level signals of a snapshot and returns the
 // health for that interval.
-func (m *monitor) observe(schedLag time.Duration, dropped uint64) wire.Health {
+func (m *Monitor) Observe(schedLag time.Duration, dropped uint64) wire.Health {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	m.lastLag, m.lastDrops = schedLag, dropped
@@ -195,17 +252,28 @@ func (m *monitor) observe(schedLag time.Duration, dropped uint64) wire.Health {
 	return evaluate(m.th, m.last, m.cpuHigh, schedLag, m.lagStreak, dropped)
 }
 
-// current returns the latest health for heartbeats.
-func (m *monitor) current() wire.Health {
+// Current returns the latest health for heartbeats.
+func (m *Monitor) Current() wire.Health {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	return evaluate(m.th, m.last, m.cpuHigh, m.lastLag, m.lagStreak, m.lastDrops)
 }
 
-// idle clears the engine-level signals when no run is active, so an old
+// Idle clears the engine-level signals when no run is active, so an old
 // run's lag does not keep a worker marked saturated.
-func (m *monitor) idle() {
+func (m *Monitor) Idle() {
 	m.mu.Lock()
 	m.lastLag, m.lastDrops, m.lagStreak = 0, 0, 0
 	m.mu.Unlock()
+}
+
+// Kind strips the figures from a saturation reason so a summary lists
+// each kind once ("cpu", "scheduling lag", ...).
+func Kind(reason string) string {
+	for _, k := range []string{"cpu", "scheduling lag", "iterations dropped", "GC pause", "file descriptors", "ephemeral ports", "network"} {
+		if strings.Contains(reason, k) {
+			return k
+		}
+	}
+	return reason
 }

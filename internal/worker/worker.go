@@ -30,6 +30,7 @@ import (
 
 	workerv1 "github.com/Ivan825/Stampede/gen/stampede/worker/v1"
 	"github.com/Ivan825/Stampede/internal/engine"
+	"github.com/Ivan825/Stampede/internal/health"
 	"github.com/Ivan825/Stampede/internal/pluginhost"
 	"github.com/Ivan825/Stampede/internal/protocol/httpx"
 	"github.com/Ivan825/Stampede/internal/version"
@@ -77,7 +78,7 @@ type Config struct {
 	// for this long during a run (default 10s).
 	DeadManTimeout time.Duration
 	// Thresholds for self-reported saturation (default DefaultThresholds).
-	Thresholds *Thresholds
+	Thresholds *health.Thresholds
 	// HTTP overrides engine HTTP options (tests, network emulation).
 	HTTP httpx.Options
 	// PluginDir is where plugins are looked for before PATH (default
@@ -100,7 +101,7 @@ type Config struct {
 type Worker struct {
 	cfg Config
 	log *slog.Logger
-	mon *monitor
+	mon *health.Monitor
 
 	// lastContact is when anything was last heard from the server, in
 	// time.Now Unix nanoseconds. The dead man's switch watches it.
@@ -152,11 +153,11 @@ func New(cfg Config) *Worker {
 	if cfg.Logger == nil {
 		cfg.Logger = slog.Default()
 	}
-	th := DefaultThresholds
+	th := health.DefaultThresholds
 	if cfg.Thresholds != nil {
 		th = *cfg.Thresholds
 	}
-	w := &Worker{cfg: cfg, log: cfg.Logger, mon: newMonitor(th)}
+	w := &Worker{cfg: cfg, log: cfg.Logger, mon: health.NewMonitor(th)}
 	w.hbInterval.Store(int64(time.Second))
 	return w
 }
@@ -174,7 +175,7 @@ func (w *Worker) ID() string {
 func (w *Worker) Run(ctx context.Context) error {
 	monDone := make(chan struct{})
 	defer close(monDone)
-	go w.mon.loop(monDone)
+	go w.mon.Loop(monDone)
 
 	const minBackoff, maxBackoff = 250 * time.Millisecond, 15 * time.Second
 	backoff := minBackoff
@@ -417,7 +418,7 @@ func (w *Worker) heartbeatLoop(s *session) {
 	t := time.NewTicker(time.Duration(w.hbInterval.Load()))
 	defer t.Stop()
 	beat := func() {
-		h := w.mon.current()
+		h := w.mon.Current()
 		hb := &workerv1.Heartbeat{WorkerTimeUnixNano: w.cfg.Clock().UnixNano(), Health: wire.HealthToProto(&h)}
 		w.mu.Lock()
 		r := w.run
