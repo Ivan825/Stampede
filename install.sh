@@ -80,7 +80,8 @@ else
   say "Downloading stampede $version for $os/$arch"
   curl -fsSL --retry 3 -o "$tmp/$asset" "$base/$asset" || fail "could not download $base/$asset"
   curl -fsSL --retry 3 -o "$tmp/checksums.txt" "$base/stampede_${v}_checksums.txt" || fail "could not download the checksums"
-  want=$(awk -v a="$asset" '$2 == a { print $1 }' "$tmp/checksums.txt")
+  # "hash  name", or "hash *name" from sha256sum in binary mode.
+  want=$(awk -v a="$asset" '{ n = $2; sub(/^\*/, "", n) } n == a { print $1 }' "$tmp/checksums.txt")
   got=$(sha256 "$tmp/$asset")
   [ -n "$want" ] && [ "$want" = "$got" ] || fail "checksum mismatch for $asset (want ${want:-none}, got $got)"
   tar -xzf "$tmp/$asset" -C "$tmp"

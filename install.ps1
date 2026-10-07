@@ -51,7 +51,8 @@ if (-not $version) {
     Write-Host "Downloading stampede $version for windows/$arch"
     Invoke-WebRequest -UseBasicParsing "$base/$asset" -OutFile (Join-Path $tmp $asset)
     Invoke-WebRequest -UseBasicParsing "$base/stampede_${v}_checksums.txt" -OutFile (Join-Path $tmp 'checksums.txt')
-    $want = (Get-Content (Join-Path $tmp 'checksums.txt') | Where-Object { ($_ -split '\s+')[1] -eq $asset } | ForEach-Object { ($_ -split '\s+')[0] }) | Select-Object -First 1
+    # "hash  name", or "hash *name" from sha256sum in binary mode.
+    $want = (Get-Content (Join-Path $tmp 'checksums.txt') | Where-Object { ($_ -split '\s+')[1].TrimStart('*') -eq $asset } | ForEach-Object { ($_ -split '\s+')[0] }) | Select-Object -First 1
     $got = (Get-FileHash -Algorithm SHA256 (Join-Path $tmp $asset)).Hash.ToLower()
     if (-not $want -or $want -ne $got) { throw "checksum mismatch for $asset (want $want, got $got)" }
     Expand-Archive -Force (Join-Path $tmp $asset) -DestinationPath (Join-Path $tmp 'x')
