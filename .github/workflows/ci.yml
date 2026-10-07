@@ -16,8 +16,8 @@ jobs:
   lint:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-go@v5
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
         with:
           go-version-file: go.mod
       - name: gofmt
@@ -28,7 +28,7 @@ jobs:
         run: go vet ./...
       - name: the Compose file and its profiles parse
         run: docker compose --profile browser --profile observability config --quiet
-      - uses: golangci/golangci-lint-action@v8
+      - uses: golangci/golangci-lint-action@v9
         with:
           version: latest
 
@@ -38,7 +38,7 @@ jobs:
     # previous commit for a push.
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           fetch-depth: 0
       - uses: bufbuild/buf-action@v1
@@ -63,8 +63,8 @@ jobs:
     # and api/openapi.yaml; they must match this commit.
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-go@v5
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
         with:
           go-version-file: go.mod
       - run: make docs
@@ -87,8 +87,8 @@ jobs:
       # Ubuntu runners restrict the user namespaces Chrome's sandbox needs.
       STAMPEDE_CHROME_NO_SANDBOX: "true"
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-go@v5
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
         with:
           go-version-file: go.mod
       - name: test
@@ -108,10 +108,10 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           fetch-depth: 0
-      - uses: actions/setup-go@v5
+      - uses: actions/setup-go@v7
         with:
           go-version-file: go.mod
       - name: build
@@ -125,13 +125,13 @@ jobs:
   accuracy-quick:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-go@v5
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
         with:
           go-version-file: go.mod
       - name: accuracy (quick)
         run: go run ./bench/accuracy -quick -out accuracy.json
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         if: always()
         with:
           name: accuracy-quick
@@ -143,8 +143,8 @@ jobs:
     # target fails the step.
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-go@v5
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
         with:
           go-version-file: go.mod
       - name: start the echo server
@@ -196,11 +196,11 @@ jobs:
       run:
         working-directory: web
     steps:
-      - uses: actions/checkout@v4
-      - uses: pnpm/action-setup@v4
+      - uses: actions/checkout@v7
+      - uses: pnpm/action-setup@v6
         with:
           version: 10.11.1
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
           node-version: 22
           cache: pnpm
@@ -228,11 +228,11 @@ jobs:
       run:
         working-directory: web
     steps:
-      - uses: actions/checkout@v4
-      - uses: pnpm/action-setup@v4
+      - uses: actions/checkout@v7
+      - uses: pnpm/action-setup@v6
         with:
           version: 10.11.1
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
           node-version: 22
           cache: pnpm
@@ -241,7 +241,7 @@ jobs:
       - name: install Chromium
         run: pnpm exec playwright install --with-deps chromium
       - run: pnpm test:e2e
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         if: failure()
         with:
           name: playwright-report
@@ -256,11 +256,11 @@ jobs:
       run:
         working-directory: site
     steps:
-      - uses: actions/checkout@v4
-      - uses: pnpm/action-setup@v4
+      - uses: actions/checkout@v7
+      - uses: pnpm/action-setup@v6
         with:
           version: 10.11.1
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
           node-version: 22
           cache: pnpm
@@ -274,8 +274,8 @@ jobs:
       run:
         working-directory: examples/shoplab
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-go@v5
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
         with:
           go-version-file: examples/shoplab/go.mod
       - run: go vet ./...
@@ -285,7 +285,7 @@ jobs:
     # The browser worker image runs a browser scenario end to end.
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: build the browser worker image
         run: docker build -f deploy/docker/Dockerfile.browser-worker -t stampede-browser-worker .
       - name: serve a test page
@@ -330,8 +330,8 @@ jobs:
       run:
         working-directory: plugins/${{ matrix.plugin }}
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-go@v5
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
         with:
           go-version-file: plugins/${{ matrix.plugin }}/go.mod
           cache-dependency-path: plugins/${{ matrix.plugin }}/go.sum
@@ -341,7 +341,7 @@ jobs:
           if [ -n "$out" ]; then echo "needs gofmt -s:"; echo "$out"; exit 1; fi
       - run: go vet ./...
       - run: go build -o /dev/null .
-      - uses: golangci/golangci-lint-action@v8
+      - uses: golangci/golangci-lint-action@v9
         with:
           version: latest
           working-directory: plugins/${{ matrix.plugin }}
@@ -370,8 +370,8 @@ jobs:
       run:
         working-directory: plugins/sql
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-go@v5
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
         with:
           go-version-file: plugins/sql/go.mod
           cache-dependency-path: plugins/sql/go.sum
@@ -386,8 +386,8 @@ jobs:
     # app; this job proves it on every push.
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-go@v5
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
         with:
           go-version-file: go.mod
       - name: start ShopLab
@@ -450,8 +450,8 @@ jobs:
       PACK_ENV: ${{ matrix.env }}
       STAMPEDE_PLUGIN_DIR: ${{ github.workspace }}/.plugins
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-go@v5
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
         with:
           go-version-file: go.mod
       - run: make build
@@ -499,8 +499,8 @@ jobs:
     env:
       V: 9.9.9
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-go@v5
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
         with:
           go-version-file: go.mod
       - name: a release built from this commit
@@ -596,7 +596,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: start the stack with both profiles
         env:
           STAMPEDE_OTLP_ENDPOINT: http://jaeger:4318
@@ -645,8 +645,8 @@ jobs:
         options: >-
           --health-cmd "pg_isready -U stampede" --health-interval 2s --health-timeout 3s --health-retries 30
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-go@v5
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
         with:
           go-version-file: go.mod
       - name: PostgreSQL 17 client
@@ -666,8 +666,8 @@ jobs:
   security:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-go@v5
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
         with:
           go-version-file: go.mod
       - name: govulncheck

@@ -12,13 +12,13 @@ jobs:
   accuracy:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-go@v5
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
         with:
           go-version-file: go.mod
       - name: accuracy benchmark (full)
         run: go run ./bench/accuracy -out accuracy-${{ github.run_number }}.json
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         if: always()
         with:
           name: accuracy-nightly-${{ github.run_number }}
@@ -30,8 +30,8 @@ jobs:
     # the echo server's ground truth.
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-go@v5
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
         with:
           go-version-file: go.mod
       - name: install k6
@@ -58,7 +58,7 @@ jobs:
           jq -r '.cases[] as $c | $c.tools[] | select(.ran) |
             "::notice title=compare \($c.name)::\(.tool) (\(.measures)) p50 \(.latency.p50)ms p95 \(.latency.p95)ms p99 \(.latency.p99)ms; truth p50 \(.truth.p50)ms p95 \(.truth.p95)ms p99 \(.truth.p99)ms; within tolerance \(.withinTolerance)"' \
             compare-${{ github.run_number }}.json
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         if: always()
         with:
           name: compare-nightly-${{ github.run_number }}
@@ -75,11 +75,11 @@ jobs:
       # docker compose command, not only up.
       STAMPEDE_JOIN_TOKEN: nightly-airgap-join-token-0123456789
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-go@v5
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
         with:
           go-version-file: go.mod
-      - uses: docker/setup-buildx-action@v3
+      - uses: docker/setup-buildx-action@v4
       - name: build the bundle
         run: deploy/airgap/build-bundle.sh nightly amd64 "$RUNNER_TEMP/airgap"
       - name: install from the bundle only
@@ -108,13 +108,13 @@ jobs:
     # iterations or falling behind its schedule, on a hosted runner.
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-go@v5
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
         with:
           go-version-file: go.mod
       - name: one-process throughput
         run: go run ./bench/scale -hold 10s -out scale-${{ github.run_number }}.json
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         if: always()
         with:
           name: scale-nightly-${{ github.run_number }}
@@ -127,8 +127,8 @@ jobs:
     # input is uploaded so it can be added to testdata/fuzz.
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-go@v5
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
         with:
           go-version-file: go.mod
       - name: fuzz
@@ -136,7 +136,7 @@ jobs:
           for f in FuzzParse FuzzTemplate FuzzParseRecording FuzzParseThreshold; do
             go test ./internal/scenario -run '^$' -fuzz "^$f\$" -fuzztime 2m || exit 1
           done
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         if: failure()
         with:
           name: fuzz-failures-${{ github.run_number }}

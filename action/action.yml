@@ -89,14 +89,14 @@ runs:
 
     - name: Set up Go (build from source)
       if: steps.resolve.outputs.mode == 'source'
-      uses: actions/setup-go@v5
+      uses: actions/setup-go@v7
       with:
         go-version: stable
         cache: false
 
     - name: Set up Go (build the workspace)
       if: steps.resolve.outputs.mode == 'local'
-      uses: actions/setup-go@v5
+      uses: actions/setup-go@v7
       with:
         go-version-file: go.mod
 
@@ -123,7 +123,7 @@ runs:
 
     - name: Upload the reports
       if: always() && inputs.artifact-name != '' && steps.run.outputs.report-dir != ''
-      uses: actions/upload-artifact@v4
+      uses: actions/upload-artifact@v7
       with:
         name: ${{ inputs.artifact-name }}
         path: ${{ steps.run.outputs.report-dir }}
