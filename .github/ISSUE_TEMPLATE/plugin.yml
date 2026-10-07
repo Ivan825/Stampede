@@ -1,0 +1,49 @@
+name: New protocol plugin
+description: Propose a plugin that adds step types for a protocol or system
+labels: [plugin]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Plugins add step types such as `mqtt.publish` and run as separate
+        processes built with the Go SDK; see [docs/plugins.md](https://github.com/Ivan825/Stampede/blob/main/docs/plugins.md).
+        A plugin you maintain yourself does not need to be in this repository:
+        `stampede plugin install example.com/your/plugin@v1.0.0` installs it.
+  - type: input
+    id: protocol
+    attributes:
+      label: Protocol or system
+      description: For example AMQP, NATS, MongoDB or SIP.
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps
+      description: The step types a scenario would use and the settings each takes (the `with:` block).
+      placeholder: |
+        nats.publish   subject, payload, headers
+        nats.request   subject, payload, timeout; returns the reply
+    validations:
+      required: true
+  - type: textarea
+    id: measure
+    attributes:
+      label: What to measure
+      description: What latency means for each step, and any values a scenario should be able to check or extract.
+  - type: input
+    id: client
+    attributes:
+      label: Go client library
+      description: The library the plugin would use, and its licence.
+  - type: textarea
+    id: testing
+    attributes:
+      label: Testing
+      description: How the plugin can be tested without external services (an in-process fake or embeddable server), as the conformance suite and CI require.
+  - type: checkboxes
+    id: contribute
+    attributes:
+      label: Contributing
+      options:
+        - label: I would like to write this plugin.
