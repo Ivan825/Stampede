@@ -9,6 +9,7 @@ import (
 	"strings"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/Ivan825/Stampede/examples/packlab/labkit"
 )
@@ -143,32 +144,38 @@ func TestNoMoneyMadeOrLost(t *testing.T) {
 }
 
 func TestLockBottleneck(t *testing.T) {
-	for _, tc := range []struct {
-		fixes string
-		one   bool
-	}{{"", true}, {"lock", false}} {
-		s, base := start(t, tc.fixes)
-		s.fraud = 10e6 // 10ms: wide enough for overlaps to show on a busy machine
+	const fraud = 10 * time.Millisecond
+	elapsed := map[string]time.Duration{}
+	for _, fixes := range []string{"", "lock"} {
+		s, base := start(t, fixes)
+		s.fraud = fraud
 		// Everyone signs in first, then all transfers start together.
 		toks := map[int]string{}
 		for i := 1; i <= 40; i += 2 {
 			toks[i] = login(t, base, i)
 		}
 		var wg sync.WaitGroup
-		start := make(chan struct{})
+		begin := make(chan struct{})
 		for i := 1; i <= 40; i += 2 {
 			wg.Add(1)
 			go func() {
 				defer wg.Done()
-				<-start
+				<-begin
 				call(t, "POST", base+"/api/transfers", toks[i], "k", transferBody(i, i+1, 100, ""))
 			}()
 		}
-		close(start)
+		t0 := time.Now()
+		close(begin)
 		wg.Wait()
-		if p := s.inflight.Peak(); (p == 1) != tc.one {
-			t.Errorf("fixes %q: %d transfers in the ledger at once", tc.fixes, p)
+		elapsed[fixes] = time.Since(t0)
+		if fixes == "" && s.inflight.Peak() != 1 {
+			t.Errorf("without the fix %d transfers were in the ledger at once", s.inflight.Peak())
 		}
+	}
+	// Under the ledger lock the 20 fraud checks run one after another;
+	// with the fix they overlap. The bound is loose for busy CI machines.
+	if elapsed[""] < 20*fraud || elapsed["lock"] > elapsed[""]/2 {
+		t.Errorf("20 transfers took %s with the lock and %s without", elapsed[""], elapsed["lock"])
 	}
 }
 
