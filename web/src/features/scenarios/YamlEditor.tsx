@@ -25,9 +25,12 @@ export function YamlEditor({
   onSave,
   onMarkers,
   revealLine,
+  syncRev,
 }: {
   value: string;
   resetKey: string | number;
+  /** Bump to apply `value` as an edit made outside the editor. */
+  syncRev?: number;
   readOnly?: boolean;
   onChange?: (v: string) => void;
   onSave?: () => void;
@@ -102,6 +105,23 @@ export function YamlEditor({
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps -- only on resetKey
   }, [resetKey]);
+
+  // Take an edit made elsewhere (the journey graph) as one undoable edit,
+  // keeping the scroll position.
+  useEffect(() => {
+    if (!syncRev) return;
+    const ed = editor.current;
+    const model = ed?.getModel();
+    if (!ed || !model || model.getValue() === value) return;
+    const top = ed.getScrollTop();
+    const pos = ed.getPosition();
+    ed.pushUndoStop();
+    ed.executeEdits('journey-graph', [{ range: model.getFullModelRange(), text: value }]);
+    ed.pushUndoStop();
+    if (pos) ed.setPosition(model.validatePosition(pos));
+    ed.setScrollTop(top);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- only on syncRev
+  }, [syncRev]);
 
   useEffect(() => {
     editor.current?.updateOptions({ readOnly: !!readOnly });

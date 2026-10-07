@@ -233,6 +233,8 @@ function EditorLayout({
   const [tab, setTab] = useState('journeys');
   const [reveal, setReveal] = useState<{ line: number; n: number }>();
   const [newRun, setNewRun] = useState(false);
+  // Bumped when the journey graph edits the YAML, so the editor takes it.
+  const [graphRev, setGraphRev] = useState(0);
 
   const shownYaml = viewing != null ? (viewed.data?.yaml ?? '') : yaml;
   const validation = useValidation(shownYaml);
@@ -389,6 +391,7 @@ function EditorLayout({
             onSave={save}
             onMarkers={setMarkers}
             revealLine={reveal}
+            syncRev={graphRev}
           />
         </div>
         <Tabs.Root value={tab} onValueChange={setTab} className="flex min-h-0 flex-col bg-bg">
@@ -420,7 +423,14 @@ function EditorLayout({
             )}
           </Tabs.List>
           <Tabs.Content value="journeys" className="min-h-[360px] flex-1">
-            <JourneyGraphView yaml={shownYaml} />
+            <JourneyGraphView
+              yaml={shownYaml}
+              readOnly={readOnly}
+              onChange={(y) => {
+                setYaml(y);
+                setGraphRev((r) => r + 1);
+              }}
+            />
           </Tabs.Content>
           <Tabs.Content value="plan" className="flex-1 overflow-y-auto">
             {validation.result?.valid === false && (
