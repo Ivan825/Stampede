@@ -1,6 +1,7 @@
 package tui
 
 import (
+	"fmt"
 	"strings"
 	"testing"
 	"time"
@@ -80,4 +81,19 @@ func stripANSI(s string) string {
 		b.WriteByte(s[i])
 	}
 	return b.String()
+}
+
+// Opening the live panel shrinks the view; what was just typed stays in view.
+func TestLivePanelKeepsLatestLinesInView(t *testing.T) {
+	m := New(nil, Options{})
+	m.Update(tea.WindowSizeMsg{Width: 100, Height: 30})
+	for i := range 40 {
+		m.typed = true
+		m.say(fmt.Sprintf("line %d", i))
+	}
+	m.live = &liveRun{started: time.Now()}
+	m.layout()
+	if v := stripANSI(m.view.View()); !strings.Contains(v, "line 39") {
+		t.Errorf("the newest line is hidden after the panel opened:\n%s", v)
+	}
 }

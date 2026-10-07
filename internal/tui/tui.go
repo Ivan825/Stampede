@@ -411,6 +411,11 @@ func (m *Model) layout() {
 	m.view.Width = m.width
 	// header, status line, input and footer
 	m.view.Height = max(m.height-5-liveH, 3)
+	// A smaller view (the live panel opening) must still show the newest
+	// lines once something has been typed.
+	if m.typed {
+		m.view.GotoBottom()
+	}
 }
 
 // record adds a typed line to the session and the saved history, with
@@ -832,7 +837,7 @@ func (m *Model) runRemote(ctx context.Context, c Command, ov scenario.Overrides)
 			return doneMsg{sBad.Render(err.Error())}
 		}
 		var b strings.Builder
-		rep.WriteText(&b)
+		rep.WriteTextColor(&b)
 		return doneMsg{strings.TrimRight(b.String(), "\n")}
 	}
 }
@@ -978,7 +983,7 @@ func (m *Model) execLocal(ctx context.Context, s *scenario.Scenario) tea.Msg {
 		return doneMsg{sBad.Render(err.Error())}
 	}
 	var b strings.Builder
-	rep.WriteText(&b)
+	rep.WriteTextColor(&b)
 	return doneMsg{strings.TrimRight(b.String(), "\n")}
 }
 
