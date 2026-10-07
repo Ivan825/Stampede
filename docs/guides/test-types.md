@@ -84,6 +84,10 @@ targets:
 `--rate`, `--vus`, `--duration` and `--shape` do not apply to a replay;
 change `speed` instead.
 
+In the terminal console, `/run replay access.log --target
+http://localhost:8080 --speed 2` replays a recording without writing a
+scenario, with the built-in engine on your machine.
+
 ## Targeted stresses
 
 Some stresses are journeys rather than shapes. The [product
