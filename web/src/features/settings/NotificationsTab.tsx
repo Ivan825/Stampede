@@ -52,6 +52,7 @@ const eventLabels: Record<NotificationEvent, string> = {
   'run.finished': 'Run finished',
   'run.target_failed': 'A target failed',
   'run.killed': 'Run killed',
+  'drift.detected': 'Drift detected',
 };
 
 /** A delivery attempt's outcome as a chip. */

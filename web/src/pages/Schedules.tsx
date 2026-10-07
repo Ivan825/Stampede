@@ -168,7 +168,10 @@ function ScheduleDialog({
       targetId,
       cron: cron.trim(),
       timezone: timezone.trim() || 'UTC',
-      overrides: toOverrides(ov),
+      overrides: {
+        ...toOverrides(ov),
+        ...(schedule?.overrides?.regions ? { regions: schedule.overrides.regions } : {}),
+      },
       env: toEnv(env),
       workers: Number(workerCount),
       enabled,
@@ -364,7 +367,30 @@ function Switch({
   );
 }
 
+function LastDrift({ s }: { s: Schedule }) {
+  if (!s.lastDriftStatus) return <span className="text-muted">Never</span>;
+  const broken = s.lastDriftBroken ?? [];
+  return (
+    <div className="flex flex-col gap-0.5">
+      <div className="flex items-center gap-2">
+        {s.lastDriftStatus === 'ok' ? (
+          <Chip tone="pass">NO DRIFT</Chip>
+        ) : s.lastDriftStatus === 'drifted' ? (
+          <Chip tone="fail">DRIFTED</Chip>
+        ) : (
+          <Chip tone="warn">CHECK FAILED</Chip>
+        )}
+        <span className="text-xs text-muted">{relativeTime(s.lastFiredAt)}</span>
+      </div>
+      {broken.length > 0 && (
+        <span className="max-w-64 text-xs text-muted">Broken: {broken.join(', ')}</span>
+      )}
+    </div>
+  );
+}
+
 function LastRun({ s }: { s: Schedule }) {
+  if (s.kind === 'drift' && !s.lastSkipReason) return <LastDrift s={s} />;
   if (s.lastSkipReason) {
     return (
       <div className="flex flex-col gap-0.5">
@@ -445,7 +471,12 @@ export function SchedulesPage() {
               {schedules.data.map((s) => (
                 <tr key={s.id}>
                   <td className="max-w-72">
-                    <div className="font-medium">{s.name}</div>
+                    <div className="font-medium">
+                      {s.name}
+                      {s.kind === 'drift' && (
+                        <span className="ml-2 text-xs font-normal text-muted">drift check</span>
+                      )}
+                    </div>
                     <div className="truncate text-xs text-muted">
                       {s.scenarioName} → {s.targetName}
                     </div>
@@ -494,17 +525,28 @@ export function SchedulesPage() {
                       {can.startRuns && (
                         <Button
                           size="sm"
-                          aria-label={`Run ${s.name} now`}
+                          aria-label={`${s.kind === 'drift' ? 'Check' : 'Run'} ${s.name} now`}
                           loading={runNow.isPending && runNow.variables === s.id}
                           onClick={() =>
                             runNow.mutate(s.id, {
-                              onSuccess: (run) =>
-                                void navigate({ to: '/runs/$runId', params: { runId: run.id } }),
+                              onSuccess: (res) => {
+                                if ('broken' in res) {
+                                  if (res.status === 'ok') toast.success(`${s.name}: no drift.`);
+                                  else if (res.status === 'drifted')
+                                    toast.error(
+                                      `${s.name}: broken journeys: ${res.broken.join(', ')}`,
+                                    );
+                                  else toast.error(`${s.name}: ${res.error ?? 'the check failed'}`);
+                                  return;
+                                }
+                                void navigate({ to: '/runs/$runId', params: { runId: res.id } });
+                              },
                               onError: (e) => toast.error(e),
                             })
                           }
                         >
-                          <Play className="size-3.5" aria-hidden /> Run now
+                          <Play className="size-3.5" aria-hidden />{' '}
+                          {s.kind === 'drift' ? 'Check now' : 'Run now'}
                         </Button>
                       )}
                       {can.editSchedules && (

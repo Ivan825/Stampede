@@ -704,8 +704,9 @@ export function useRunSchedule(projectId: string) {
   return useMutation({
     mutationFn: (id: string) =>
       unwrap(api.POST('/schedules/{scheduleId}/run', { params: { path: { scheduleId: id } } })),
-    onSuccess: (run) => {
-      qc.setQueryData(keys.run(run.id), run);
+    onSuccess: (res) => {
+      // A drift schedule's check returns a drift result, not a run.
+      if (!('broken' in res)) qc.setQueryData(keys.run(res.id), res);
       void qc.invalidateQueries({ queryKey: keys.schedules(projectId) });
       void qc.invalidateQueries({ queryKey: keys.allRuns(projectId) });
       void qc.invalidateQueries({ queryKey: keys.activeRuns });

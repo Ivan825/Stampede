@@ -224,6 +224,103 @@ export interface paths {
         patch: operations["updateProject"];
         trace?: never;
     };
+    "/organisation/caps": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The organisation's hard caps on every run */
+        get: operations["getOrgCaps"];
+        /**
+         * Set the organisation's hard caps (admin)
+         * @description Every run in the organisation must fit within these caps, as well
+         *     as the server's, its project's and its target's. Send an empty
+         *     object to remove them. Audited.
+         */
+        put: operations["putOrgCaps"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/projects/{projectId}/settings": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+            };
+            cookie?: never;
+        };
+        get: operations["getProjectSettings"];
+        /**
+         * Set the project's caps and dry-run gate (admin)
+         * @description Caps bound every run in the project, together with the server's,
+         *     the organisation's and the target's. With requireDryRun, starting a
+         *     run first runs each journey once with one user; the run fails
+         *     before any load when a journey fails. Needs the admin role in the
+         *     project. Audited.
+         */
+        put: operations["putProjectSettings"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/projects/{projectId}/roles": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+            };
+            cookie?: never;
+        };
+        /**
+         * Per-project role overrides
+         * @description A member's organisation role applies in every project unless an
+         *     override here sets another role for this project, higher or lower.
+         *     Owners are owners everywhere.
+         */
+        get: operations["listProjectRoles"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/projects/{projectId}/roles/{userId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+                userId: components["parameters"]["userId"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Give a member a different role in this project (admin)
+         * @description Needs the admin role in the project. Owners cannot be overridden. Audited.
+         */
+        put: operations["putProjectRole"];
+        post?: never;
+        /** Remove an override, so the organisation role applies again (admin) */
+        delete: operations["deleteProjectRole"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/projects/{projectId}/targets": {
         parameters: {
             query?: never;
@@ -538,6 +635,31 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/runs/{runId}/events": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                runId: components["parameters"]["runId"];
+            };
+            cookie?: never;
+        };
+        /**
+         * Events recorded for a run
+         * @description Workers joining or being lost, safety stops, breakpoint
+         *     confirmations and, when the project requires one, the dry run
+         *     before load (dryrun.started, one dryrun.journey per journey, then
+         *     dryrun.passed or dryrun.failed). Oldest first.
+         */
+        get: operations["listRunEvents"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/runs/{runId}/report": {
         parameters: {
             query?: never;
@@ -663,8 +785,75 @@ export interface paths {
          * Start the schedule's run now
          * @description Starts a run as the caller without changing when the schedule next
          *     fires. Refused while the schedule's previous run is still active.
+         *     For a drift schedule, runs its drift check now instead and returns
+         *     the result (200).
          */
         post: operations["runSchedule"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/projects/{projectId}/drift-results": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+            };
+            cookie?: never;
+        };
+        /** Results of scheduled drift checks, newest first */
+        get: operations["listDriftResults"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/drift-results/{driftId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                driftId: components["parameters"]["driftId"];
+            };
+            cookie?: never;
+        };
+        /** One drift check with its redacted dry-run traces and spec diff */
+        get: operations["getDriftResult"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/drift-results/{driftId}/repair": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                driftId: components["parameters"]["driftId"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Ask the AI generator to repair the broken journeys (asynchronous)
+         * @description Starts an AI generation job with the scenario as the starting point,
+         *     the broken journeys and their dry-run evidence (redacted) as the
+         *     task, and the spec the check fetched, if any. The job dry-runs and
+         *     repairs as usual; its result is a proposed new version with a diff
+         *     against the current one. Nothing is saved until the job is approved
+         *     with POST /ai/jobs/{jobId}/approve. Needs the editor role.
+         */
+        post: operations["repairDrift"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1067,6 +1256,8 @@ export interface components {
             description?: string;
             /** Format: date-time */
             createdAt: string;
+            /** @description The caller's role in this project (the organisation role, or a per-project override) */
+            role?: components["schemas"]["Role"];
         };
         ProjectCreate: {
             name: string;
@@ -1080,6 +1271,85 @@ export interface components {
             maxRate?: number;
             maxVUs?: number;
             maxDurationSeconds?: number;
+        };
+        DriftResult: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            projectId: string;
+            /** Format: uuid */
+            scheduleId?: string | null;
+            scheduleName?: string;
+            /** Format: uuid */
+            scenarioId: string;
+            scenarioName?: string;
+            scenarioVersion: number;
+            /** Format: uuid */
+            targetId: string;
+            targetURL?: string;
+            /**
+             * @description drifted when a journey failed its dry run or calls an endpoint the API no longer has; error when the check could not run
+             * @enum {string}
+             */
+            status: "ok" | "drifted" | "error";
+            error?: string;
+            /** @description Names of the broken journeys */
+            broken: string[];
+            /** @description Dry-run outcome per journey (with redacted traces on GET /drift-results/{driftId}) */
+            journeys?: components["schemas"]["DriftJourney"][];
+            /** @description Endpoints in the previous check's spec that the current spec no longer has */
+            removedEndpoints?: string[];
+            addedEndpoints?: string[];
+            /** @description Requests that match no endpoint of the current spec */
+            unmatched?: string[];
+            /** Format: uuid */
+            repairJobId?: string | null;
+            /** Format: date-time */
+            createdAt: string;
+        };
+        DriftJourney: {
+            journey: string;
+            ok: boolean;
+            problem?: string;
+            traces?: components["schemas"]["AITrace"][];
+        };
+        DriftRepair: {
+            /**
+             * Format: uuid
+             * @description Defaults to the organisation's only provider
+             */
+            providerId?: string;
+            /** @default 3 */
+            maxRepairs: number;
+        };
+        RunEvent: {
+            /** Format: date-time */
+            at: string;
+            /** @example dryrun.journey */
+            type: string;
+            message: string;
+            worker?: string;
+            details?: {
+                [key: string]: unknown;
+            };
+        };
+        ProjectSettings: {
+            caps: components["schemas"]["Caps"];
+            /** @description Before load, run each journey once with one user and fail the run if any journey fails. */
+            requireDryRun: boolean;
+        };
+        ProjectRole: {
+            /** Format: uuid */
+            userId: string;
+            email: string;
+            name?: string;
+            role: components["schemas"]["Role"];
+            orgRole?: components["schemas"]["Role"];
+            /** Format: date-time */
+            createdAt?: string;
+        };
+        ProjectRoleSet: {
+            role: components["schemas"]["Role"];
         };
         Target: {
             /** Format: uuid */
@@ -1174,6 +1444,15 @@ export interface components {
             duration?: string;
             start?: string;
             max?: string;
+            /**
+             * @description Percent of the load per worker region, such as
+             *     {"mumbai": 50, "frankfurt": 30, "virginia": 20}. The shares add
+             *     up to 100 and replace the scenario's load.regions. A run is
+             *     refused when a region has no connected worker.
+             */
+            regions?: {
+                [key: string]: number;
+            };
         };
         RunCreate: {
             /** Format: uuid */
@@ -1273,6 +1552,15 @@ export interface components {
             lastRunVerdict?: string | null;
             /** @description Why the last firing started no run; empty when it did */
             lastSkipReason: string;
+            kind?: components["schemas"]["ScheduleKind"];
+            /** @description Drift schedules: OpenAPI document fetched on each check (on the target's host or an allowed host) */
+            specURL?: string;
+            /** Format: uuid */
+            lastDriftId?: string | null;
+            /** @description Drift schedules: ok, drifted or error */
+            lastDriftStatus?: string | null;
+            /** @description Drift schedules, the journeys the last check found broken */
+            lastDriftBroken?: string[];
         };
         ScheduleCreate: {
             name: string;
@@ -1293,7 +1581,19 @@ export interface components {
             /** @default true */
             enabled: boolean;
             note?: string;
+            kind?: components["schemas"]["ScheduleKind"];
+            /** @description Drift schedules only: an OpenAPI document to compare the scenario with on each check */
+            specURL?: string;
         };
+        /**
+         * @description run starts a load test on the cron. drift starts no load: it dry-runs
+         *     each journey once with one user against the target (and compares the
+         *     scenario with specURL when set), records a drift result and notifies
+         *     drift.detected subscribers when journeys broke.
+         * @default run
+         * @enum {string}
+         */
+        ScheduleKind: "run" | "drift";
         ScheduleUpdate: {
             name?: string;
             /** Format: uuid */
@@ -1309,6 +1609,7 @@ export interface components {
             workers?: number;
             enabled?: boolean;
             note?: string;
+            specURL?: string;
         };
         SchedulePreview: {
             timezone: string;
@@ -1523,6 +1824,16 @@ export interface components {
             /** @description Web server access log */
             accessLog?: string;
             /**
+             * @description .proto sources by file name (the name imports use), at most 5 MiB
+             *     in all. Their services' unary and server streaming methods
+             *     become grpc steps, dry-run against the target with these
+             *     descriptors. The steps leave proto out, so runs use the
+             *     target's gRPC reflection service.
+             */
+            proto?: {
+                [key: string]: string;
+            };
+            /**
              * Format: uuid
              * @description Required for the dry run.
              */
@@ -1729,7 +2040,7 @@ export interface components {
         /** @enum {string} */
         NotificationKind: "webhook" | "slack" | "discord";
         /** @enum {string} */
-        NotificationEvent: "run.finished" | "run.target_failed" | "run.killed";
+        NotificationEvent: "run.finished" | "run.target_failed" | "run.killed" | "drift.detected";
         NotificationChannel: {
             /** Format: uuid */
             id: string;
@@ -1842,6 +2153,7 @@ export interface components {
         };
     };
     parameters: {
+        driftId: string;
         userId: string;
         tokenId: string;
         projectId: string;
@@ -2295,6 +2607,180 @@ export interface operations {
                     "application/json": components["schemas"]["Project"];
                 };
             };
+            404: components["responses"]["NotFound"];
+        };
+    };
+    getOrgCaps: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Caps; unset fields mean no cap at this level */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Caps"];
+                };
+            };
+        };
+    };
+    putOrgCaps: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["Caps"];
+            };
+        };
+        responses: {
+            /** @description Saved */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Caps"];
+                };
+            };
+            403: components["responses"]["Forbidden"];
+            422: components["responses"]["Invalid"];
+        };
+    };
+    getProjectSettings: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The project's caps and run gate */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProjectSettings"];
+                };
+            };
+            404: components["responses"]["NotFound"];
+        };
+    };
+    putProjectSettings: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ProjectSettings"];
+            };
+        };
+        responses: {
+            /** @description Saved */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProjectSettings"];
+                };
+            };
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            422: components["responses"]["Invalid"];
+        };
+    };
+    listProjectRoles: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Overrides, by email */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProjectRole"][];
+                };
+            };
+            404: components["responses"]["NotFound"];
+        };
+    };
+    putProjectRole: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+                userId: components["parameters"]["userId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ProjectRoleSet"];
+            };
+        };
+        responses: {
+            /** @description Saved */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProjectRole"];
+                };
+            };
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            422: components["responses"]["Invalid"];
+        };
+    };
+    deleteProjectRole: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+                userId: components["parameters"]["userId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Removed */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];
         };
     };
@@ -2876,7 +3362,16 @@ export interface operations {
     };
     getRunTimeline: {
         parameters: {
-            query?: never;
+            query?: {
+                /**
+                 * @description 1s (default) returns the per-second points. 10s and 1m return
+                 *     rollups: requests summed, rps averaged, p50 the mean and p95/p99
+                 *     the worst per-second value in each bucket. With TimescaleDB the
+                 *     rollups are continuous aggregates kept after per-second points
+                 *     expire (stampede server --metrics-retention).
+                 */
+                resolution?: "1s" | "10s" | "1m";
+            };
             header?: never;
             path: {
                 runId: components["parameters"]["runId"];
@@ -2892,6 +3387,29 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Point"][];
+                };
+            };
+            404: components["responses"]["NotFound"];
+        };
+    };
+    listRunEvents: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                runId: components["parameters"]["runId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Events */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RunEvent"][];
                 };
             };
             404: components["responses"]["NotFound"];
@@ -3117,6 +3635,15 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
+            /** @description Drift schedules only, the check's result */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DriftResult"];
+                };
+            };
             /** @description Run accepted and scheduled */
             201: {
                 headers: {
@@ -3130,6 +3657,94 @@ export interface operations {
             404: components["responses"]["NotFound"];
             409: components["responses"]["Conflict"];
             422: components["responses"]["Invalid"];
+        };
+    };
+    listDriftResults: {
+        parameters: {
+            query?: {
+                scheduleId?: string;
+                limit?: number;
+            };
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Results without traces */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DriftResult"][];
+                };
+            };
+            404: components["responses"]["NotFound"];
+        };
+    };
+    getDriftResult: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                driftId: components["parameters"]["driftId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The result */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DriftResult"];
+                };
+            };
+            404: components["responses"]["NotFound"];
+        };
+    };
+    repairDrift: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                driftId: components["parameters"]["driftId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["DriftRepair"];
+            };
+        };
+        responses: {
+            /** @description Repair job accepted */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AIJob"];
+                };
+            };
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            422: components["responses"]["Invalid"];
+            /** @description Monthly AI token cap reached, or too many jobs queued */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
         };
     };
     listWorkers: {
