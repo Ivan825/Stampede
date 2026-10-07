@@ -1,9 +1,18 @@
 import { useQueryClient } from '@tanstack/react-query';
 import { Link, useParams } from '@tanstack/react-router';
 import { OctagonX, Square } from 'lucide-react';
-import { useCallback } from 'react';
+import { useCallback, useEffect, useMemo } from 'react';
 import { ApiError } from '@/api/client';
-import { keys, useKillRun, useMe, useReport, useRun, useStopRun, useTimeline } from '@/api/queries';
+import {
+  keys,
+  useKillRun,
+  useMe,
+  useReport,
+  useRun,
+  useRunEvents,
+  useStopRun,
+  useTimeline,
+} from '@/api/queries';
 import type { Run } from '@/api/types';
 import { isTerminal } from '@/api/types';
 import { StatusChip, VerdictChip } from '@/components/chips';
@@ -12,6 +21,8 @@ import { useToast } from '@/components/toast';
 import { Button, ErrorAlert, Loading, Notice } from '@/components/ui';
 import { LiveView } from '@/features/runs/LiveView';
 import { Downloads, ReportView } from '@/features/runs/ReportView';
+import { DryRunGatePanel, EventFeed } from '@/features/runs/RunEvents';
+import { dryRunGate, mergeEvents } from '@/features/runs/eventLog';
 import { dateTime } from '@/lib/format';
 import { permissions } from '@/lib/roles';
 import { useRunStream } from '@/lib/useRunStream';
@@ -131,6 +142,15 @@ export function RunPage() {
       : runQ.data;
   const finished = !!run && isTerminal(run.status);
   const report = useReport(runId, finished);
+  const recorded = useRunEvents(runId, run && !finished ? 5000 : false);
+  const events = useMemo(
+    () => mergeEvents(recorded.data ?? [], stream.events),
+    [recorded.data, stream.events],
+  );
+  // Fetch the events once more when the run ends, for its last ones.
+  useEffect(() => {
+    if (finished) void qc.invalidateQueries({ queryKey: keys.runEvents(runId) });
+  }, [finished, qc, runId]);
 
   if (runQ.isPending) return <Loading />;
   if (runQ.error) return <ErrorAlert error={runQ.error} className="m-6" />;
@@ -140,8 +160,13 @@ export function RunPage() {
     <div className="mx-auto max-w-7xl px-6 py-6">
       <RunHeader run={run} />
       {run.error && <ErrorAlert error={new Error(run.error)} className="mb-4" />}
+      {finished && dryRunGate(events) && (
+        <div className="mb-4">
+          <DryRunGatePanel events={events} />
+        </div>
+      )}
       {!finished ? (
-        <LiveView run={run} points={stream.points} events={stream.events} state={stream.state} />
+        <LiveView run={run} points={stream.points} events={events} state={stream.state} />
       ) : report.isPending ? (
         <Loading label="Loading report…" />
       ) : report.error ? (
@@ -154,6 +179,11 @@ export function RunPage() {
         )
       ) : (
         <ReportView report={report.data} runId={run.id} canNarrate={canNarrate} />
+      )}
+      {finished && (
+        <div className="mt-4">
+          {recorded.error ? <ErrorAlert error={recorded.error} /> : <EventFeed events={events} />}
+        </div>
       )}
     </div>
   );
