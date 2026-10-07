@@ -59,7 +59,12 @@ iterations, dropped iterations and the generator's scheduling lag.
   carried; a link when `observe.traces` gives a link template.
 - **Errors**: each kind of failure at each step with counts, for example
   `HTTP 503`, `timeout`, `connection refused`, `check status (got 302)`,
-  `extract token`.
+  `extract token`. HTTP and GraphQL failures keep up to three **examples** each:
+  the request line, headers and the first 512 bytes of the body, and the
+  response status, headers and body (for error statuses even when the
+  scenario did not read the body), with the trace ID. `Authorization`,
+  cookies and API-key headers are replaced by `[redacted]`, and so is any
+  value of the run's secrets, as written or URL-encoded.
 - **Workers** (distributed runs): each worker's share, requests, peak users,
   clock offset, saturated windows and whether it was lost.
 - **Notes**: anything that affects how to read the numbers: dropped

@@ -254,6 +254,9 @@ type ErrorRow struct {
 	Step    string `json:"step"`
 	Error   string `json:"error"`
 	Count   uint64 `json:"count"`
+	// Examples are up to three of these failures, with what was sent and
+	// received (credentials and secrets redacted).
+	Examples []metrics.ErrorExample `json:"examples,omitempty"`
 }
 
 // Point is one timeline interval.
@@ -396,7 +399,7 @@ func Build(in Input) *Report {
 			sr.Browser = browserStatOf(st, in.Phases[cs.ID])
 			jr.Steps = append(jr.Steps, sr)
 			for e, n := range st.Errors {
-				r.Errors = append(r.Errors, ErrorRow{Journey: cj.Name, Step: cs.Name, Error: e, Count: n})
+				r.Errors = append(r.Errors, ErrorRow{Journey: cj.Name, Step: cs.Name, Error: e, Count: n, Examples: st.Examples[e]})
 			}
 		}
 		jr.Stats = statsOf(jTotal, dur)

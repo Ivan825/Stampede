@@ -38,6 +38,11 @@ h2 { font-size: 13px; font-family: var(--mono); text-transform: uppercase; lette
 .card { background: var(--surface); border: 1px solid var(--line); border-radius: 8px; padding: 14px 14px 10px; margin-bottom: 12px; }
 .card h3 { margin: 0 0 8px; font-size: 14px; font-weight: 600; }
 .muted { color: var(--muted); }
+details.ex summary { cursor: pointer; }
+.exchange { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 10px; }
+.exchange pre { margin: 0; padding: 10px; background: var(--bg); border: 1px solid var(--line); border-radius: 6px; font: 12px/1.45 var(--mono); white-space: pre-wrap; word-break: break-word; max-height: 320px; overflow: auto; }
+.exchange p { grid-column: 1 / -1; margin: 0; font: 12px var(--mono); }
+@media (max-width: 720px) { .exchange { grid-template-columns: 1fr; } }
 svg { width: 100%; height: auto; display: block; }
 @media print {
   /* Paper is light whatever the reader's theme. */
@@ -239,6 +244,21 @@ footer a, td a { color: var(--accent); }
   {{range .Errors}}<tr><td>{{.Error}}</td><td class="l">{{.Journey}}</td><td class="l"><code>{{.Step}}</code></td><td>{{.Count}}</td></tr>{{end}}
   </tbody>
 </table></div>
+{{range .Errors}}{{if .Examples}}
+<details class="card ex"><summary><b>{{.Error}}</b> · {{.Journey}} › <code>{{.Step}}</code> · {{len .Examples}} example{{if gt (len .Examples) 1}}s{{end}}</summary>
+{{range .Examples}}<div class="exchange">
+<pre>{{.Request}}{{range $k, $v := .RequestHeaders}}
+{{$k}}: {{$v}}{{end}}{{if .RequestBody}}
+
+{{.RequestBody}}{{end}}</pre>
+<pre>{{if .Status}}{{.Status}}{{else}}no response{{end}}{{if .Detail}} · {{.Detail}}{{end}}{{range $k, $v := .ResponseHeaders}}
+{{$k}}: {{$v}}{{end}}{{if .ResponseBody}}
+
+{{.ResponseBody}}{{end}}</pre>
+{{if .TraceID}}<p class="muted">trace {{.TraceID}}</p>{{end}}
+</div>{{end}}
+</details>
+{{end}}{{end}}
 {{end}}
 
 <footer>
