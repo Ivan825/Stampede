@@ -35,27 +35,17 @@ describe('Library', () => {
     );
   });
 
-  it('creates a scenario from a pack file in a chosen project', async () => {
+  it('points to the CLI to save a pack file as a scenario, without a button', async () => {
     const db = installMockApi();
     const user = userEvent.setup();
-    const { router } = renderApp('/library/ecommerce');
+    renderApp('/library/ecommerce');
     await user.click(await screen.findByRole('button', { name: 'journeys/shop-mix.yaml' }));
-    const project = db.projects[1]!;
-    await user.selectOptions(
-      screen.getByRole('combobox', { name: 'Project for ecommerce-shop-mix' }),
-      project.id,
-    );
-    await user.click(screen.getByRole('button', { name: /Create scenario/ }));
-    await waitFor(() =>
-      expect(db.scenarios.some((s) => s.name === 'ecommerce-shop-mix')).toBe(true),
-    );
-    const created = db.scenarios.find((s) => s.name === 'ecommerce-shop-mix')!;
-    expect(created.projectId).toBe(project.id);
-    await waitFor(() =>
-      expect(router.state.location.pathname).toBe(
-        `/projects/${project.id}/scenarios/${created.id}`,
-      ),
-    );
+    expect(
+      screen.getByText(`stampede push --project ${db.projects[0]!.slug} <scenario.yaml>`),
+    ).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Create scenario/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole('combobox')).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Copy YAML' })).toBeInTheDocument();
   });
 
   it('shows not found for an unknown pack', async () => {
@@ -93,7 +83,7 @@ describe('Scenario coverage and drift', () => {
     expect(screen.getByText('7 of 11')).toBeInTheDocument();
   });
 
-  it('fetches the document from a target and reports drift with a dry run', async () => {
+  it('fetches the document from a target and reports drift, leaving dry runs to the CLI', async () => {
     const { db, sc, url } = setup();
     const user = userEvent.setup();
     renderApp(`${url}?tab=drift`);
@@ -106,7 +96,8 @@ describe('Scenario coverage and drift', () => {
     await user.paste(
       mockShopSpec.replace('/api/orders:', '/api/wishlist:\n    get: {}\n  /api/orders:'),
     );
-    await user.selectOptions(form.getByLabelText('Dry run against'), local.id);
+    expect(form.queryByLabelText('Dry run against')).not.toBeInTheDocument();
+    expect(form.getByText(/stampede drift <scenario.yaml> .* --target <url>/)).toBeInTheDocument();
     await user.click(form.getByRole('button', { name: 'Check drift' }));
 
     expect(
@@ -114,9 +105,7 @@ describe('Scenario coverage and drift', () => {
     ).toBeInTheDocument();
     const change = within(screen.getByRole('list', { name: 'API change' }));
     expect(change.getByText('− GET /api/wishlist')).toBeInTheDocument();
-    const dry = within(screen.getByRole('table', { name: 'Dry run' }));
-    expect(dry.getByText('shopper')).toBeInTheDocument();
-    expect(dry.queryByText('fails')).not.toBeInTheDocument();
+    expect(screen.queryByRole('table', { name: 'Dry run' })).not.toBeInTheDocument();
   });
 
   it('loads the document from a file', async () => {
