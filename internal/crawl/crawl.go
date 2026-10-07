@@ -103,6 +103,8 @@ type entry struct {
 	resHeaders map[string]string
 	body       string
 	done       bool
+	// settled is set once the request finished or failed.
+	settled bool
 }
 
 // Crawl visits the site and returns what it saw.
@@ -151,6 +153,9 @@ func Crawl(ctx context.Context, o Options) (*Result, error) {
 	entries := map[network.RequestID]*entry{}
 	var order []network.RequestID
 	var bodies sync.WaitGroup
+	// inflight counts the page's document, XHR and fetch requests still
+	// loading; quietSince is when it last reached zero.
+	inflight, quietSince := 0, time.Now()
 	keep := func(t network.ResourceType) bool {
 		return t == network.ResourceTypeDocument || t == network.ResourceTypeXHR || t == network.ResourceTypeFetch
 	}
@@ -178,6 +183,7 @@ func Crawl(ctx context.Context, o Options) (*Result, error) {
 			mu.Lock()
 			if _, seen := entries[ev.RequestID]; !seen {
 				order = append(order, ev.RequestID)
+				inflight++
 			}
 			entries[ev.RequestID] = e
 			mu.Unlock()
@@ -187,9 +193,24 @@ func Crawl(ctx context.Context, o Options) (*Result, error) {
 				e.status, e.mime, e.resHeaders = ev.Response.Status, ev.Response.MimeType, headerMap(ev.Response.Headers)
 			}
 			mu.Unlock()
+		case *network.EventLoadingFailed:
+			mu.Lock()
+			if e := entries[ev.RequestID]; e != nil && !e.settled {
+				e.settled = true
+				if inflight--; inflight == 0 {
+					quietSince = time.Now()
+				}
+			}
+			mu.Unlock()
 		case *network.EventLoadingFinished:
 			mu.Lock()
 			e := entries[ev.RequestID]
+			if e != nil && !e.settled {
+				e.settled = true
+				if inflight--; inflight == 0 {
+					quietSince = time.Now()
+				}
+			}
 			mu.Unlock()
 			if e == nil {
 				return
@@ -233,7 +254,21 @@ func Crawl(ctx context.Context, o Options) (*Result, error) {
 		pctx, pcancel := context.WithTimeout(tab, o.PageTimeout)
 		resp, err := chromedp.RunResponse(pctx, chromedp.Navigate(it.u))
 		if err == nil {
+			// Give the page's scripts time to start their requests, then
+			// wait until its network has been quiet for a moment (at most
+			// five seconds more), so slow API calls are still recorded.
 			time.Sleep(o.Settle)
+			// A page that polls forever must not hold the crawl up.
+			quietBy := time.Now().Add(5 * time.Second)
+			for pctx.Err() == nil && time.Now().Before(quietBy) {
+				mu.Lock()
+				idle := inflight == 0 && time.Since(quietSince) >= 300*time.Millisecond
+				mu.Unlock()
+				if idle {
+					break
+				}
+				time.Sleep(50 * time.Millisecond)
+			}
 			err = chromedp.Run(pctx, chromedp.Evaluate(extractJS, &info))
 		}
 		pcancel()

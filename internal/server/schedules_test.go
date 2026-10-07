@@ -345,10 +345,11 @@ func TestSchedulerFiresOnce(t *testing.T) {
 	})
 	clock.Advance(time.Minute)
 	eventually(t, 5*time.Second, "the second scheduled run", func() bool { return len(countRuns(t, c, f.pid)) == 2 })
-	c.do("GET", "/schedules/"+id, nil, &sch)
-	if sch["lastSkipReason"] != "" {
-		t.Errorf("skip reason not cleared: %v", sch["lastSkipReason"])
-	}
+	// The schedule is updated just after the run is created.
+	eventually(t, 5*time.Second, "the skip reason cleared", func() bool {
+		c.do("GET", "/schedules/"+id, nil, &sch)
+		return sch["lastSkipReason"] == ""
+	})
 
 	var audit []map[string]any
 	c.do("GET", "/audit?limit=100", nil, &audit)
