@@ -29,6 +29,7 @@ type Server struct {
 	runOrder  []string
 	stopped   map[string]bool
 	workers   int
+	saturated map[string]int // run ID -> how many of its workers are saturated
 	creates   int
 	last      stampede.RunCreate
 }
@@ -65,6 +66,17 @@ func (f *Server) SetWorkers(n int) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	f.workers = n
+}
+
+// SetSaturated makes the first n workers report themselves saturated on
+// the run.
+func (f *Server) SetSaturated(runID string, n int) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if f.saturated == nil {
+		f.saturated = map[string]int{}
+	}
+	f.saturated[runID] = n
 }
 
 // FinishRun moves a run to a terminal status with a verdict.
@@ -139,6 +151,15 @@ func (f *Server) serve(w http.ResponseWriter, r *http.Request) {
 		ws := make([]stampede.Worker, f.workers)
 		for i := range ws {
 			ws[i] = stampede.Worker{ID: fmt.Sprintf("w-%d", i), Name: fmt.Sprintf("worker-%d", i), Status: "idle"}
+		}
+		for runID, n := range f.saturated {
+			if run := f.runs[runID]; run == nil || run.Status != "running" {
+				continue
+			}
+			for i := 0; i < n && i < len(ws); i++ {
+				id := runID
+				ws[i].Status, ws[i].RunID = "saturated", &id
+			}
 		}
 		writeJSON(w, http.StatusOK, ws)
 	case path == "/projects" && r.Method == http.MethodGet:

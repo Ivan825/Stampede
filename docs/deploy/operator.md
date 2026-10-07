@@ -125,11 +125,28 @@ What the controller does:
 5. Polls the run every 5 seconds. When it ends, records `verdict`,
    `summary`, `completedAt`, and scales the workers back.
 
+**More workers when they saturate.** With
+`scaleWorkers.onSaturation: { maxReplicas: 16, windowSeconds: 120 }`, the
+operator watches the run's workers while it runs. If one reports itself
+saturated (CPU, scheduling lag, dropped iterations, see
+[measurement](../concepts/measurement.md#saturation)) within
+`windowSeconds` of the start, while load is still ramping, it stops the
+run, doubles the worker Deployment (up to `maxReplicas`), waits for the
+stopped run to end and the new workers to connect, and starts the run
+again with proportionally more workers (`workers` scales with the
+Deployment). A run's shares are fixed when it starts, so adding workers
+to a running test would not spread its load; restarting does. Each
+stopped run is listed under `status.attempts` with the reason, and
+`status.replicas` is the size the current attempt asked for. Saturation
+after the window is left to the report, which marks the run
+generator-limited when it matters.
+
 Status fields: `phase` (`Pending`, `Scaling`, `Running`, `Completed`,
 `Failed`), `runId`, `serverStatus`, `verdict` (`pass`, `fail`,
 `generator-limited`, `no-targets`), `reportURL` (the run's page in the web
 UI), `summary` (requests, error rate, RPS, p95, p99), `message`, the
-resolved IDs, and a `Ready` condition once the run is over.
+resolved IDs, `attempts` and `replicas` (with `onSaturation`), and a
+`Ready` condition once the run is over.
 
 `Completed` means the run finished; whether it met its targets is the
 `verdict`. In a pipeline:

@@ -345,3 +345,62 @@ func TestRunValidation(t *testing.T) {
 		t.Fatal("ftp:// server URL accepted")
 	}
 }
+
+func TestRunRestartsWithMoreWorkersWhenSaturated(t *testing.T) {
+	needEnvtest(t)
+	ns := namespace(t, "run-sat")
+	f := stampedetest.New("stp_test")
+	defer f.Close()
+	workerPool(t, ns, 1)
+	tokenSecret(t, ns)
+	f.SetWorkers(2)
+
+	run := newRun(ns, "spike", f.URL)
+	run.Spec.Workers = 2
+	run.Spec.ScaleWorkers = &stampedev1.ScaleWorkers{Deployment: "pool", Replicas: 2, WaitTimeoutSeconds: 60,
+		OnSaturation: &stampedev1.SaturationScaling{MaxReplicas: 8, WindowSeconds: 120}}
+	if err := k8s.Create(testCtx, run); err != nil {
+		t.Fatal(err)
+	}
+	var r *stampedev1.StampedeRun
+	eventually(t, wait, "the first attempt running", func() bool {
+		r = getRun(t, ns, "spike")
+		return r.Status.Phase == stampedev1.RunRunning && r.Status.RunID != ""
+	})
+	first := r.Status.RunID
+
+	// A worker saturates during ramp-up: the run is stopped and the pool doubled.
+	f.SetSaturated(first, 1)
+	var dep appsv1.Deployment
+	eventually(t, wait, "the pool doubled and the attempt stopping", func() bool {
+		_ = k8s.Get(testCtx, types.NamespacedName{Namespace: ns, Name: "pool"}, &dep)
+		r = getRun(t, ns, "spike")
+		return *dep.Spec.Replicas == 4 && r.Status.StoppingRunID == first && f.Stopped(first)
+	})
+	if len(r.Status.Attempts) != 1 || r.Status.Attempts[0].RunID != first || r.Status.Attempts[0].Replicas != 2 ||
+		!strings.Contains(r.Status.Attempts[0].Reason, "worker-0 saturated") || r.Status.Replicas != 4 {
+		t.Fatalf("status: %+v", r.Status)
+	}
+	if f.RunCreates() != 1 {
+		t.Fatal("restarted before the first attempt ended")
+	}
+
+	// Once it has ended and four workers are connected, the second attempt
+	// starts with twice the workers.
+	f.FinishRun(first, "aborted", "")
+	f.SetWorkers(4)
+	eventually(t, wait, "the second attempt running", func() bool {
+		r = getRun(t, ns, "spike")
+		return r.Status.Phase == stampedev1.RunRunning && r.Status.RunID != "" && r.Status.RunID != first
+	})
+	in := f.LastRunCreate()
+	if in.Workers != 4 || !strings.Contains(in.Note, " attempt 2]") || f.RunCreates() != 2 {
+		t.Fatalf("second create: %+v (%d creates)", in, f.RunCreates())
+	}
+	f.FinishRun(r.Status.RunID, "completed", "pass")
+	eventually(t, wait, "completed and restored", func() bool {
+		_ = k8s.Get(testCtx, types.NamespacedName{Namespace: ns, Name: "pool"}, &dep)
+		r = getRun(t, ns, "spike")
+		return r.Status.Phase == stampedev1.RunCompleted && *dep.Spec.Replicas == 1
+	})
+}

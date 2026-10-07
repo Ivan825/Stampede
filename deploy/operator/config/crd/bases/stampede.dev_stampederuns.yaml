@@ -147,6 +147,28 @@ spec:
                       Deployment in the run's namespace. Defaults to the worker Deployment of
                       server.clusterRef. Do not point it at a Deployment an HPA manages.
                     type: string
+                  onSaturation:
+                    description: |-
+                      OnSaturation, when set, restarts the run with more workers if one
+                      of its workers reports itself saturated early in the run, while
+                      load is still ramping. A run's shares are fixed when it starts, so
+                      added workers only help a new run.
+                    properties:
+                      maxReplicas:
+                        description: MaxReplicas caps the Deployment.
+                        format: int32
+                        minimum: 1
+                        type: integer
+                      windowSeconds:
+                        default: 120
+                        description: WindowSeconds after the run starts in which saturation
+                          restarts it.
+                        format: int32
+                        minimum: 10
+                        type: integer
+                    required:
+                    - maxReplicas
+                    type: object
                   replicas:
                     description: Replicas during the run.
                     format: int32
@@ -226,6 +248,27 @@ spec:
           status:
             description: StampedeRunStatus reports progress and the result.
             properties:
+              attempts:
+                description: |-
+                  Attempts lists runs stopped because their workers saturated; the
+                  current run is RunID.
+                items:
+                  description: RunAttempt is a run the operator stopped to restart
+                    it with more workers.
+                  properties:
+                    reason:
+                      type: string
+                    replicas:
+                      format: int32
+                      type: integer
+                    runId:
+                      type: string
+                  required:
+                  - reason
+                  - replicas
+                  - runId
+                  type: object
+                type: array
               completedAt:
                 format: date-time
                 type: string
@@ -300,6 +343,12 @@ spec:
                 description: ProjectID, ScenarioID, ScenarioVersion and TargetID were
                   resolved for the run.
                 type: string
+              replicas:
+                description: |-
+                  Replicas is the worker Deployment size the current attempt asked for,
+                  when onSaturation raised it above scaleWorkers.replicas.
+                format: int32
+                type: integer
               reportURL:
                 description: ReportURL is the run's page in the web UI.
                 type: string
@@ -327,6 +376,10 @@ spec:
               startedAt:
                 description: StartedAt and CompletedAt bracket the run.
                 format: date-time
+                type: string
+              stoppingRunId:
+                description: StoppingRunID is an attempt being stopped before the
+                  restart.
                 type: string
               summary:
                 description: Summary of the finished run.

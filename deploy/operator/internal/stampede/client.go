@@ -203,6 +203,8 @@ type Worker struct {
 	Region string            `json:"region"`
 	Labels map[string]string `json:"labels"`
 	Status string            `json:"status"`
+	// RunID is the run the worker is busy with, if any.
+	RunID *string `json:"runId,omitempty"`
 }
 
 // ListProjects returns every project the token can see.

@@ -137,6 +137,34 @@ type ScaleWorkers struct {
 	// +kubebuilder:default=300
 	// +optional
 	WaitTimeoutSeconds int32 `json:"waitTimeoutSeconds,omitempty"`
+
+	// OnSaturation, when set, restarts the run with more workers if one
+	// of its workers reports itself saturated early in the run, while
+	// load is still ramping. A run's shares are fixed when it starts, so
+	// added workers only help a new run.
+	// +optional
+	OnSaturation *SaturationScaling `json:"onSaturation,omitempty"`
+}
+
+// SaturationScaling doubles the worker Deployment, up to MaxReplicas,
+// each time a run's workers saturate within WindowSeconds of its start.
+type SaturationScaling struct {
+	// MaxReplicas caps the Deployment.
+	// +kubebuilder:validation:Minimum=1
+	MaxReplicas int32 `json:"maxReplicas"`
+
+	// WindowSeconds after the run starts in which saturation restarts it.
+	// +kubebuilder:validation:Minimum=10
+	// +kubebuilder:default=120
+	// +optional
+	WindowSeconds int32 `json:"windowSeconds,omitempty"`
+}
+
+// RunAttempt is a run the operator stopped to restart it with more workers.
+type RunAttempt struct {
+	RunID    string `json:"runId"`
+	Replicas int32  `json:"replicas"`
+	Reason   string `json:"reason"`
 }
 
 // Run phases.
@@ -196,6 +224,20 @@ type StampedeRunStatus struct {
 	// ScalingStartedAt is when the operator began waiting for workers.
 	// +optional
 	ScalingStartedAt *metav1.Time `json:"scalingStartedAt,omitempty"`
+
+	// Replicas is the worker Deployment size the current attempt asked for,
+	// when onSaturation raised it above scaleWorkers.replicas.
+	// +optional
+	Replicas int32 `json:"replicas,omitempty"`
+
+	// Attempts lists runs stopped because their workers saturated; the
+	// current run is RunID.
+	// +optional
+	Attempts []RunAttempt `json:"attempts,omitempty"`
+
+	// StoppingRunID is an attempt being stopped before the restart.
+	// +optional
+	StoppingRunID string `json:"stoppingRunId,omitempty"`
 
 	// StartedAt and CompletedAt bracket the run.
 	// +optional

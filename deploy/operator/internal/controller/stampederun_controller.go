@@ -148,6 +148,20 @@ func (r *StampedeRunReconciler) advance(ctx context.Context, run *stampedev1.Sta
 	}
 	st := &run.Status
 
+	if st.StoppingRunID != "" {
+		// An attempt stopped for saturation must end before its workers
+		// are free for the next.
+		old, err := api.GetRun(ctx, st.StoppingRunID)
+		if err != nil {
+			return ctrl.Result{}, err
+		}
+		if !old.Terminal() {
+			st.Message = "stopping run " + st.StoppingRunID + " before restarting with more workers"
+			return ctrl.Result{RequeueAfter: r.poll()}, nil
+		}
+		st.StoppingRunID = ""
+	}
+
 	if st.RunID == "" {
 		if st.Phase == "" {
 			st.Phase = stampedev1.RunPending
@@ -165,6 +179,9 @@ func (r *StampedeRunReconciler) advance(ctx context.Context, run *stampedev1.Sta
 			}
 		}
 		marker := runMarker(run)
+		if len(st.Attempts) > 0 {
+			marker = strings.TrimSuffix(marker, "]") + fmt.Sprintf(" attempt %d]", len(st.Attempts)+1)
+		}
 		existing, err := api.FindRunByNote(ctx, st.ProjectID, marker)
 		if err != nil {
 			return ctrl.Result{}, err
@@ -172,7 +189,7 @@ func (r *StampedeRunReconciler) advance(ctx context.Context, run *stampedev1.Sta
 		if existing == nil {
 			in := stampede.RunCreate{
 				ScenarioID: st.ScenarioID, Version: st.ScenarioVersion, TargetID: st.TargetID,
-				Env: run.Spec.Env, Workers: run.Spec.Workers,
+				Env: run.Spec.Env, Workers: r.runWorkers(run),
 				Note: strings.TrimSpace(run.Spec.Note + " " + marker),
 			}
 			if o := run.Spec.Overrides; o != nil {
@@ -201,6 +218,9 @@ func (r *StampedeRunReconciler) advance(ctx context.Context, run *stampedev1.Sta
 	st.ServerStatus = got.Status
 	st.Message = "the run is " + got.Status
 	if !got.Terminal() {
+		if restarted, err := r.checkSaturation(ctx, api, run); err != nil || restarted {
+			return ctrl.Result{RequeueAfter: r.poll()}, err
+		}
 		return ctrl.Result{RequeueAfter: r.poll()}, nil
 	}
 	if got.Verdict != nil {
@@ -329,9 +349,9 @@ func (r *StampedeRunReconciler) scaleUp(ctx context.Context, api *stampede.Clien
 		st.Phase = stampedev1.RunScaling
 		r.event(run, corev1.EventTypeNormal, "ScaledWorkers", "scaled Deployment %s to %d for the run", name, max(sw.Replicas, before))
 	}
-	want := int(sw.Replicas)
-	if run.Spec.Workers > 0 {
-		want = int(run.Spec.Workers)
+	want := int(max(sw.Replicas, st.Replicas))
+	if w := r.runWorkers(run); w > 0 {
+		want = int(w)
 	}
 	n, err := api.ConnectedWorkers(ctx)
 	if err != nil {
@@ -349,6 +369,71 @@ func (r *StampedeRunReconciler) scaleUp(ctx context.Context, api *stampede.Clien
 		return false, permanentf("only %d of %d workers connected after %s", n, want, timeout)
 	}
 	return false, nil
+}
+
+// runWorkers is how many workers the run asks for: spec.workers, scaled
+// up in proportion when onSaturation has grown the Deployment.
+func (r *StampedeRunReconciler) runWorkers(run *stampedev1.StampedeRun) int32 {
+	w := run.Spec.Workers
+	if sw := run.Spec.ScaleWorkers; sw != nil && w > 0 && run.Status.Replicas > sw.Replicas {
+		w = w * run.Status.Replicas / sw.Replicas
+	}
+	return w
+}
+
+// checkSaturation restarts the run with twice the workers (up to the cap)
+// when one of its workers reports itself saturated within the window
+// after the start. It reports whether it did.
+func (r *StampedeRunReconciler) checkSaturation(ctx context.Context, api *stampede.Client, run *stampedev1.StampedeRun) (bool, error) {
+	sw := run.Spec.ScaleWorkers
+	st := &run.Status
+	if sw == nil || sw.OnSaturation == nil || st.ScaledDeployment == "" || st.StartedAt == nil {
+		return false, nil
+	}
+	sat := sw.OnSaturation
+	window := time.Duration(sat.WindowSeconds) * time.Second
+	if window <= 0 {
+		window = 2 * time.Minute
+	}
+	cur := max(sw.Replicas, st.Replicas)
+	if time.Since(st.StartedAt.Time) > window || cur >= sat.MaxReplicas {
+		return false, nil
+	}
+	workers, err := api.ListWorkers(ctx)
+	if err != nil {
+		return false, err
+	}
+	var saturated []string
+	for _, w := range workers {
+		if w.Status == "saturated" && w.RunID != nil && *w.RunID == st.RunID {
+			saturated = append(saturated, w.Name)
+		}
+	}
+	if len(saturated) == 0 {
+		return false, nil
+	}
+	if err := api.StopRun(ctx, st.RunID); err != nil {
+		return false, err
+	}
+	next := min(sat.MaxReplicas, cur*2)
+	var dep appsv1.Deployment
+	if err := r.Get(ctx, types.NamespacedName{Namespace: run.Namespace, Name: st.ScaledDeployment}, &dep); err != nil {
+		return false, err
+	}
+	dep.Spec.Replicas = &next
+	if err := r.Update(ctx, &dep); err != nil {
+		return false, err
+	}
+	reason := fmt.Sprintf("%s saturated %s after the start", strings.Join(saturated, ", "), time.Since(st.StartedAt.Time).Round(time.Second))
+	st.Attempts = append(st.Attempts, stampedev1.RunAttempt{RunID: st.RunID, Replicas: cur, Reason: reason})
+	r.event(run, corev1.EventTypeNormal, "Saturated", "%s; restarting with %d workers", reason, next)
+	st.StoppingRunID, st.RunID = st.RunID, ""
+	st.Replicas = next
+	st.Phase = stampedev1.RunScaling
+	st.ScalingStartedAt = ptrNow()
+	st.StartedAt = nil
+	st.Message = fmt.Sprintf("workers saturated; restarting with %d workers", next)
+	return true, nil
 }
 
 // restoreWorkers puts the worker Deployment back to its size before the run.
