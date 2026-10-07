@@ -1,0 +1,11 @@
+# Loads deploy/grafana/stampede-server.json, mounted at
+# /etc/grafana/dashboards/stampede by docker-compose.yml.
+apiVersion: 1
+providers:
+  - name: stampede
+    folder: Stampede
+    type: file
+    disableDeletion: true
+    allowUiUpdates: false
+    options:
+      path: /etc/grafana/dashboards/stampede
