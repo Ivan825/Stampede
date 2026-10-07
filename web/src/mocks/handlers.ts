@@ -6,9 +6,13 @@ import type {
   AIJobSummary,
   AIProvider,
   AIProviderPut,
+  Caps,
   CompareRequest,
   CoverageRequest,
+  DriftRepair,
   DriftRequest,
+  ProjectRole,
+  ProjectSettings,
   Scenario,
   ApiErrorBody,
   Integration,
@@ -48,6 +52,7 @@ import {
 } from './db';
 import { checkZone, nextTimes, parseCron } from './cron';
 import { advanceAIJob, type MockAIJob } from './ai';
+import { driftCheck, driftSummary } from './drift';
 import { compareReports } from './compare';
 import { analyse, simulatePoint, simulateTimeline } from './sim';
 import {
@@ -118,6 +123,49 @@ export function createHandlers(initial: MockOptions, opts: MockHandlerOptions = 
       ? null
       : err(403, 'forbidden', `Your role (${role()}) cannot do this; it needs ${min} or above.`);
 
+  /** The signed-in user's role in a project: an override, or their organisation role. */
+  const roleIn = (projectId: string): Role => {
+    const u = me(db)!;
+    if (u.role === 'owner') return 'owner';
+    return db.projectRoles[projectId]?.find((x) => x.userId === u.id)?.role ?? u.role;
+  };
+  /** The highest role the caller may grant in a project, as the server checks it. */
+  const rankIn = (projectId: string) => Math.max(rank[role()], rank[roleIn(projectId)]);
+  /** Organisation admins, or admins in this project through an override. */
+  const projectAdmin = (projectId: string) => {
+    if (!db.projects.some((p) => p.id === projectId)) return notFound('Project');
+    return rankIn(projectId) >= rank.admin
+      ? null
+      : err(403, 'forbidden', 'This needs the admin role in this project.');
+  };
+  const projectRoles = (projectId: string): ProjectRole[] =>
+    (db.projectRoles[projectId] ?? []).flatMap((o) => {
+      const u = db.users.find((x) => x.id === o.userId);
+      return u
+        ? [
+            {
+              userId: u.id,
+              email: u.email,
+              name: u.name,
+              role: o.role,
+              orgRole: u.role,
+              createdAt: o.createdAt,
+            },
+          ]
+        : [];
+    });
+  /** Checks caps: every value set must be positive. */
+  const capsBody = (c: Caps | undefined): Caps | Response => {
+    const out: Caps = {};
+    for (const k of ['maxRate', 'maxVUs', 'maxDurationSeconds'] as const) {
+      const v = c?.[k];
+      if (v == null) continue;
+      if (typeof v !== 'number' || !(v > 0)) return err(422, 'invalid', 'caps must be positive');
+      out[k] = v;
+    }
+    return out;
+  };
+
   /** Moves an AI job along the pipeline according to the wall clock. */
   const advance = (j: MockAIJob) =>
     advanceAIJob(
@@ -186,7 +234,29 @@ export function createHandlers(initial: MockOptions, opts: MockHandlerOptions = 
       return err(422, 'invalid', 'overrides: rate is not valid', [
         `overrides.rate: "${b.overrides.rate}" is not a rate`,
       ]);
-    return { sc: sc!, t: t!, next };
+    const kind = b.kind ?? 'run';
+    const specURL = b.specURL?.trim() ?? '';
+    if (kind !== 'run' && kind !== 'drift') return err(422, 'invalid', 'kind must be run or drift');
+    if (kind === 'run' && specURL)
+      return err(422, 'invalid', 'specURL applies only to drift schedules');
+    if (specURL) {
+      let u: URL | undefined;
+      try {
+        u = new URL(specURL);
+      } catch {
+        /* checked below */
+      }
+      if (!u || (u.protocol !== 'http:' && u.protocol !== 'https:'))
+        return err(422, 'invalid', 'specURL must be an absolute http(s) URL');
+      const host = new URL(t!.baseURL).hostname;
+      if (u.hostname !== host && !(t!.allowHosts ?? []).includes(u.hostname))
+        return err(
+          422,
+          'invalid',
+          `specURL must be on the target's host ${host} or one of its allowed hosts, not ${u.hostname}`,
+        );
+    }
+    return { sc: sc!, t: t!, next, kind, specURL };
   };
 
   /**
@@ -368,7 +438,10 @@ export function createHandlers(initial: MockOptions, opts: MockHandlerOptions = 
     }),
 
     // ------------------------------------------------------------ projects
-    http.get(`${B}/projects`, async () => (await auth()) ?? ok(db.projects)),
+    http.get(
+      `${B}/projects`,
+      async () => (await auth()) ?? ok(db.projects.map((p) => ({ ...p, role: roleIn(p.id) }))),
+    ),
     http.post(`${B}/projects`, async ({ request }) => {
       const a = (await auth()) ?? need('editor');
       if (a) return a;
@@ -391,7 +464,7 @@ export function createHandlers(initial: MockOptions, opts: MockHandlerOptions = 
       const a = await auth();
       if (a) return a;
       const p = db.projects.find((x) => x.id === params.id);
-      return p ? ok(p) : notFound('Project');
+      return p ? ok({ ...p, role: roleIn(p.id) }) : notFound('Project');
     }),
     http.patch(`${B}/projects/:id`, async ({ request, params }) => {
       const a = (await auth()) ?? need('editor');
@@ -405,6 +478,84 @@ export function createHandlers(initial: MockOptions, opts: MockHandlerOptions = 
       const a = (await auth()) ?? need('admin');
       if (a) return a;
       db.projects = db.projects.filter((x) => x.id !== params.id);
+      return noContent();
+    }),
+
+    // ------------------------------------------------------------ caps, gate, project roles
+    http.get(`${B}/organisation/caps`, async () => (await auth()) ?? ok(db.orgCaps)),
+    http.put(`${B}/organisation/caps`, async ({ request }) => {
+      const a = (await auth()) ?? need('admin');
+      if (a) return a;
+      const c = capsBody((await request.json()) as Caps);
+      if (c instanceof Response) return c;
+      db.orgCaps = c;
+      return ok(c);
+    }),
+    http.get(`${B}/projects/:id/settings`, async ({ params }) => {
+      const a = await auth();
+      if (a) return a;
+      const id = String(params.id);
+      if (!db.projects.some((p) => p.id === id)) return notFound('Project');
+      return ok(db.projectSettings[id] ?? { caps: {}, requireDryRun: false });
+    }),
+    http.put(`${B}/projects/:id/settings`, async ({ params, request }) => {
+      const id = String(params.id);
+      const a = (await auth()) ?? projectAdmin(id);
+      if (a) return a;
+      const b = (await request.json()) as ProjectSettings;
+      const c = capsBody(b.caps);
+      if (c instanceof Response) return c;
+      db.projectSettings[id] = { caps: c, requireDryRun: !!b.requireDryRun };
+      return ok(db.projectSettings[id]);
+    }),
+    http.get(`${B}/projects/:id/roles`, async ({ params }) => {
+      const a = await auth();
+      if (a) return a;
+      const id = String(params.id);
+      if (!db.projects.some((p) => p.id === id)) return notFound('Project');
+      return ok(projectRoles(id));
+    }),
+    http.put(`${B}/projects/:id/roles/:userId`, async ({ params, request }) => {
+      const id = String(params.id);
+      const a = (await auth()) ?? projectAdmin(id);
+      if (a) return a;
+      const { role: r } = (await request.json()) as { role: Role };
+      if (!(r in rank)) return err(422, 'invalid', `unknown role ${r}`);
+      if (r === 'owner')
+        return err(
+          422,
+          'invalid',
+          'owner is an organisation role; it cannot be given for one project',
+        );
+      const mine = rankIn(id);
+      if (rank[r] > mine)
+        return err(
+          403,
+          'forbidden',
+          `you cannot give a role higher than your own (${roleIn(id)}) in this project`,
+        );
+      const u = db.users.find((x) => x.id === params.userId);
+      if (!u) return notFound('member');
+      if (u.role === 'owner')
+        return err(
+          422,
+          'invalid',
+          `${u.email} is an owner, and owners have the owner role in every project`,
+        );
+      const list = (db.projectRoles[id] ??= []);
+      const cur = list.find((x) => x.userId === u.id);
+      if (cur) cur.role = r;
+      else list.push({ userId: u.id, role: r, createdAt: new Date().toISOString() });
+      return ok(projectRoles(id).find((x) => x.userId === u.id)!);
+    }),
+    http.delete(`${B}/projects/:id/roles/:userId`, async ({ params }) => {
+      const id = String(params.id);
+      const a = (await auth()) ?? projectAdmin(id);
+      if (a) return a;
+      const list = db.projectRoles[id] ?? [];
+      const i = list.findIndex((x) => x.userId === params.userId);
+      if (i < 0) return notFound('project role');
+      list.splice(i, 1);
       return noContent();
     }),
 
@@ -690,6 +841,14 @@ export function createHandlers(initial: MockOptions, opts: MockHandlerOptions = 
       if (!isTerminal(r.status)) finish(db, r, `killed by ${me(db)!.email}`, 'aborted');
       return new HttpResponse(null, { status: 202 });
     }),
+    http.get(`${B}/runs/:id/events`, async ({ params }) => {
+      const a = await auth();
+      if (a) return a;
+      const r = db.runs.find((x) => x.id === params.id);
+      if (!r) return notFound('Run');
+      // Stored newest first; the API lists them oldest first.
+      return ok([...(db.events[r.id] ?? [])].reverse());
+    }),
     http.get(`${B}/runs/:id/timeline`, async ({ params }) => {
       const a = await auth();
       if (a) return a;
@@ -905,6 +1064,8 @@ export function createHandlers(initial: MockOptions, opts: MockHandlerOptions = 
         lastFiredAt: null,
         lastRunId: null,
         lastSkipReason: '',
+        kind: c.kind,
+        ...(c.specURL ? { specURL: c.specURL } : {}),
       };
       db.schedules.push(sc);
       return ok(scheduleView(sc), 201);
@@ -950,14 +1111,19 @@ export function createHandlers(initial: MockOptions, opts: MockHandlerOptions = 
         workers: body.workers ?? sc.workers,
         enabled: body.enabled ?? sc.enabled,
         note: body.note ?? sc.note ?? '',
+        kind: sc.kind ?? 'run',
+        specURL: body.specURL ?? sc.specURL ?? '',
       };
       const c = checkSchedule(merged, sc.projectId, sc.id);
       if (c instanceof Response) return c;
       const u = me(db)!;
       const enabled = merged.enabled ?? true;
       const timing = merged.cron !== sc.cron || merged.timezone !== sc.timezone || !sc.nextRunAt;
+      const { specURL: _s, ...rest } = merged;
+      if (c.specURL) sc.specURL = c.specURL;
+      else delete sc.specURL;
       Object.assign(sc, {
-        ...merged,
+        ...rest,
         name: merged.name.trim(),
         cron: merged.cron.trim(),
         timezone: merged.timezone || 'UTC',
@@ -989,6 +1155,28 @@ export function createHandlers(initial: MockOptions, opts: MockHandlerOptions = 
       const s = db.scenarios.find((x) => x.id === sc.scenarioId);
       const t = db.targets.find((x) => x.id === sc.targetId);
       if (!s || !t) return err(422, 'invalid', 'scenario or target not found in this project');
+      if (sc.kind === 'drift') {
+        // The API has not changed since the last check, so a check finds
+        // what the last one found.
+        const last = db.driftResults.find((r) => r.id === sc.lastDriftId);
+        const res = driftCheck({
+          id: uuid(),
+          schedule: sc,
+          scenario: s,
+          target: t,
+          drifted: last ? last.status === 'drifted' : true,
+          at: new Date().toISOString(),
+        });
+        db.driftResults.unshift(res);
+        Object.assign(sc, {
+          lastFiredAt: res.createdAt,
+          lastDriftId: res.id,
+          lastDriftStatus: res.status,
+          lastDriftBroken: res.broken,
+          lastSkipReason: '',
+        });
+        return ok(res);
+      }
       const run = startRun(db, s, t, {
         note: `scheduled: ${sc.name}`,
         ...(sc.workers ? { workers: sc.workers } : {}),
@@ -999,6 +1187,72 @@ export function createHandlers(initial: MockOptions, opts: MockHandlerOptions = 
       sc.lastFiredAt = run.createdAt;
       sc.lastSkipReason = '';
       return ok(run, 201);
+    }),
+
+    http.get(`${B}/projects/:id/drift-results`, async ({ params, request }) => {
+      const a = await auth();
+      if (a) return a;
+      const q = new URL(request.url).searchParams;
+      const scheduleId = q.get('scheduleId');
+      return ok(
+        db.driftResults
+          .filter((r) => r.projectId === params.id)
+          .filter((r) => !scheduleId || r.scheduleId === scheduleId)
+          .slice(0, Number(q.get('limit') ?? 50))
+          .map(driftSummary),
+      );
+    }),
+    http.get(`${B}/drift-results/:id`, async ({ params }) => {
+      const a = await auth();
+      if (a) return a;
+      const r = db.driftResults.find((x) => x.id === params.id);
+      return r ? ok(r) : notFound('drift result');
+    }),
+    http.post(`${B}/drift-results/:id/repair`, async ({ params, request }) => {
+      const a = (await auth()) ?? need('editor');
+      if (a) return a;
+      const r = db.driftResults.find((x) => x.id === params.id);
+      if (!r) return notFound('drift result');
+      if (r.status !== 'drifted' || r.broken.length === 0)
+        return err(409, 'conflict', 'this drift check found no broken journeys to repair');
+      const b = ((await request.json().catch(() => ({}))) ?? {}) as DriftRepair;
+      const prov = b.providerId
+        ? db.aiProviders.find((p) => p.id === b.providerId)
+        : db.aiProviders.length === 1
+          ? db.aiProviders[0]
+          : db.aiProviders.find((p) => p.name === 'default');
+      if (!prov)
+        return err(
+          409,
+          'conflict',
+          'no AI provider is configured; an admin can add one with POST /ai/providers',
+        );
+      const job: MockAIJob = {
+        id: uuid(),
+        projectId: r.projectId,
+        status: 'queued',
+        stage: '',
+        providerKind: prov.kind,
+        model: prov.model,
+        usage: { inputTokens: 0, outputTokens: 0 },
+        dryRun: true,
+        createdBy: me(db)!.email,
+        createdAt: new Date().toISOString(),
+        finishedAt: null,
+        approvedAt: null,
+        startedAt: null,
+        round: 0,
+        targetId: r.targetId,
+        scenarioId: r.scenarioId,
+        problems: [],
+        journeys: [],
+        approvedScenarioId: null,
+        approvedVersion: null,
+        maxRepairs: b.maxRepairs ?? 3,
+      };
+      db.aiJobs.unshift(job);
+      r.repairJobId = job.id;
+      return ok(aiPublic(job), 202);
     }),
 
     http.get(`${B}/workers`, async () => {

@@ -430,12 +430,23 @@ function tightest(...cs: LimitCaps[]): LimitCaps {
 }
 
 export function limitSettings(db: Db): LimitSettings {
+  const projectCaps = (id: string): LimitCaps => db.projectSettings[id]?.caps ?? {};
   return {
     server: serverCaps,
+    organisation: db.orgCaps,
+    projects: [...db.projects]
+      .sort((a, b) => a.name.localeCompare(b.name))
+      .map((p) => ({
+        id: p.id,
+        name: p.name,
+        caps: projectCaps(p.id),
+        requireDryRun: db.projectSettings[p.id]?.requireDryRun ?? false,
+      })),
     unverifiedPublic: unverified,
     abortFloor: { errorRate: 0.9, forSeconds: 30 },
     targets: db.targets.map((t) => {
       const verified = t.private || t.verified;
+      const levels = [serverCaps, db.orgCaps, projectCaps(t.projectId), t.caps];
       return {
         id: t.id,
         name: t.name,
@@ -445,9 +456,7 @@ export function limitSettings(db: Db): LimitSettings {
         private: t.private,
         verified,
         caps: t.caps,
-        effective: verified
-          ? tightest(serverCaps, t.caps)
-          : tightest(serverCaps, t.caps, unverified),
+        effective: verified ? tightest(...levels) : tightest(...levels, unverified),
       };
     }),
   };

@@ -134,7 +134,7 @@ describe('SchedulesPage', () => {
     const confirm = await screen.findByRole('alertdialog');
     await user.click(within(confirm).getByRole('button', { name: 'Delete schedule' }));
     await waitFor(() => expect(screen.queryByText('weekday-stress')).not.toBeInTheDocument());
-    expect(db.schedules.map((s) => s.name)).toEqual(['nightly-smoke']);
+    expect(db.schedules.map((s) => s.name)).toEqual(['nightly-smoke', 'hourly-drift']);
   });
 });
 
