@@ -254,7 +254,7 @@ export function Shell() {
                   icon={<Sparkles />}
                   indent
                 >
-                  AI studio
+                  AI jobs
                 </NavItem>
                 <NavItem
                   to="/projects/$projectId/targets"

@@ -120,12 +120,6 @@ const scenariosRoute = createRoute({
   component: lazyRouteComponent(() => import('@/pages/Scenarios'), 'ScenariosPage'),
 });
 
-const scenarioNewRoute = createRoute({
-  getParentRoute: () => projectRoute,
-  path: '/scenarios/new',
-  component: lazyRouteComponent(() => import('@/pages/ScenarioEditor'), 'NewScenarioPage'),
-});
-
 const scenarioRoute = createRoute({
   getParentRoute: () => projectRoute,
   path: '/scenarios/$scenarioId',
@@ -133,7 +127,7 @@ const scenarioRoute = createRoute({
     const v = Number(s.version);
     return Number.isInteger(v) && v > 0 ? { version: v } : {};
   },
-  component: lazyRouteComponent(() => import('@/pages/ScenarioEditor'), 'ScenarioEditorPage'),
+  component: lazyRouteComponent(() => import('@/pages/ScenarioView'), 'ScenarioViewPage'),
 });
 
 const scenarioCoverageRoute = createRoute({
@@ -171,10 +165,10 @@ const projectSettingsRoute = createRoute({
   component: lazyRouteComponent(() => import('@/pages/ProjectSettings'), 'ProjectSettingsPage'),
 });
 
-const aiStudioRoute = createRoute({
+const aiJobsRoute = createRoute({
   getParentRoute: () => projectRoute,
   path: '/ai',
-  component: lazyRouteComponent(() => import('@/pages/AIStudio'), 'AIStudioPage'),
+  component: lazyRouteComponent(() => import('@/pages/AIJobs'), 'AIJobsPage'),
 });
 
 const aiJobRoute = createRoute({
@@ -275,14 +269,13 @@ const routeTree = rootRoute.addChildren([
       projectIndexRoute,
       runsRoute,
       scenariosRoute,
-      scenarioNewRoute,
       scenarioRoute,
       scenarioCoverageRoute,
       schedulesRoute,
       targetsRoute,
       secretsRoute,
       projectSettingsRoute,
-      aiStudioRoute,
+      aiJobsRoute,
       aiJobRoute,
       compareRoute,
     ]),
