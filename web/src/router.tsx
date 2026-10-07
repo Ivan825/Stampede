@@ -147,6 +147,9 @@ const scenarioCoverageRoute = createRoute({
 const schedulesRoute = createRoute({
   getParentRoute: () => projectRoute,
   path: '/schedules',
+  /** `drift` opens one drift check's result. */
+  validateSearch: (s: Record<string, unknown>): { drift?: string } =>
+    typeof s.drift === 'string' && uuidRe.test(s.drift) ? { drift: s.drift } : {},
   component: lazyRouteComponent(() => import('@/pages/Schedules'), 'SchedulesPage'),
 });
 

@@ -852,9 +852,12 @@ export function useDriftResult(id: string | null) {
 export function useRepairDrift(projectId: string) {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: ({ id, ...body }: DriftRepair & { id: string }) =>
+    mutationFn: ({ id, providerId, maxRepairs }: Partial<DriftRepair> & { id: string }) =>
       unwrap(
-        api.POST('/drift-results/{driftId}/repair', { params: { path: { driftId: id } }, body }),
+        api.POST('/drift-results/{driftId}/repair', {
+          params: { path: { driftId: id } },
+          body: { maxRepairs: maxRepairs ?? 3, ...(providerId ? { providerId } : {}) },
+        }),
       ),
     onSuccess: (job, { id }) => {
       qc.setQueryData(keys.aiJob(job.id), job);
