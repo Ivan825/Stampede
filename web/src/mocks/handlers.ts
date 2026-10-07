@@ -7,6 +7,8 @@ import type {
   AIProvider,
   AIProviderPut,
   CompareRequest,
+  CoverageRequest,
+  DriftRequest,
   Scenario,
   ApiErrorBody,
   Integration,
@@ -48,6 +50,19 @@ import { checkZone, nextTimes, parseCron } from './cron';
 import { advanceAIJob, type MockAIJob } from './ai';
 import { compareReports } from './compare';
 import { analyse, simulatePoint, simulateTimeline } from './sim';
+import {
+  coverageOf,
+  driftOf,
+  endpointsOf,
+  limitSettings,
+  mockPacks,
+  mockShopSpec,
+  mockSSO,
+  packDetail,
+  runWorkerHealth,
+  scenarioYaml,
+  type Endpoint,
+} from './library';
 
 const B = '*/api/v1';
 
@@ -172,6 +187,44 @@ export function createHandlers(initial: MockOptions, opts: MockHandlerOptions = 
         `overrides.rate: "${b.overrides.rate}" is not a rate`,
       ]);
     return { sc: sc!, t: t!, next };
+  };
+
+  /**
+   * An OpenAPI document given inline or by URL on a project target's host
+   * (where every mock target serves the shop API); an error response, or
+   * null when neither is given.
+   */
+  const specFor = (
+    projectId: string,
+    inline: string | undefined,
+    url: string | undefined,
+    what: string,
+  ): Endpoint[] | Response | null => {
+    let text: string | undefined;
+    if (inline?.trim()) text = inline;
+    else if (url?.trim()) {
+      const r = need('editor');
+      if (r) return r;
+      let host = '';
+      try {
+        host = new URL(url).hostname;
+      } catch {
+        return err(422, 'invalid', `${what} URL must be an absolute http(s) URL`);
+      }
+      const hosts = db.targets
+        .filter((t) => t.projectId === projectId)
+        .flatMap((t) => [new URL(t.baseURL).hostname, ...(t.allowHosts ?? [])]);
+      if (!hosts.includes(host))
+        return err(
+          422,
+          'invalid',
+          `${what} URL: ${host} is not the host of a target in this project; add the target first or paste the document`,
+        );
+      text = mockShopSpec;
+    }
+    if (!text) return null;
+    const eps = endpointsOf(text);
+    return typeof eps === 'string' ? err(422, 'invalid', eps.replace('openapi', what)) : eps;
   };
 
   const handlers = [
@@ -954,6 +1007,66 @@ export function createHandlers(initial: MockOptions, opts: MockHandlerOptions = 
       const now = new Date().toISOString();
       for (const w of db.workers) if (w.status !== 'lost') w.lastSeenAt = now;
       return ok(db.workers);
+    }),
+    // ------------------------------------------------------------ packs
+    http.get(`${B}/packs`, async () => (await auth()) ?? ok(mockPacks)),
+    http.get(`${B}/packs/:name`, async ({ params }) => {
+      const a = await auth();
+      if (a) return a;
+      const p = packDetail(String(params.name));
+      return p ? ok(p) : notFound('pack');
+    }),
+
+    // ------------------------------------------------------------ coverage and drift
+    http.post(`${B}/scenarios/:id/coverage`, async ({ params, request }) => {
+      const a = await auth();
+      if (a) return a;
+      const sc = db.scenarios.find((x) => x.id === params.id);
+      if (!sc) return notFound('scenario');
+      const b = (await request.json()) as CoverageRequest;
+      const ver = scenarioYaml(db, sc, b.version);
+      if (!ver) return notFound('scenario version');
+      const spec = specFor(sc.projectId, b.openapi, b.specURL, 'openapi');
+      if (spec instanceof Response) return spec;
+      if (!spec) return err(422, 'invalid', 'give the API as openapi or specURL');
+      return ok(coverageOf(ver.yaml, spec, ver.version));
+    }),
+    http.post(`${B}/scenarios/:id/drift`, async ({ params, request }) => {
+      const a = await auth();
+      if (a) return a;
+      const sc = db.scenarios.find((x) => x.id === params.id);
+      if (!sc) return notFound('scenario');
+      const b = (await request.json()) as DriftRequest;
+      if (b.targetId) {
+        const r = need('runner');
+        if (r) return r;
+        if (!db.targets.some((t) => t.id === b.targetId && t.projectId === sc.projectId))
+          return err(422, 'invalid', 'target not found in this project');
+      }
+      const ver = scenarioYaml(db, sc, b.version);
+      if (!ver) return notFound('scenario version');
+      const cur = specFor(sc.projectId, b.openapi, b.specURL, 'openapi');
+      if (cur instanceof Response) return cur;
+      if (!cur) return err(422, 'invalid', 'give the current API as openapi or specURL');
+      const prev = specFor(sc.projectId, b.previousOpenapi, b.previousSpecURL, 'previousOpenapi');
+      if (prev instanceof Response) return prev;
+      if (b.targetId) await delay(latency ? 1200 : 0);
+      return ok(driftOf(ver.yaml, cur, prev, ver.version, !!b.targetId));
+    }),
+
+    // ------------------------------------------------------------ settings
+    http.get(`${B}/settings/sso`, async () => (await auth()) ?? need('admin') ?? ok(mockSSO)),
+    http.get(
+      `${B}/settings/limits`,
+      async () => (await auth()) ?? need('admin') ?? ok(limitSettings(db)),
+    ),
+
+    http.get(`${B}/runs/:id/workers`, async ({ params }) => {
+      const a = await auth();
+      if (a) return a;
+      const r = db.runs.find((x) => x.id === params.id);
+      if (!r) return notFound('Run');
+      return ok(runWorkerHealth(db, r));
     }),
     http.get(`${B}/audit`, async () => (await auth()) ?? need('admin') ?? ok(db.audit)),
 

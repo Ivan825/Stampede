@@ -72,6 +72,23 @@ export type Comparison = S['Comparison'];
 export type CompareVerdict = S['CompareVerdict'];
 export type MetricDelta = S['MetricDelta'];
 export type StepDelta = S['StepDelta'];
+export type RunWorkers = S['RunWorkers'];
+export type RunWorkerHealth = S['RunWorkerHealth'];
+export type PackEntry = S['PackEntry'];
+export type PackDetail = S['PackDetail'];
+export type PackFile = S['PackFile'];
+export type CoverageRequest = S['CoverageRequest'];
+export type ScenarioCoverage = S['ScenarioCoverage'];
+export type CoverageEndpoint = S['CoverageEndpoint'];
+export type RequestRef = S['RequestRef'];
+export type DriftRequest = S['DriftRequest'];
+export type ScenarioDrift = S['ScenarioDrift'];
+export type DriftEndpoint = S['DriftEndpoint'];
+export type DriftJourneyCheck = S['DriftJourneyCheck'];
+export type SSOSettings = S['SSOSettings'];
+export type LimitSettings = S['LimitSettings'];
+export type LimitCaps = S['LimitCaps'];
+export type TargetLimits = S['TargetLimits'];
 
 export const aiProviderKinds: readonly AIProviderKind[] = [
   'anthropic',

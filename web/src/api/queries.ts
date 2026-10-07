@@ -13,6 +13,8 @@ import type {
   AIJobCreate,
   AIProviderPut,
   CompareRequest,
+  CoverageRequest,
+  DriftRequest,
   IntegrationCreate,
   LoginRequest,
   NotificationChannelCreate,
@@ -67,6 +69,11 @@ export const keys = {
   aiJobs: (projectId: string) => ['projects', projectId, 'ai-jobs'] as const,
   aiJob: (id: string) => ['ai-jobs', id] as const,
   compare: (body: CompareRequest) => ['compare', body] as const,
+  runWorkers: (runId: string) => ['runs', runId, 'workers'] as const,
+  packs: ['packs'] as const,
+  pack: (name: string) => ['packs', name] as const,
+  ssoSettings: ['settings', 'sso'] as const,
+  limitSettings: ['settings', 'limits'] as const,
 };
 
 // ---------------------------------------------------------------- system/auth
@@ -737,6 +744,78 @@ export function useWorkers() {
     queryKey: keys.workers,
     queryFn: () => unwrap(api.GET('/workers')),
     refetchInterval: 3_000,
+  });
+}
+
+/** Health of a run's load generators, polled while the run is active. */
+export function useRunWorkers(runId: string, enabled: boolean) {
+  return useQuery({
+    queryKey: keys.runWorkers(runId),
+    queryFn: () => unwrap(api.GET('/runs/{runId}/workers', { params: { path: { runId } } })),
+    enabled,
+    refetchInterval: enabled ? 2_000 : false,
+  });
+}
+
+// ---------------------------------------------------------------- packs
+
+export function usePacks() {
+  return useQuery({
+    queryKey: keys.packs,
+    queryFn: () => unwrap(api.GET('/packs')),
+    staleTime: Infinity,
+  });
+}
+
+export function usePack(name: string) {
+  return useQuery({
+    queryKey: keys.pack(name),
+    queryFn: () => unwrap(api.GET('/packs/{packName}', { params: { path: { packName: name } } })),
+    staleTime: Infinity,
+  });
+}
+
+// ---------------------------------------------------------------- coverage and drift
+
+/** Maps a scenario's requests onto an API's endpoints. */
+export function useScenarioCoverage(scenarioId: string) {
+  return useMutation({
+    mutationFn: (body: CoverageRequest) =>
+      unwrap(
+        api.POST('/scenarios/{scenarioId}/coverage', {
+          params: { path: { scenarioId } },
+          body,
+        }),
+      ),
+  });
+}
+
+/** Finds journeys an API change broke. */
+export function useScenarioDrift(scenarioId: string) {
+  return useMutation({
+    mutationFn: (body: DriftRequest) =>
+      unwrap(
+        api.POST('/scenarios/{scenarioId}/drift', {
+          params: { path: { scenarioId } },
+          body,
+        }),
+      ),
+  });
+}
+
+// ---------------------------------------------------------------- server settings
+
+export function useSSOSettings() {
+  return useQuery({
+    queryKey: keys.ssoSettings,
+    queryFn: () => unwrap(api.GET('/settings/sso')),
+  });
+}
+
+export function useLimitSettings() {
+  return useQuery({
+    queryKey: keys.limitSettings,
+    queryFn: () => unwrap(api.GET('/settings/limits')),
   });
 }
 
