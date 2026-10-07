@@ -30,6 +30,32 @@ jobs:
         with:
           version: latest
 
+  proto:
+    # Lint the protobuf definitions and refuse changes that break the wire
+    # or JSON encoding: against the base branch for a pull request, the
+    # previous commit for a push.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: bufbuild/buf-action@v1
+        with:
+          version: 1.73.0
+          setup_only: true
+      - name: buf lint
+        run: buf lint
+      - name: buf breaking
+        env:
+          BASE: ${{ github.event_name == 'pull_request' && github.event.pull_request.base.sha || github.event.before }}
+        run: |
+          # A new branch's first push has no previous commit.
+          if [ -z "$BASE" ] || ! git cat-file -e "$BASE^{commit}" 2>/dev/null; then
+            echo "no base commit to compare with; skipping"
+            exit 0
+          fi
+          buf breaking --against ".git#ref=$BASE"
+
   test:
     strategy:
       fail-fast: false
