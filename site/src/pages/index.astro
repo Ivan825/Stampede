@@ -61,6 +61,45 @@ const stats = [
     </div>
   </section>
 
+  <section class="block shots" id="screenshots" aria-label="Screenshots">
+    <div class="wrap">
+      <figure class="lead">
+        <a href="/screenshots/console.png" aria-label="Open full size"><img src="/screenshots/console.png" width="1600" height="884" alt="The Stampede console: the teal block-art bull, a welcome naming the signed-in user, server and project, and suggested first commands" /></a>
+        <figcaption><code>stampede</code> opens a console that stays open until you leave: every command as <code>/command</code>, plain language, saved sessions.</figcaption>
+      </figure>
+      <div class="shot-grid">
+        <figure>
+          <a href="/screenshots/console-run.png" aria-label="Open full size"><img src="/screenshots/console-run.png" width="1600" height="1118" loading="lazy" alt="A plain-language request turned into a command for confirmation, then a live run at 623 requests per second with 1,210 virtual users and live throughput and p95 sparklines" /></a>
+          <figcaption>Ask in plain words, confirm, and watch the run live.</figcaption>
+        </figure>
+        <figure>
+          <a href="/screenshots/cli-run.png" aria-label="Open full size"><img src="/screenshots/cli-run.png" width="1600" height="1364" loading="lazy" alt="stampede run with 1,000 virtual users through four SaaS journeys: PASS, every target met, and per-step latency" /></a>
+          <figcaption>1,000 users through four journeys: targets checked, every step timed.</figcaption>
+        </figure>
+        <figure>
+          <a href="/screenshots/web-report.png" aria-label="Open full size"><img class="frame" src="/screenshots/web-report.png" width="1440" height="900" loading="lazy" alt="A run's report in the web UI: FAIL with the missed targets, summary figures and exports" /></a>
+          <figcaption>Every run's report in the web UI, with HTML, PDF, CSV, JSON, JUnit and Markdown exports.</figcaption>
+        </figure>
+        <figure>
+          <a href="/screenshots/web-live.png" aria-label="Open full size"><img class="frame" src="/screenshots/web-live.png" width="1440" height="900" loading="lazy" alt="A live run in the web UI with its dry run, worker health showing one saturated worker, and the stop and kill controls" /></a>
+          <figcaption>Live runs with worker health; a saturated worker is called out, not hidden.</figcaption>
+        </figure>
+        <figure>
+          <a href="/screenshots/report-html.png" aria-label="Open full size"><img class="frame" src="/screenshots/report-html.png" width="1280" height="1170" loading="lazy" alt="The self-contained HTML report of a baseline run: PASS, summary, targets and throughput and users over time" /></a>
+          <figcaption>A self-contained HTML report from <code>stampede run -o report.html</code>.</figcaption>
+        </figure>
+        <figure>
+          <a href="/screenshots/web-overview.png" aria-label="Open full size"><img class="frame" src="/screenshots/web-overview.png" width="1440" height="900" loading="lazy" alt="A project overview in the web UI listing recent runs with their verdicts, p95, errors and throughput" /></a>
+          <figcaption>Each project's runs, verdicts and trends at a glance.</figcaption>
+        </figure>
+      </div>
+      <figure class="wide">
+        <a href="/screenshots/web-curve.png" aria-label="Open full size"><img class="frame" src="/screenshots/web-curve.png" width="1200" height="330" loading="lazy" alt="Throughput against load: completed iterations per second and p95 latency per load level, with the last level that scaled and the knee marked" /></a>
+        <figcaption>Throughput against load: where your system stops keeping up, marked.</figcaption>
+      </figure>
+    </div>
+  </section>
+
   <section class="block" aria-label="The reality">
     <div class="wrap">
       <div class="stats" id="stats">
