@@ -86,7 +86,27 @@ load: {mode: rate, rate: 100/s, duration: 3s}`}, &sc); code != 201 {
 	}
 	rid := run["id"].(string)
 	var got map[string]any
+	// While the run executes, GET /runs/{id}/workers reports both workers'
+	// health.
+	healthy := map[string]bool{}
 	for start := time.Now(); ; time.Sleep(100 * time.Millisecond) {
+		var live struct {
+			Live    bool `json:"live"`
+			Workers []struct {
+				Name            string  `json:"name"`
+				Status          string  `json:"status"`
+				CPUPercent      float64 `json:"cpuPercent"`
+				LastHeartbeatAt *string `json:"lastHeartbeatAt"`
+			} `json:"workers"`
+		}
+		if code := c.do("GET", "/runs/"+rid+"/workers", nil, &live); code != 200 {
+			t.Fatalf("run workers: %d", code)
+		}
+		for _, w := range live.Workers {
+			if live.Live && w.Status != "lost" && w.LastHeartbeatAt != nil {
+				healthy[w.Name] = true
+			}
+		}
 		c.do("GET", "/runs/"+rid, nil, &got)
 		if s := got["status"]; s == "completed" || s == "failed" || s == "aborted" {
 			break
@@ -97,6 +117,19 @@ load: {mode: rate, rate: 100/s, duration: 3s}`}, &sc); code != 201 {
 	}
 	if got["status"] != "completed" {
 		t.Fatalf("run %v: %v", got["status"], got["error"])
+	}
+	if !healthy["w0"] || !healthy["w1"] {
+		t.Errorf("live worker health should list w0 and w1: %v", healthy)
+	}
+	// The run leaves the active set just after its status is final.
+	var after map[string]any
+	for start := time.Now(); time.Since(start) < 5*time.Second; time.Sleep(50 * time.Millisecond) {
+		if c.do("GET", "/runs/"+rid+"/workers", nil, &after); after["live"] == false {
+			break
+		}
+	}
+	if after["live"] != false || len(after["workers"].([]any)) != 0 {
+		t.Errorf("a finished run has no live worker health: %v", after)
 	}
 	var rep map[string]any
 	c.do("GET", "/runs/"+rid+"/report", nil, &rep)
