@@ -6,6 +6,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"net/http"
 	"net/url"
 	"time"
 
@@ -76,10 +77,11 @@ func (v *VU) graphql(ctx context.Context, st *scenario.CStep, intended time.Time
 	rctx, cancel := context.WithTimeout(ctx, v.stepTimeout(r.Timeout))
 	defer cancel()
 
-	res, err := v.gqlExchange(rctx, u, r, &body)
+	req, res, err := v.gqlExchange(rctx, u, r, &body)
 	if err != nil {
 		return run.fail("template error", err)
 	}
+	run.req, run.res = req, res
 	if g.Persisted && res.Err == nil && persistedQueryNotFound(res.Body) {
 		if query == "" {
 			run.fromHTTP(res)
@@ -87,9 +89,10 @@ func (v *VU) graphql(ctx context.Context, st *scenario.CStep, intended time.Time
 		}
 		first := res
 		body.Query = query
-		if res, err = v.gqlExchange(rctx, u, r, &body); err != nil {
+		if req, res, err = v.gqlExchange(rctx, u, r, &body); err != nil {
 			return run.fail("template error", err)
 		}
+		run.req, run.res = req, res
 		res.Start = first.Start
 		res.BytesIn += first.BytesIn
 		res.BytesOut += first.BytesOut
@@ -122,19 +125,19 @@ func (v *VU) graphql(ctx context.Context, st *scenario.CStep, intended time.Time
 
 // gqlExchange posts one GraphQL request and keeps the whole response,
 // which is needed to look for errors.
-func (v *VU) gqlExchange(ctx context.Context, u *url.URL, r *scenario.CRequest, body *gqlRequest) (*httpx.Result, error) {
+func (v *VU) gqlExchange(ctx context.Context, u *url.URL, r *scenario.CRequest, body *gqlRequest) (*http.Request, *httpx.Result, error) {
 	b, err := json.Marshal(body)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	req, err := v.newRequest(ctx, "POST", u, bytes.NewReader(b), "application/json", r.Headers)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	if req.Header.Get("Accept") == "" {
 		req.Header.Set("Accept", "application/graphql-response+json, application/json")
 	}
-	return httpx.Do(v.client, req, int64(len(b)), true, v.e.maxBody), nil
+	return req, httpx.Do(v.client, req, int64(len(b)), true, v.e.maxBody), nil
 }
 
 // persistedQueryNotFound reports whether the server asked for the full

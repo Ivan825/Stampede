@@ -277,6 +277,9 @@ type stepRun struct {
 	v  *VU
 	st *scenario.CStep
 	s  metrics.Sample
+	// req and res, when set, let a failure be kept as an error example.
+	req *http.Request
+	res *httpx.Result
 }
 
 func (v *VU) begin(st *scenario.CStep, intended time.Time) stepRun {
@@ -295,6 +298,9 @@ func (r *stepRun) fail(class string, err error) error {
 		r.s.End = now
 	}
 	r.s.Err, r.s.Failed = class, true
+	if r.req != nil && r.v.e.wantExample(r.st.ID, class) {
+		r.s.Exchange = r.v.e.example(r.req, r.res, err)
+	}
 	r.v.e.collector.Record(r.v.ID, &r.s)
 	if err != nil {
 		r.v.e.logStepError(r.st, err)
@@ -351,12 +357,13 @@ func (v *VU) request(ctx context.Context, st *scenario.CStep, intended time.Time
 	keepBody := len(r.Extract) > 0 || r.Check != nil && (r.Check.BodyContains != nil || r.Check.NeedsJSON || r.Check.Expr != nil)
 	res := httpx.Do(v.client, req, bodyLen, keepBody, v.e.maxBody)
 	run.fromHTTP(res)
+	run.req, run.res = req, res
 	if res.Err != nil {
 		if ctx.Err() != nil {
 			// The run is stopping; do not count an aborted request.
 			return ctx.Err()
 		}
-		return run.fail(httpx.ClassifyError(res.Err), nil)
+		return run.fail(httpx.ClassifyError(res.Err), res.Err)
 	}
 	return v.verify(&run, r, res)
 }

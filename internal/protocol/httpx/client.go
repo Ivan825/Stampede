@@ -152,7 +152,12 @@ type Result struct {
 // Do sends req and reads the response. Up to maxBody bytes are kept in
 // Result.Body; the rest is read and counted but discarded so connections
 // can be reused and download time is measured fully. keepBody=false
-// discards the whole body.
+// discards the body, except the first ErrorSnippet bytes of an error
+// response (status 400 and above), kept for error examples.
+// ErrorSnippet is how much of an error response's body Do keeps when the
+// caller did not ask for the body.
+const ErrorSnippet = 512
+
 func Do(c *http.Client, req *http.Request, bodyLen int64, keepBody bool, maxBody int64) *Result {
 	r, resp := Open(c, req, bodyLen)
 	if resp == nil {
@@ -165,6 +170,14 @@ func Do(c *http.Client, req *http.Request, bodyLen int64, keepBody bool, maxBody
 	if keepBody {
 		lr := io.LimitReader(resp.Body, maxBody)
 		r.Body, err = io.ReadAll(lr)
+		n = int64(len(r.Body))
+		if err == nil {
+			var rest int64
+			rest, err = io.Copy(io.Discard, resp.Body)
+			n += rest
+		}
+	} else if resp.StatusCode >= 400 {
+		r.Body, err = io.ReadAll(io.LimitReader(resp.Body, ErrorSnippet))
 		n = int64(len(r.Body))
 		if err == nil {
 			var rest int64

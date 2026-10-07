@@ -130,6 +130,9 @@ type Engine struct {
 
 	errMu     sync.Mutex
 	errLogged map[int]time.Time
+	// exMu guards examples, the error examples kept per step and class.
+	exMu     sync.Mutex
+	examples map[exampleKey]int
 }
 
 type headerKV struct{ Name, Value string }
