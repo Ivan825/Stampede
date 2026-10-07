@@ -43,7 +43,6 @@ jobs:
           sudo install "$RUNNER_TEMP"/k6-*-linux-amd64/k6 /usr/local/bin/k6
           k6 version
       - name: build wrk2
-        continue-on-error: true
         run: |
           sudo apt-get update -qq && sudo apt-get install -y -qq libssl-dev zlib1g-dev
           git clone --depth 1 https://github.com/giltene/wrk2 "$RUNNER_TEMP/wrk2"
@@ -58,6 +57,11 @@ jobs:
           jq -r '.cases[] as $c | $c.tools[] | select(.ran) |
             "::notice title=compare \($c.name)::\(.tool) (\(.measures)) p50 \(.latency.p50)ms p95 \(.latency.p95)ms p99 \(.latency.p99)ms; truth p50 \(.truth.p50)ms p95 \(.truth.p95)ms p99 \(.truth.p99)ms; within tolerance \(.withinTolerance)"' \
             compare-${{ github.run_number }}.json
+      - name: every tool ran
+        run: |
+          jq -r '.cases[] as $c | $c.tools[] | select(.ran | not) | "::error title=compare \($c.name)::\(.tool) did not run: \(.note)"' \
+            compare-${{ github.run_number }}.json | tee missing.txt
+          test ! -s missing.txt
       - uses: actions/upload-artifact@v7
         if: always()
         with:

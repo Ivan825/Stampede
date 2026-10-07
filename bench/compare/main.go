@@ -297,7 +297,47 @@ export default function () { http.get('http://%s/echo'); }
 	return t
 }
 
-var wrkLine = regexp.MustCompile(`^\s*(50|95|99)\.000%\s+([\d.]+)(us|ms|s|m)\s*$`)
+// wrk2's summary lists 50, 75, 90, 99, 99.9... percent but not 95, so p95
+// comes from the detailed spectrum that follows it, whose rows are
+// "value(ms) percentile count 1/(1-percentile)".
+var (
+	wrkLine     = regexp.MustCompile(`^\s*(50|99)\.000%\s+([\d.]+)(us|ms|s|m)\s*$`)
+	wrkSpectrum = regexp.MustCompile(`^\s*([\d.]+)\s+([\d.]+)\s+\d+\s+(?:[\d.]+|inf)\s*$`)
+)
+
+// parseWrk2 reads p50, p95 and p99 in milliseconds from wrk2 --latency output.
+func parseWrk2(out []byte) (Percentiles, bool) {
+	var p Percentiles
+	var have50, have95, have99 bool
+	sc := bufio.NewScanner(bytes.NewReader(out))
+	for sc.Scan() {
+		line := sc.Text()
+		if m := wrkLine.FindStringSubmatch(line); m != nil {
+			v, _ := strconv.ParseFloat(m[2], 64)
+			switch m[3] {
+			case "us":
+				v /= 1000
+			case "s":
+				v *= 1000
+			case "m":
+				v *= 60000
+			}
+			if m[1] == "50" {
+				p.P50, have50 = v, true
+			} else {
+				p.P99, have99 = v, true
+			}
+			continue
+		}
+		if m := wrkSpectrum.FindStringSubmatch(line); m != nil && !have95 {
+			if q, _ := strconv.ParseFloat(m[2], 64); q >= 0.95 {
+				p.P95, _ = strconv.ParseFloat(m[1], 64)
+				have95 = true
+			}
+		}
+	}
+	return p, have50 && have95 && have99
+}
 
 func runWrk2(c benchCase, addr string) toolResult {
 	t := toolResult{Tool: "wrk2", Measures: "scheduled"}
@@ -314,34 +354,8 @@ func runWrk2(c benchCase, addr string) toolResult {
 		t.Note = "wrk2 failed: " + lastLine(string(out), err)
 		return t
 	}
-	var p Percentiles
-	found := 0
-	sc := bufio.NewScanner(bytes.NewReader(out))
-	for sc.Scan() {
-		m := wrkLine.FindStringSubmatch(sc.Text())
-		if m == nil {
-			continue
-		}
-		v, _ := strconv.ParseFloat(m[2], 64)
-		switch m[3] {
-		case "us":
-			v /= 1000
-		case "s":
-			v *= 1000
-		case "m":
-			v *= 60000
-		}
-		switch m[1] {
-		case "50":
-			p.P50 = v
-		case "95":
-			p.P95 = v
-		case "99":
-			p.P99 = v
-		}
-		found++
-	}
-	if found < 3 {
+	p, ok := parseWrk2(out)
+	if !ok {
 		t.Note = "could not read wrk2's latency distribution (is this wrk rather than wrk2?)"
 		return t
 	}
