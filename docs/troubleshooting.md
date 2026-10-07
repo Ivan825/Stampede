@@ -17,8 +17,11 @@ target is so slow that the planned rate cannot be served. Dropped iterations
 show the generator could not keep the schedule; they are not target errors.
 
 **The verdict is `generator-limited`**
-A worker was saturated (CPU, scheduling lag, GC, file descriptors). Add
-workers, give them more CPU, or lower the load per worker.
+A worker, or the machine running `stampede run`, was saturated (CPU,
+scheduling lag, dropped iterations, GC, file descriptors, ephemeral ports
+or network). Add workers, give them more CPU, or lower the load per worker.
+Running out of ephemeral ports usually means connections are not reused:
+keep-alive is off, or every request opens a new connection.
 
 **`data.users reads a file, which needs the server to be started with --data-dir`**
 On a server, CSV and JSON feeders must live in its data directory. In the

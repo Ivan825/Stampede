@@ -40,7 +40,8 @@ quick version gates every push in CI; the full version runs nightly. See
 ## Saturation
 
 An overloaded load generator inflates latency and blames the system under
-test. Workers watch themselves every second:
+test. Workers, `stampede run` and a server running load itself all watch
+the machine they run on every second:
 
 | Signal | Saturated when |
 |---|---|
@@ -49,10 +50,16 @@ test. Workers watch themselves every second:
 | Dropped iterations | any |
 | Go GC pause p99 | above 5 ms |
 | Open file descriptors | above 80% of the limit |
+| Ephemeral ports in use (Linux) | above 80% of the local port range |
+| Network throughput (Linux) | above 80% of a network interface's link speed, when the kernel knows it |
 
-Saturated intervals are listed in the report for each worker. If a target
-fails while a worker was saturated, the verdict is **generator-limited**
-instead of fail.
+Saturated intervals are listed in the report for each worker (for a run
+on one machine, the machine appears as a worker only when it was
+saturated). If a target fails while the generator was saturated, the
+verdict is **generator-limited** instead of fail. Port and network
+checks need `/proc`, so they run on Linux only; most cloud VMs report no
+link speed for their virtual NICs, in which case the network check is
+skipped.
 
 ## DNS
 
