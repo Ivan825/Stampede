@@ -165,6 +165,8 @@ type page struct {
 	cancel  context.CancelFunc
 	timeout time.Duration
 	bytes   atomic.Int64 // bytes received by the page so far
+	// log keeps console errors and requests for error examples.
+	log pageLog
 }
 
 func (v *VU) openPage(st *scenario.CStep) (*page, error) {
@@ -199,6 +201,7 @@ func (v *VU) openPage(st *scenario.CStep) (*page, error) {
 	p := &page{ctx: ctx, cancel: cancel, timeout: v.stepTimeout(st.Browser.Timeout)}
 	allow := v.e.allowHost
 	chromedp.ListenTarget(ctx, func(ev any) {
+		p.log.observe(ev)
 		switch ev := ev.(type) {
 		case *fetch.EventRequestPaused:
 			// Every request the page makes passes the run's host policy,
@@ -218,6 +221,7 @@ func (v *VU) openPage(st *scenario.CStep) (*page, error) {
 	vp := st.Browser.Viewport
 	setup := chromedp.Tasks{
 		network.Enable(),
+		cdpruntime.Enable(),
 		fetch.Enable(),
 		emulation.SetDeviceMetricsOverride(int64(vp.Width), int64(vp.Height), 1, false),
 		// Every user's page paints as if it were the focused window, so
@@ -261,6 +265,7 @@ func (v *VU) browserBlock(ctx context.Context, st *scenario.CStep, intended time
 		return run.fail("browser unavailable", err)
 	}
 	defer p.cancel()
+	run.page = p
 	if err := v.navigate(ctx, &run, p, u.String(), p.timeout); err != nil {
 		return err
 	}
@@ -326,6 +331,7 @@ var namedKeys = map[string]string{
 func (v *VU) browserAction(ctx context.Context, st *scenario.CStep) error {
 	run := v.begin(st, time.Time{})
 	p := v.page
+	run.page = p
 	if p == nil {
 		return run.fail("browser error", errors.New("browser action outside a browser block"))
 	}

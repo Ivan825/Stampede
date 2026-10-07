@@ -277,9 +277,11 @@ type stepRun struct {
 	v  *VU
 	st *scenario.CStep
 	s  metrics.Sample
-	// req and res, when set, let a failure be kept as an error example.
-	req *http.Request
-	res *httpx.Result
+	// req and res, or page, when set, let a failure be kept as an error
+	// example.
+	req  *http.Request
+	res  *httpx.Result
+	page *page
 }
 
 func (v *VU) begin(st *scenario.CStep, intended time.Time) stepRun {
@@ -298,8 +300,11 @@ func (r *stepRun) fail(class string, err error) error {
 		r.s.End = now
 	}
 	r.s.Err, r.s.Failed = class, true
-	if r.req != nil && r.v.e.wantExample(r.st.ID, class) {
+	switch {
+	case r.req != nil && r.v.e.wantExample(r.st.ID, class):
 		r.s.Exchange = r.v.e.example(r.req, r.res, err)
+	case r.page != nil && r.v.e.wantExample(r.st.ID, class):
+		r.s.Exchange = r.v.e.browserExample(r.page, err)
 	}
 	r.v.e.collector.Record(r.v.ID, &r.s)
 	if err != nil {
