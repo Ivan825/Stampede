@@ -5,10 +5,9 @@ Notable changes to Stampede. The format follows
 follow [Semantic Versioning](https://semver.org/). The website's changelog
 page is built from this file.
 
-## Unreleased
+## 1.0.0 (2026-10-07)
 
-Everything below is in the repository and will be in v1.0, the first
-release. Features still being built are listed as planned in
+The first release. Features still being built are listed as planned in
 [features.yaml](features.yaml) and are not included here.
 
 ### Measurement
