@@ -1,0 +1,33 @@
+{
+  "run": "https://github.com/Ivan825/Stampede/actions/runs/37594830463",
+  "date": "2026-10-07",
+  "commit": "0b5c0e7",
+  "runner": "GitHub-hosted ubuntu-latest",
+  "rule": "within max(2% of truth, 1 ms) at p50, p95 and p99",
+  "cases": [
+    {
+      "name": "fixed 10 ms, 200/s for 20 s",
+      "tools": [
+        { "tool": "Stampede (from scheduled send)", "p50": 10.239, "p95": 11.303, "p99": 11.327, "truth": [10.059, 11.098, 11.111], "within": true },
+        { "tool": "Stampede (service time)", "p50": 10.215, "p95": 11.271, "p99": 11.295, "truth": [10.059, 11.098, 11.111], "within": true },
+        { "tool": "k6", "p50": 10.894, "p95": 11.212, "p99": 11.249, "truth": [10.748, 11.072, 11.1], "within": true }
+      ]
+    },
+    {
+      "name": "lognormal, median 20 ms, 300/s for 30 s",
+      "tools": [
+        { "tool": "Stampede (from scheduled send)", "p50": 21.231, "p95": 55.679, "p99": 80.255, "truth": [21.038, 55.48, 80.071], "within": true },
+        { "tool": "Stampede (service time)", "p50": 21.199, "p95": 55.647, "p99": 80.255, "truth": [21.038, 55.48, 80.071], "within": true },
+        { "tool": "k6", "p50": 20.178, "p95": 54.683, "p99": 80.69, "truth": [20.03, 54.549, 80.585], "within": true }
+      ]
+    },
+    {
+      "name": "bimodal 5 ms / 300 ms (2%), 300/s for 30 s",
+      "tools": [
+        { "tool": "Stampede (from scheduled send)", "p50": 5.699, "p95": 5.839, "p99": 300.543, "truth": [5.509, 5.659, 300.123], "within": true },
+        { "tool": "Stampede (service time)", "p50": 5.659, "p95": 5.811, "p99": 300.287, "truth": [5.509, 5.659, 300.123], "within": true },
+        { "tool": "k6", "p50": 5.735, "p95": 5.869, "p99": 300.541, "truth": [5.603, 5.73, 300.4], "within": true }
+      ]
+    }
+  ]
+}

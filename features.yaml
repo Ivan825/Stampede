@@ -10,7 +10,8 @@ groups:
       - { name: "Generator saturation detection and generator-limited verdicts", status: shipped }
       - { name: "Saturated and lost-worker windows shaded on the report charts", status: shipped, doc: docs/guides/reports }
       - { name: "Accuracy gate against a calibrated server in CI", status: shipped, doc: benchmarks }
-      - { name: "Side-by-side benchmarks with k6 and wrk2", status: planned }
+      - { name: "Side-by-side accuracy comparison with k6, published nightly", status: shipped, doc: benchmarks }
+      - { name: "wrk2 in the side-by-side comparison", status: planned }
   - name: Load
     features:
       - { name: "Open (arrival rate) and closed (virtual users) models", status: shipped, doc: docs/concepts/load-models }
@@ -72,7 +73,7 @@ groups:
       - { name: "Helm chart", status: shipped, doc: docs/deploy/helm }
       - { name: "Kubernetes operator (alpha)", status: shipped, doc: docs/deploy/operator }
       - { name: "Terraform examples for multi-region workers", status: shipped, doc: docs/deploy/terraform }
-      - { name: "Air-gapped install bundle", status: planned, doc: docs/deploy/airgap }
+      - { name: "Air-gapped install bundle", status: shipped, doc: docs/deploy/airgap }
   - name: Safety
     features:
       - { name: "Ownership verification and caps for public targets", status: shipped, doc: safety }

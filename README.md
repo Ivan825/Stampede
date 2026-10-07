@@ -228,7 +228,9 @@ per server and per target; audit log ([safety](docs/safety.md)).
 
 ## Planned for v1.0
 
-Side-by-side benchmarks with k6 and wrk2, and the website.
+wrk2 in the nightly side-by-side comparison (k6 is compared today, see
+the [benchmarks](https://stampede.vercel.app/benchmarks)), connection-flood and
+slow-client stresses, and the website.
 
 ## Deploy
 
@@ -238,7 +240,7 @@ Side-by-side benchmarks with k6 and wrk2, and the website.
 | Kubernetes, Helm chart | [docs/deploy/helm.md](docs/deploy/helm.md) | tested on kind: install, `helm test`, a distributed run |
 | Kubernetes operator (`StampedeCluster`, `StampedeRun`) | [docs/deploy/operator.md](docs/deploy/operator.md) | alpha; envtest-tested, and on kind in CI |
 | Workers in several AWS/GCP regions, Terraform | [docs/deploy/terraform.md](docs/deploy/terraform.md) | validated, not yet applied |
-| Air-gapped networks, offline bundle | [docs/deploy/airgap.md](docs/deploy/airgap.md) | a nightly CI job builds and installs it from scratch; first run pending |
+| Air-gapped networks, offline bundle | [docs/deploy/airgap.md](docs/deploy/airgap.md) | a nightly CI job builds it, removes every image, and installs and starts Stampede from the bundle alone |
 | Upgrades, backups, restores | [docs/deploy/upgrades.md](docs/deploy/upgrades.md) | |
 
 Releases (binaries for Linux, macOS and Windows, signed multi-arch images

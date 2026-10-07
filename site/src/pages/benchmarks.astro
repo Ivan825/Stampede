@@ -1,6 +1,8 @@
 ---
 import Site from '../layouts/Site.astro';
 import { GITHUB } from '../lib/data';
+import compare from '../data/compare.json';
+const ms = (v: number) => v.toFixed(2);
 ---
 <Site title="Benchmarks" description="How Stampede checks its own accuracy against ground truth.">
   <div class="wrap">
@@ -9,9 +11,23 @@ import { GITHUB } from '../lib/data';
       <p class="lede">A calibrated echo server delays each response by a value from a known distribution (fixed, uniform, lognormal, bimodal) and records exactly how long it held every request. Stampede drives it at a fixed arrival rate from a separate process, and its p50, p95 and p99 must land within 2% or 1 ms of the server's exact values, whichever is larger. A case also fails if a single request is dropped or counted twice.</p>
       <p><a href={`${GITHUB}/tree/main/bench`}>The harness and its README →</a></p>
     </section>
-    <section class="block"><span class="num">02</span><h2>Where results are published</h2>
-      <p class="lede">A quick version gates every push in CI, and the full version runs nightly on a dedicated Linux runner; results are attached to each CI run. Results for each release will be published here and in its release notes once v1.0 is tagged.</p>
-      <p class="muted">Side-by-side comparisons with k6 and wrk2, and the scale targets (200 workers, 100,000 requests per second, 50,000 WebSocket connections), are planned and will appear here only once measured.</p>
+    <section class="block"><span class="num">02</span><h2>Side by side with k6</h2>
+      <p class="lede">The nightly job runs the same workloads through Stampede and k6 against the echo server. Each tool is judged against the server's exact values for its own run ({compare.rule}). Latest run: <a href={compare.run}>{compare.date}</a>, commit <code>{compare.commit}</code>, on a {compare.runner}.</p>
+      {compare.cases.map((c) => (
+        <div class="table-wrap" style="margin-top:20px"><table>
+          <caption style="text-align:left;padding:12px 16px;font-weight:600">{c.name}</caption>
+          <thead><tr><th>Tool</th><th>p50 ms</th><th>p95 ms</th><th>p99 ms</th><th>Truth p50 / p95 / p99</th><th>Within tolerance</th></tr></thead>
+          <tbody>
+            {c.tools.map((t) => (
+              <tr><td>{t.tool}</td><td>{ms(t.p50)}</td><td>{ms(t.p95)}</td><td>{ms(t.p99)}</td><td>{t.truth.map(ms).join(' / ')}</td><td>{t.within ? 'yes' : 'no'}</td></tr>
+            ))}
+          </tbody>
+        </table></div>
+      ))}
+      <p class="muted" style="margin-top:16px">"From scheduled send" counts any wait inside the load generator (no coordinated omission); "service time" starts when the request actually left, as k6 measures. Each tool's truth differs slightly because each tool drives its own run.</p>
+    </section>
+    <section class="block"><span class="num">03</span><h2>Still to be measured</h2>
+      <p class="lede">A quick accuracy check gates every push in CI and the full one runs nightly. wrk2 joins the comparison once its build runs in the nightly job, and the scale targets (200 workers, 100,000 requests per second, 50,000 WebSocket connections) appear here only once measured.</p>
     </section>
   </div>
 </Site>
