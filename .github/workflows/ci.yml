@@ -216,6 +216,38 @@ jobs:
             exit 1
           fi
 
+  web-e2e:
+    # The web UI end to end in Chromium, against a build of it with the
+    # mock API: sign in, create a project, target and scenario, run it and
+    # read the report, compare runs, the AI studio, the library, coverage
+    # and drift, settings and journey graph editing.
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: web
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.11.1
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+          cache-dependency-path: web/pnpm-lock.yaml
+      - run: pnpm install --frozen-lockfile
+      - name: install Chromium
+        run: pnpm exec playwright install --with-deps chromium
+      - run: pnpm test:e2e
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: playwright-report
+          path: |
+            web/playwright-report
+            web/test-results
+          retention-days: 7
+
   site:
     runs-on: ubuntu-latest
     defaults:
