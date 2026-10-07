@@ -89,6 +89,13 @@ export type SSOSettings = S['SSOSettings'];
 export type LimitSettings = S['LimitSettings'];
 export type LimitCaps = S['LimitCaps'];
 export type TargetLimits = S['TargetLimits'];
+export type ProjectLimits = S['ProjectLimits'];
+export type ProjectSettings = S['ProjectSettings'];
+export type ProjectRole = S['ProjectRole'];
+export type ScheduleKind = S['ScheduleKind'];
+export type DriftResult = S['DriftResult'];
+export type DriftJourney = S['DriftJourney'];
+export type DriftRepair = S['DriftRepair'];
 
 export const aiProviderKinds: readonly AIProviderKind[] = [
   'anthropic',
@@ -133,13 +140,12 @@ export function isTerminal(status: RunStatus): boolean {
   return terminalStatuses.includes(status);
 }
 
-/** A worker or safety event from the live stream. */
-export interface RunEvent {
-  type: string;
-  message: string;
-  worker?: string;
-  at: string;
-}
+/**
+ * A run event: workers joining or being lost, safety stops, breakpoint
+ * confirmations and the dry run a project can require before load. From
+ * the live stream or GET /runs/{runId}/events.
+ */
+export type RunEvent = S['RunEvent'];
 
 // The report JSON. The OpenAPI schema leaves it open
 // (additionalProperties: true); these types follow internal/report/report.go.

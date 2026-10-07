@@ -1304,8 +1304,8 @@ export interface paths {
             cookie?: never;
         };
         /**
-         * The server's load caps and every target's caps (admin)
-         * @description Read-only. A run must fit the server's caps, the caps for unverified public targets when they apply, and its target's own caps.
+         * The caps every run is checked against (admin)
+         * @description Read-only. A run must fit the server's caps, the organisation's caps, its project's caps, the caps for unverified public targets when they apply, and its target's own caps.
          */
         get: operations["getLimitSettings"];
         put?: never;
@@ -2425,6 +2425,9 @@ export interface components {
         };
         LimitSettings: {
             server: components["schemas"]["LimitCaps"];
+            organisation: components["schemas"]["LimitCaps"];
+            /** @description Every project's caps and dry-run gate, by name */
+            projects: components["schemas"]["ProjectLimits"][];
             unverifiedPublic: components["schemas"]["LimitCaps"];
             /** @description Stops any run whose target is clearly failing, even when its scenario sets no abort limits. */
             abortFloor?: {
@@ -2437,6 +2440,14 @@ export interface components {
             } | null;
             targets: components["schemas"]["TargetLimits"][];
         };
+        ProjectLimits: {
+            /** Format: uuid */
+            id: string;
+            name: string;
+            caps: components["schemas"]["LimitCaps"];
+            requireDryRun: boolean;
+        };
+        /** @description A target's own caps, and its effective caps, the tightest of the server's, the organisation's, its project's and its own, and the unverified public caps when they apply. */
         TargetLimits: {
             /** Format: uuid */
             id: string;
