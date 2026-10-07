@@ -246,6 +246,16 @@ func (s *server) seed() {
 		a.posts = append(a.posts, p)
 		s.posts[p.id] = p
 	}
+	// Everyone has posted at least once, so "their latest post" always
+	// exists; the random spread above leaves a few accounts without one.
+	for _, u := range s.users {
+		if len(u.posts) == 0 {
+			s.nextID++
+			p := &post{id: s.nextID, author: u, at: time.Now(), text: "hello " + words[rng.IntN(len(words))]}
+			u.posts = append(u.posts, p)
+			s.posts[p.id] = p
+		}
+	}
 }
 
 // --- sessions -------------------------------------------------------------

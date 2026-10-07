@@ -205,3 +205,12 @@ func TestNotifications(t *testing.T) {
 		c.CloseNow()
 	}
 }
+
+func TestEveryoneHasPosted(t *testing.T) {
+	s, _ := start(t, "")
+	for _, u := range s.users {
+		if len(u.posts) == 0 {
+			t.Fatalf("%s has no posts", u.name)
+		}
+	}
+}
