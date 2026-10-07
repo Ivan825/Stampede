@@ -240,6 +240,10 @@ results.
   scenario with `stampede ai jobs approve`. A job that needs review must be
   approved explicitly as unvalidated, because its flagged journeys did not
   pass the dry run.
+- The web UI's **AI jobs** page in a project lists the jobs; opening one
+  shows its progress, each journey's dry-run trace, the proposed scenario
+  and its diff against the existing one, and the `stampede ai jobs approve`
+  command for that job. Approving is not done in the UI.
 
 ## Server API
 
