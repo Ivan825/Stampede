@@ -286,6 +286,8 @@
         "while": { "type": "string" },
         "max": { "type": "integer", "minimum": 1 },
         "group": { "type": "string" },
+        "script": { "type": "string", "description": "JavaScript run between requests. Reads and writes vars; also env, data, vu, iteration, fail(message), console.log." },
+        "sets": { "type": "array", "items": { "type": "string", "pattern": "^[A-Za-z_][A-Za-z0-9_]*$" }, "description": "Variables the script sets for later steps." },
         "steps": { "$ref": "#/$defs/steps" },
         "graphql": { "type": "string", "description": "GraphQL endpoint; the operation is POSTed as JSON." },
         "variables": { "type": "object", "description": "GraphQL variables; strings may contain ${} expressions." },
@@ -360,7 +362,7 @@
         { "required": ["browser", "steps"] }, { "required": ["goto"] }, { "required": ["click"] }, { "required": ["fill"] },
         { "required": ["press"] }, { "required": ["waitFor"] }, { "required": ["assert"] },
         { "required": ["think"] }, { "required": ["branch"] }, { "required": ["loop", "steps"] },
-        { "required": ["while", "steps"] }, { "required": ["group", "steps"] }
+        { "required": ["while", "steps"] }, { "required": ["group", "steps"] }, { "required": ["script"] }
       ]
     },
     "load": {

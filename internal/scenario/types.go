@@ -309,9 +309,12 @@ type Step struct {
 	Branch  []Branch
 	// Loop runs Steps Count times; While runs them while Cond holds, at
 	// most Max times.
-	Loop    *Loop
-	Group   *Group
+	Loop  *Loop
+	Group *Group
+	// Script is JavaScript run between requests; Sets names the variables
+	// it sets for later steps.
 	Script  string
+	Sets    []string
 	GraphQL *GraphQL
 	SSE     *SSE
 	WS      *WebSocket

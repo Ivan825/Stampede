@@ -32,7 +32,7 @@ var stepKeys = map[string][]string{
 	"request": requestKeys,
 	"think":   nil,
 	"branch":  nil,
-	"script":  nil,
+	"script":  {"sets"},
 	"loop":    {"steps"},
 	"while":   {"steps", "max"},
 	"group":   {"steps"},
@@ -161,6 +161,11 @@ func (s *Step) UnmarshalYAML(n *yaml.Node) error {
 	case "script":
 		out.Kind = StepScript
 		out.Script = fields["script"].Value
+		if v, ok := fields["sets"]; ok {
+			if err := v.Decode(&out.Sets); err != nil {
+				return fmt.Errorf("line %d: sets must be a list of variable names", v.Line)
+			}
+		}
 	case "graphql":
 		out.Kind = StepGraphQL
 		g, err := decodeGraphQL(fields)
@@ -650,6 +655,9 @@ func (s Step) toMap() map[string]any {
 		m["steps"] = s.Group.Steps
 	case StepScript:
 		m["script"] = s.Script
+		if len(s.Sets) > 0 {
+			m["sets"] = s.Sets
+		}
 	case StepGraphQL:
 		g := s.GraphQL
 		m["graphql"] = g.URL

@@ -18,6 +18,8 @@ import (
 	"cel.dev/cel-go/interpreter"
 	"github.com/andybalholm/cascadia"
 	"github.com/santhosh-tekuri/jsonschema/v6"
+
+	"github.com/Ivan825/Stampede/internal/script"
 	"go.yaml.in/yaml/v3"
 	"golang.org/x/text/language"
 	"golang.org/x/text/message"
@@ -84,6 +86,8 @@ type CStep struct {
 	// GRPC is set for grpc steps; Req holds their check (without status),
 	// extractors and timeout.
 	GRPC *CGRPC
+	// Script is set for script steps.
+	Script *script.Program
 	// Plugin is set for plugin steps; Req holds their check, extractors
 	// and timeout.
 	Plugin *CPlugin
@@ -592,7 +596,22 @@ func (c *compiler) step(path, journey string, st Step, vars []string) (*CStep, [
 		}
 		cs.Steps, vars = c.steps(path, journey, st.Group.Steps, vars)
 	case StepScript:
-		c.errf(path, "script steps are planned and not available in this build")
+		p, err := script.Compile(path, st.Script)
+		if err != nil {
+			c.errf(path, "%v", err)
+			break
+		}
+		cs.Script = p
+		if cs.Name == "" {
+			cs.Name = "script"
+		}
+		for _, name := range st.Sets {
+			if !identRe.MatchString(name) || IsReserved(name) {
+				c.errf(path+".sets", "%q is not a variable name (identifiers only, not one of %s)", name, strings.Join(append(builtinRoots, responseRoots...), ", "))
+				continue
+			}
+			vars = append(vars, name)
+		}
 	}
 	return cs, vars
 }
@@ -1118,7 +1137,7 @@ var undeclaredRe = regexp.MustCompile(`undeclared reference to '([^']+)'`)
 
 func explainUndeclared(err error) error {
 	if m := undeclaredRe.FindStringSubmatch(err.Error()); m != nil {
-		return fmt.Errorf("%w (is %q extracted in an earlier step, or defined under vars?)", err, m[1])
+		return fmt.Errorf("%w (is %q extracted in an earlier step, listed in a script step's sets, or defined under vars?)", err, m[1])
 	}
 	return err
 }
