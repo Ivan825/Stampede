@@ -1,0 +1,89 @@
+# The everyday mix for a news site: readers open the home page and the
+# top story, browse a section, arrive on an article from a social link
+# (with tracking parameters), come back and revalidate with If-None-Match,
+# and apps and feed readers use the JSON API and RSS. Pages must be
+# cacheable (Cache-Control with a max-age) and come with an ETag.
+apiVersion: stampede.dev/v1
+kind: Scenario
+metadata:
+  name: content-reader-mix
+  description: Weighted home, section, article, social-link, revalidation, API, RSS and search journeys.
+  tags: [pack:content]
+target:
+  baseURL: ${env.TARGET_URL}
+journeys:
+  - name: home
+    weight: 35
+    steps:
+      - name: home
+        get: /
+        check: { status: 200, expr: "headers['cache-control'].contains('max-age') && headers['etag'] != ''" }
+        extract: { story: "css:a.top-story@href" }
+      - think: 3s..10s
+      - name: top story
+        get: ${story}
+        check: { status: 200, bodyContains: "articleBody" }
+  - name: section
+    weight: 20
+    steps:
+      - name: section
+        get: /section/${pick(['world', 'politics', 'business', 'technology', 'sport', 'culture', 'science', 'opinion'])}
+        check: { status: 200 }
+        extract: { story: "css:a.headline@href" }
+      - think: 3s..8s
+      - name: article
+        get: ${story}
+        check: { status: 200, bodyContains: "articleBody" }
+  - name: social-link
+    weight: 15
+    steps:
+      # Shared links carry tracking parameters; a cache that keys on them
+      # misses every time.
+      - name: article
+        get: /articles/story-${rand(19901, 20000)}?utm_source=${pick(['facebook', 'twitter', 'newsletter'])}&utm_medium=social&fbclid=${randString(16)}
+        check: { status: 200, bodyContains: "articleBody" }
+  - name: returning
+    weight: 10
+    steps:
+      - name: home
+        get: /
+        check: { status: 200 }
+        extract: { etag: "header:ETag" }
+      - think: 5s..15s
+      - name: revalidate
+        get: /
+        headers: { If-None-Match: "${etag}" }
+        # 304 while the page is unchanged; 200 if it changed meanwhile.
+        check: { status: [200, 304] }
+  - name: api
+    weight: 12
+    steps:
+      - name: latest
+        get: /api/articles?section=${pick(['world', 'business', 'sport', 'technology'])}
+        check: { status: 200, json: { "$.articles[0].slug": exists } }
+        extract: { slug: "$.articles[0].slug" }
+      - think: 2s..5s
+      - name: article
+        get: /api/articles/${slug}
+        check: { status: 200, json: { "$.article.title": exists } }
+  - name: rss
+    weight: 5
+    steps:
+      - name: feed
+        get: /feed.xml
+        check: { status: 200, bodyContains: "<rss" }
+  - name: search
+    weight: 3
+    steps:
+      - name: search
+        get: /api/search?q=${pick(['storm', 'budget', 'league', 'climate', 'court'])}
+        check: { status: 200, json: { "$.results": exists } }
+load:
+  mode: rate
+  rate: 30/s
+  duration: 5m
+targets:
+  - http.p95 < 200ms
+  - errors < 1%
+  - "home/home.p95 < 50ms"
+  - "home/top story.p95 < 50ms"

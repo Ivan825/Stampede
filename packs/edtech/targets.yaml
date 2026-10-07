@@ -1,0 +1,8 @@
+# Default targets for exam platforms. Starting an exam and saving an
+# answer are the moments students feel most: a slow save during a timed
+# exam costs them time. Submissions may take longer but must not fail.
+targets:
+  - http.p95 < 500ms
+  - errors < 1%
+  - "exam/start attempt.p95 < 1s"
+  - "exam/save answer.p95 < 300ms"

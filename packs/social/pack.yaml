@@ -1,0 +1,23 @@
+apiVersion: stampede.dev/v1
+kind: Pack
+name: social
+title: Social, feeds, forums
+description: >
+  Social networks and forums: scrolling the home feed, posting, liking,
+  commenting, following, and notifications delivered live over a
+  WebSocket, with a viral spike on one celebrity's post and a morning
+  feed rush. Built for APIs shaped like SocialLab; adjust paths, cursor
+  and field names to match yours.
+status: shipped
+protocols: [http, websocket]
+referenceApp: examples/packlab/sociallab
+detect:
+  paths: ["/api/feed", "/api/timeline", "/api/posts", "/api/notifications", "/api/trending", "/api/followers", "/api/following", "/api/likes"]
+  openapiTags: [feed, timeline, posts, likes, comments, follows, notifications, profiles]
+  htmlMeta: []
+  headers: {}
+variables:
+  TARGET_URL: { description: Base URL of the social API (HTTP; the WebSocket path is joined to it) }
+targets:
+  - http.p95 < 500ms
+  - errors < 1%

@@ -1,0 +1,146 @@
+# The everyday mix for a social app: most people scroll their home feed
+# and open a post; some like, comment, post, explore trending posts and
+# follow someone, or check their notifications.
+apiVersion: stampede.dev/v1
+kind: Scenario
+metadata:
+  name: social-feed-mix
+  description: Weighted feed, like, post, comment, explore and notification journeys across 2,000 users.
+  tags: [pack:social]
+target:
+  baseURL: ${env.TARGET_URL}
+data:
+  users: { csv: ../data/users.csv, mode: random }
+journeys:
+  - name: scroll
+    weight: 45
+    steps:
+      - name: sign in
+        post: /api/login
+        json: { username: "${data.users.username}", password: "${data.users.password}" }
+        check: { status: 200, json: { "$.token": exists } }
+        extract: { token: "$.token" }
+      - name: feed
+        get: /api/feed
+        headers: { Authorization: "Bearer ${token}" }
+        check: { status: 200, json: { "$.posts[0].id": exists } }
+        extract: { cursor: "$.next_cursor", postId: "$.posts[0].id" }
+      - think: 3s..8s
+      - name: next page
+        get: /api/feed?before=${cursor}
+        headers: { Authorization: "Bearer ${token}" }
+        check: { status: 200 }
+      - think: 2s..5s
+      - name: post
+        get: /api/posts/${postId}
+        headers: { Authorization: "Bearer ${token}" }
+        check: { status: 200, json: { "$.likes": exists } }
+      - name: comments
+        get: /api/posts/${postId}/comments
+        headers: { Authorization: "Bearer ${token}" }
+        check: { status: 200 }
+  - name: like
+    weight: 20
+    steps:
+      - name: sign in
+        post: /api/login
+        json: { username: "${data.users.username}", password: "${data.users.password}" }
+        check: { status: 200 }
+        extract: { token: "$.token" }
+      - name: feed
+        get: /api/feed
+        headers: { Authorization: "Bearer ${token}" }
+        check: { status: 200 }
+        extract: { postId: "$.posts[1].id" }
+      - think: 2s..6s
+      - name: like
+        post: /api/posts/${postId}/like
+        headers: { Authorization: "Bearer ${token}" }
+        check: { status: 200, json: { "$.liked": true } }
+  - name: publish
+    weight: 10
+    steps:
+      - name: sign in
+        post: /api/login
+        json: { username: "${data.users.username}", password: "${data.users.password}" }
+        check: { status: 200 }
+        extract: { token: "$.token" }
+      - think: 5s..15s
+      - name: post
+        post: /api/posts
+        headers: { Authorization: "Bearer ${token}" }
+        json: { text: "Load test post ${randString(12)} #stampede" }
+        check: { status: 201 }
+        extract: { postId: "$.id" }
+      - name: own posts
+        get: /api/users/${data.users.username}/posts?limit=5
+        headers: { Authorization: "Bearer ${token}" }
+        # The new post is visible to its author at once.
+        check: { status: 200, expr: "json.posts[0].id == postId" }
+  - name: comment
+    weight: 10
+    steps:
+      - name: sign in
+        post: /api/login
+        json: { username: "${data.users.username}", password: "${data.users.password}" }
+        check: { status: 200 }
+        extract: { token: "$.token" }
+      - name: feed
+        get: /api/feed
+        headers: { Authorization: "Bearer ${token}" }
+        check: { status: 200 }
+        extract: { postId: "$.posts[0].id" }
+      - name: comments
+        get: /api/posts/${postId}/comments
+        headers: { Authorization: "Bearer ${token}" }
+        check: { status: 200 }
+      - think: 5s..15s
+      - name: add comment
+        post: /api/posts/${postId}/comments
+        headers: { Authorization: "Bearer ${token}" }
+        json: { text: "Great post! ${randString(6)}" }
+        check: { status: 201 }
+  - name: explore
+    weight: 10
+    steps:
+      - name: sign in
+        post: /api/login
+        json: { username: "${data.users.username}", password: "${data.users.password}" }
+        check: { status: 200 }
+        extract: { token: "$.token" }
+      - name: trending
+        get: /api/trending
+        headers: { Authorization: "Bearer ${token}" }
+        check: { status: 200, json: { "$.posts[0].author": exists } }
+      - think: 2s..5s
+      - name: profile
+        get: /api/users/user${rand(1000, 4999)}
+        headers: { Authorization: "Bearer ${token}" }
+        check: { status: 200, json: { "$.followers": exists } }
+        extract: { author: "$.username" }
+      - name: follow
+        if: "${author != data.users.username}"
+        post: /api/users/${author}/follow
+        headers: { Authorization: "Bearer ${token}" }
+        check: { status: 200, json: { "$.following": true } }
+  - name: notifications
+    weight: 5
+    steps:
+      - name: sign in
+        post: /api/login
+        json: { username: "${data.users.username}", password: "${data.users.password}" }
+        check: { status: 200 }
+        extract: { token: "$.token" }
+      - name: notifications
+        get: /api/notifications
+        headers: { Authorization: "Bearer ${token}" }
+        check: { status: 200, json: { "$.notifications": exists } }
+load:
+  mode: rate
+  rate: 20/s
+  duration: 5m
+targets:
+  - http.p95 < 500ms
+  - errors < 1%
+  - "scroll/feed.p95 < 300ms"
+  - "like/like.p95 < 200ms"

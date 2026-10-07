@@ -172,16 +172,20 @@ checkout", always confirmed before it runs.
 
 **Product packs.** `stampede init` probes a target (its OpenAPI document,
 OpenID Connect discovery, home page and headers) and installs the matching
-pack. Eleven packs ship: e-commerce (tested against ShopLab), and SaaS with
-GraphQL, AI and LLM apps over SSE, chat over WebSocket, ticketing with a
-waiting room, login and identity, public APIs with rate limits, IoT over
-MQTT, event pipelines on Kafka, databases and caches (PostgreSQL and
-Redis) and game backends (WebSocket matchmaking, a UDP game server), each
-tested on every push against a small reference app with planted
-bottlenecks ([PackLab](examples/packlab/README.md)); the last four use the
-protocol plugins, against an in-process broker, Kafka cluster, Redis or
-UDP server, and PostgreSQL in a service container. The other 9 product
-types are catalogued as planned ([packs](docs/guides/packs.md)).
+pack. All twenty packs ship: e-commerce (tested against ShopLab), and SaaS
+with GraphQL, AI and LLM apps over SSE, chat over WebSocket, ticketing
+with a waiting room, login and identity, public APIs with rate limits,
+fintech with duplicate-payment checks, social feeds with live
+notifications, news behind a cache, HLS video and live streaming, exams
+with a live channel, government results and applications, ride hailing
+and food delivery with live tracking, mobile app backends, serverless
+cold starts and concurrency limits, IoT over MQTT, event pipelines on
+Kafka, databases and caches (PostgreSQL and Redis) and game backends
+(WebSocket matchmaking, a UDP game server). Each is tested on every push
+against a small reference app with planted bottlenecks
+([PackLab](examples/packlab/README.md)); the last four use the protocol
+plugins, against an in-process broker, Kafka cluster, Redis or UDP
+server, and PostgreSQL in a service container ([packs](docs/guides/packs.md)).
 
 **AI journey generation** (optional, bring your own key, never during
 load). Anthropic, OpenAI, Gemini, Ollama or any OpenAI-compatible server
@@ -203,8 +207,7 @@ per server and per target; audit log ([safety](docs/safety.md)).
 
 ## Planned for v1.0
 
-The other 9 product packs, side-by-side benchmarks with k6 and wrk2, and
-the website.
+Side-by-side benchmarks with k6 and wrk2, and the website.
 
 ## Deploy
 

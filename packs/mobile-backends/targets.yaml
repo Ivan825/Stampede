@@ -1,0 +1,9 @@
+# Default targets for mobile backends. App launch waits on config, sync
+# and the home screen, so each is held tight; analytics may take longer,
+# since the app sends it in the background.
+targets:
+  - http.p95 < 500ms
+  - errors < 1%
+  - "cold-launch/config.p95 < 200ms"
+  - "cold-launch/sync.p95 < 500ms"
+  - "cold-launch/home screen.p95 < 300ms"

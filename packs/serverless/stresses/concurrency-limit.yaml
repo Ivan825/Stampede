@@ -1,0 +1,40 @@
+# A function with a small concurrency limit (EdgeLab's preview function
+# is reserved at five instances, to protect what it calls) gets far more
+# simultaneous requests than that. The right answer is a fast 429 with
+# Retry-After, and the client backs off for that long. Other functions
+# must not be throttled because of it.
+apiVersion: stampede.dev/v1
+kind: Scenario
+metadata:
+  name: serverless-concurrency-limit
+  tags: [pack:serverless, throttling]
+target:
+  baseURL: ${env.TARGET_URL}
+  http: { maxRedirects: -1 }
+journeys:
+  - name: previews
+    weight: 7
+    steps:
+      - name: preview image
+        get: /api/preview?url=https://example.com/posts/${rand(1, 500)}
+        check:
+          status: [200, 429]
+          expr: "status == 200 || ('retry-after' in headers && int(headers['retry-after']) >= 1)"
+        extract: { code: status }
+      - name: back off
+        if: "${code == 429}"
+        think: 1s
+  - name: neighbours
+    weight: 3
+    steps:
+      - name: redirect
+        get: /r/go${rand(1000, 1999)}
+        check: { status: 301 }
+load:
+  mode: vus
+  vus: 20
+  duration: 2m
+targets:
+  - "neighbours/redirect.p95 < 100ms"
+  - "neighbours.errors < 0.1%"
+  - errors < 1%

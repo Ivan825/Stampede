@@ -1,0 +1,25 @@
+apiVersion: stampede.dev/v1
+kind: Pack
+name: mobile-backends
+title: Mobile app backends
+description: >
+  The API behind a mobile app, driven the way the app drives it: remote
+  config and a minimum version at launch, device registration for push,
+  delta sync with offline changes, batched analytics, and a GraphQL home
+  screen sent as persisted queries; a launch over a 3G network, a push
+  that makes everyone open the app at once, and devices coming back
+  online with queued work. Built for backends shaped like MobileLab;
+  adjust paths, headers and payloads to match yours.
+status: shipped
+protocols: [http, graphql]
+referenceApp: examples/packlab/mobilelab
+detect:
+  paths: ["/api/v1/config", "/api/v1/remote-config", "/api/v1/devices", "/api/v1/sync", "/api/v1/events", "/api/v1/graphql", "/v1/devices", "/v1/sync"]
+  openapiTags: [remote-config, devices, sync, analytics, push, feature-flags]
+  htmlMeta: []
+  headers: {}
+variables:
+  TARGET_URL: { description: Base URL of the app's API (without /api/v1) }
+targets:
+  - http.p95 < 500ms
+  - errors < 1%

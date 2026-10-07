@@ -1,0 +1,118 @@
+# Video on demand, the way a player drives it. Some viewers only browse;
+# some press play and leave once the video starts (the start-up journey
+# is exactly what start-up time is made of); most watch: buffer two
+# segments at the lowest rendition, switch up to 480p and fetch one
+# segment every two seconds, sending a heartbeat as they go. Popular
+# titles get most plays.
+apiVersion: stampede.dev/v1
+kind: Scenario
+metadata:
+  name: streaming-vod-mix
+  description: Weighted browse, start-up and watch journeys over HLS (playlists, segments, heartbeats).
+  tags: [pack:streaming]
+target:
+  baseURL: ${env.TARGET_URL}
+journeys:
+  - name: browse
+    weight: 20
+    steps:
+      - name: catalogue
+        get: /api/videos
+        check: { status: 200, json: { "$.videos[0].id": exists } }
+      - think: 2s..6s
+      - name: details
+        get: /api/videos/v0${rand(10, 30)}
+        check: { status: 200, json: { "$.durationSeconds": exists } }
+  - name: start-up
+    weight: 30
+    steps:
+      - name: play
+        post: /api/playback
+        json: { videoId: "${pick(['v001', 'v001', 'v001', 'v002', 'v002', 'v003', 'v004', 'v005', 'v006', 'v007'])}" }
+        check: { status: 201, json: { "$.manifest": exists } }
+        extract: { manifest: "$.manifest" }
+      - name: master playlist
+        get: ${manifest}
+        check: { status: 200, bodyContains: "#EXT-X-STREAM-INF" }
+        # Players start at the lowest rendition, listed first.
+        extract: { media: 'regex:(/\S+/index\.m3u8\S*)' }
+      - name: media playlist
+        get: ${media}
+        check: { status: 200, bodyContains: "#EXTINF" }
+        extract: { first: 'regex:(/\S+/seg00000\.ts\S*)' }
+      - name: first segment
+        get: ${first}
+        check: { status: 200 }
+  - name: watch
+    weight: 50
+    steps:
+      - name: play
+        post: /api/playback
+        json: { videoId: "${pick(['v001', 'v001', 'v001', 'v002', 'v002', 'v003', 'v004', 'v005', 'v006', 'v007'])}" }
+        check: { status: 201 }
+        extract: { manifest: "$.manifest", token: "$.token", session: "$.sessionId", video: 'regex:/vod/(v\d+)/' }
+      - name: master playlist
+        get: ${manifest}
+        check: { status: 200 }
+      - name: media playlist
+        get: /vod/${video}/240p/index.m3u8?token=${token}
+        check: { status: 200 }
+      - name: first segment
+        get: /vod/${video}/240p/seg00000.ts?token=${token}
+        check: { status: 200 }
+      - name: segment
+        get: /vod/${video}/240p/seg00001.ts?token=${token}
+        check: { status: 200 }
+      # The buffer is healthy: switch up to 480p.
+      - name: switch rendition
+        get: /vod/${video}/480p/index.m3u8?token=${token}
+        check: { status: 200 }
+      - think: 2s
+      - name: segment
+        get: /vod/${video}/480p/seg00002.ts?token=${token}
+        check: { status: 200 }
+      - think: 2s
+      - name: segment
+        get: /vod/${video}/480p/seg00003.ts?token=${token}
+        check: { status: 200 }
+      - think: 2s
+      - name: segment
+        get: /vod/${video}/480p/seg00004.ts?token=${token}
+        check: { status: 200 }
+      - think: 2s
+      - name: segment
+        get: /vod/${video}/480p/seg00005.ts?token=${token}
+        check: { status: 200 }
+      - think: 2s
+      - name: segment
+        get: /vod/${video}/480p/seg00006.ts?token=${token}
+        check: { status: 200 }
+      - name: heartbeat
+        post: /api/playback/${session}/heartbeat
+        json: { position: 12, rendition: 480p, bufferSeconds: 6, stalls: 0 }
+        check: { status: 204 }
+      - think: 2s
+      - name: segment
+        get: /vod/${video}/480p/seg00007.ts?token=${token}
+        check: { status: 200 }
+      - think: 2s
+      - name: segment
+        get: /vod/${video}/480p/seg00008.ts?token=${token}
+        check: { status: 200 }
+      - think: 2s
+      - name: segment
+        get: /vod/${video}/480p/seg00009.ts?token=${token}
+        check: { status: 200 }
+      - name: heartbeat
+        post: /api/playback/${session}/heartbeat
+        json: { position: 20, rendition: 480p, bufferSeconds: 6, stalls: 0 }
+        check: { status: 204 }
+load:
+  mode: rate
+  rate: 5/s
+  duration: 5m
+targets:
+  - errors < 1%
+  - "start-up/play.p95 < 500ms"
+  - "start-up/first segment.p95 < 500ms"
+  - "watch/segment.p95 < 1s"

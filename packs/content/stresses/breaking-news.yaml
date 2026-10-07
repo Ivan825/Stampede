@@ -1,0 +1,60 @@
+# Breaking news: arrivals jump twentyfold, most readers come from social
+# links to the newest story (with tracking parameters), others reload
+# the home page, and the newsroom keeps publishing updates. Each update
+# must refresh only the pages it appears on; the cache must absorb the
+# crowd, so home and story pages stay at cache-hit speed throughout.
+apiVersion: stampede.dev/v1
+kind: Scenario
+metadata:
+  name: content-breaking-news
+  tags: [pack:content, spike]
+target:
+  baseURL: ${env.TARGET_URL}
+vars:
+  # NewsLab's newsroom token. For a real CMS use ${secret.EDITOR_TOKEN}.
+  editorToken: newslab-editor
+journeys:
+  - name: social-reader
+    weight: 600
+    steps:
+      # The newest story's link, as a social post would carry it: taken
+      # from the RSS feed, whose first item is the newest.
+      - name: feed
+        get: /feed.xml
+        check: { status: 200 }
+        extract: { story: 'regex:<link>(/articles/[^<]+)</link>' }
+      - name: article
+        get: ${story}?utm_source=${pick(['facebook', 'twitter', 'whatsapp'])}&utm_medium=social&fbclid=${randString(16)}
+        check: { status: 200, bodyContains: "articleBody" }
+  - name: homepage
+    weight: 399
+    steps:
+      - name: home
+        get: /
+        check: { status: 200 }
+        extract: { story: "css:a.top-story@href" }
+      - think: 5s..15s
+      - name: home again
+        get: /
+        check: { status: 200 }
+      - name: top story
+        get: ${story}
+        check: { status: 200 }
+  - name: newsroom
+    weight: 1
+    steps:
+      - name: publish update
+        post: /api/articles
+        headers: { Authorization: "Bearer ${vars.editorToken}" }
+        json: { title: "Live: storm update ${randString(4)}", section: world, summary: "The latest on the storm.", body: "Updates as they come in.", breaking: true }
+        check: { status: 201 }
+load:
+  shape: spike
+  mode: rate
+  start: 10/s
+  max: 200/s
+  duration: 3m
+targets:
+  - "homepage/home.p95 < 100ms"
+  - "social-reader/article.p95 < 100ms"
+  - errors < 1%

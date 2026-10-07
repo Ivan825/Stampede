@@ -333,6 +333,15 @@ jobs:
           - { pack: ticketing, port: 8094 }
           - { pack: identity, port: 8095 }
           - { pack: public-apis, port: 8096 }
+          - { pack: fintech, port: 8097 }
+          - { pack: social, port: 8098 }
+          - { pack: content, port: 8099 }
+          - { pack: streaming, port: 8100 }
+          - { pack: edtech, port: 8101 }
+          - { pack: government, port: 8102 }
+          - { pack: delivery, port: 8103 }
+          - { pack: mobile-backends, port: 8104 }
+          - { pack: serverless, port: 8105 }
           - { pack: iot, port: 8110, plugins: mqtt, env: "-e MQTT_BROKER=tcp://localhost:8111" }
           - { pack: event-pipelines, port: 8112, plugins: kafka, env: "-e KAFKA_BROKERS=127.0.0.1:8113" }
           - pack: databases

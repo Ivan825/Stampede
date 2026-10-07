@@ -191,8 +191,11 @@ func checkDetect(t *testing.T, target, want string, shipped []*pack.Pack) {
 	if len(m) == 0 || m[0].Pack.Name != want {
 		t.Fatalf("best match is not %s: %+v", want, summary(m))
 	}
-	if len(m) > 1 && m[1].Score >= m[0].Score {
-		t.Fatalf("%s ties with %s: %+v", want, m[1].Pack.Name, summary(m))
+	// A clear margin, so that adding packs cannot quietly make detection
+	// ambiguous: the runner-up scores at most half as much, and at least
+	// two API paths' worth (6 points) less.
+	if len(m) > 1 && (2*m[1].Score > m[0].Score || m[0].Score-m[1].Score < 6) {
+		t.Fatalf("%s (%d) wins only narrowly over %s (%d): %+v", want, m[0].Score, m[1].Pack.Name, m[1].Score, summary(m))
 	}
 	// The same through the command: init proposes the pack; answering no
 	// installs nothing.
@@ -319,6 +322,7 @@ func checkLoad(t *testing.T, target, name string, appEnv map[string]string) {
 var wantStatus = map[string]int{
 	"public-apis/stresses/rate-limit-burst.yaml":   429,
 	"ticketing/stresses/seat-lock-contention.yaml": 409,
+	"serverless/stresses/concurrency-limit.yaml":   429,
 }
 
 func shorten(s *scenario.Scenario) {

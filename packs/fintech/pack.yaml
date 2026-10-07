@@ -1,0 +1,25 @@
+apiVersion: stampede.dev/v1
+kind: Pack
+name: fintech
+title: Fintech, banking, payments
+description: >
+  Retail banking and payments: balances and transaction history,
+  transfers and bill payments sent with an Idempotency-Key, monthly
+  statements, a duplicate-payment test that races retries of the same
+  payment and then reconciles the ledger, and a month-end peak. Built for
+  APIs shaped like BankLab; adjust paths, account ids and amounts to match
+  yours. The journeys never call a payment provider: point them at your
+  own API and its test ledger.
+status: shipped
+protocols: [http]
+referenceApp: examples/packlab/banklab
+detect:
+  paths: ["/api/accounts", "/api/transfers", "/api/payments", "/api/transactions", "/api/statements", "/api/payees", "/api/beneficiaries", "/api/ledger"]
+  openapiTags: [accounts, transactions, statements, transfers, payments, payees, beneficiaries, ledger]
+  htmlMeta: []
+  headers: {}
+variables:
+  TARGET_URL: { description: Base URL of the banking API }
+targets:
+  - http.p95 < 500ms
+  - errors < 1%

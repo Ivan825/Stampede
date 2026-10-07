@@ -1,0 +1,75 @@
+# A premiere: a new episode is released and arrivals jump from 5/s to
+# 150/s, nearly all pressing play on the same title and buffering its
+# first segments. Start-up must stay quick: the playback call, the
+# playlists and the first segments, which everyone wants at once.
+apiVersion: stampede.dev/v1
+kind: Scenario
+metadata:
+  name: streaming-premiere-spike
+  tags: [pack:streaming, spike]
+target:
+  baseURL: ${env.TARGET_URL}
+vars:
+  premiere: v001
+journeys:
+  - name: premiere
+    weight: 9
+    steps:
+      - name: play
+        post: /api/playback
+        json: { videoId: "${vars.premiere}" }
+        check: { status: 201 }
+        extract: { manifest: "$.manifest", token: "$.token" }
+      - name: master playlist
+        get: ${manifest}
+        check: { status: 200 }
+      - name: media playlist
+        get: /vod/${vars.premiere}/240p/index.m3u8?token=${token}
+        check: { status: 200 }
+      - name: first segment
+        get: /vod/${vars.premiere}/240p/seg00000.ts?token=${token}
+        check: { status: 200 }
+      - name: buffer
+        get: /vod/${vars.premiere}/240p/seg00001.ts?token=${token}
+        check: { status: 200 }
+      - name: switch rendition
+        get: /vod/${vars.premiere}/720p/index.m3u8?token=${token}
+        check: { status: 200 }
+      - think: 1s
+      - name: segment
+        get: /vod/${vars.premiere}/720p/seg00002.ts?token=${token}
+        check: { status: 200 }
+      - think: 2s
+      - name: segment
+        get: /vod/${vars.premiere}/720p/seg00003.ts?token=${token}
+        check: { status: 200 }
+  - name: back-catalogue
+    weight: 1
+    steps:
+      - name: play
+        post: /api/playback
+        json: { videoId: "v0${rand(10, 30)}" }
+        check: { status: 201 }
+        extract: { manifest: "$.manifest" }
+      - name: master playlist
+        get: ${manifest}
+        check: { status: 200 }
+        extract: { media: 'regex:(/\S+/index\.m3u8\S*)' }
+      - name: media playlist
+        get: ${media}
+        check: { status: 200 }
+        extract: { first: 'regex:(/\S+/seg00000\.ts\S*)' }
+      - name: first segment
+        get: ${first}
+        check: { status: 200 }
+load:
+  shape: spike
+  mode: rate
+  start: 5/s
+  max: 150/s
+  duration: 3m
+targets:
+  - "premiere/play.p95 < 500ms"
+  - "premiere/first segment.p95 < 500ms"
+  - "premiere/segment.p95 < 1s"
+  - errors < 1%

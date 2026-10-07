@@ -1,0 +1,55 @@
+# Apps retry payments: after a timeout, on a flaky network, when a user
+# taps "Pay" twice. Here many clients send the same 100 bill payments at
+# once, each with the payment's own Idempotency-Key. Exactly one payment
+# per key may exist; the others must get the first one back (or a 409
+# "still processing" and then the first one). After every attempt the
+# client checks that the reference has exactly one payment and that the
+# ledger still balances.
+apiVersion: stampede.dev/v1
+kind: Scenario
+metadata:
+  name: fintech-duplicate-payments
+  tags: [pack:fintech, contention, correctness]
+target:
+  baseURL: ${env.TARGET_URL}
+data:
+  # key, customer and payment; several users draw the same row at once.
+  intents: { csv: ../data/intents.csv, mode: random }
+journeys:
+  - name: retrying-client
+    steps:
+      - name: sign in
+        post: /api/login
+        json: { customerId: "${data.intents.customerId}", password: "${data.intents.password}" }
+        check: { status: 200 }
+        extract: { token: "$.token" }
+      - name: pay
+        post: /api/payments
+        headers: { Authorization: "Bearer ${token}", Idempotency-Key: "${data.intents.key}" }
+        json: { fromAccount: "${data.intents.fromAccount}", payee: "${data.intents.payee}", amount: "${int(data.intents.amount)}", currency: EUR, reference: "${data.intents.key}" }
+        # 409: the same key is being processed by another request right now.
+        check: { status: [201, 409] }
+        extract: { paid: status }
+      - group: retry
+        if: "${paid == 409}"
+        steps:
+          - think: 1s
+          - name: pay again
+            post: /api/payments
+            headers: { Authorization: "Bearer ${token}", Idempotency-Key: "${data.intents.key}" }
+            json: { fromAccount: "${data.intents.fromAccount}", payee: "${data.intents.payee}", amount: "${int(data.intents.amount)}", currency: EUR, reference: "${data.intents.key}" }
+            check: { status: 201 }
+      - name: one payment per key
+        get: /api/transfers?reference=${data.intents.key}
+        headers: { Authorization: "Bearer ${token}" }
+        check: { status: 200, expr: "json.transfers.size() == 1" }
+      - name: ledger balances
+        get: /api/ledger/check
+        check: { status: 200, json: { "$.balanced": true, "$.duplicates": 0 } }
+load:
+  mode: vus
+  vus: 50
+  iterations: 1000
+targets:
+  - "retrying-client/pay.p95 < 300ms"
+  - errors < 0.1%

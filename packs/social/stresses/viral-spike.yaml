@@ -1,0 +1,120 @@
+# A celebrity's post goes viral: arrivals jump thirtyfold and most of
+# them open the post, like it and some comment, while the celebrity has
+# the app open and receives the notifications. Everyone else is still
+# scrolling their feed, and must not notice.
+apiVersion: stampede.dev/v1
+kind: Scenario
+metadata:
+  name: social-viral-spike
+  tags: [pack:social, spike]
+target:
+  baseURL: ${env.TARGET_URL}
+data:
+  users: { csv: ../data/users.csv, mode: random }
+vars:
+  # SocialLab's celebrities are user0001 ... user0020, followed by everyone.
+  celebrity: user0001
+  password: sociallab-pass
+journeys:
+  - name: fan
+    weight: 7
+    steps:
+      - name: sign in
+        post: /api/login
+        json: { username: "${data.users.username}", password: "${data.users.password}" }
+        check: { status: 200 }
+        extract: { token: "$.token" }
+      - name: celebrity posts
+        get: /api/users/${vars.celebrity}/posts?limit=1
+        headers: { Authorization: "Bearer ${token}" }
+        check: { status: 200 }
+        extract: { postId: "$.posts[0].id" }
+      - name: post
+        get: /api/posts/${postId}
+        headers: { Authorization: "Bearer ${token}" }
+        check: { status: 200 }
+      - think: 1s..3s
+      - name: like
+        post: /api/posts/${postId}/like
+        headers: { Authorization: "Bearer ${token}" }
+        check: { status: 200, json: { "$.liked": true } }
+      - branch:
+          - weight: 30
+            name: comments
+            steps:
+              - think: 3s..8s
+              - name: comment
+                post: /api/posts/${postId}/comments
+                headers: { Authorization: "Bearer ${token}" }
+                json: { text: "OMG ${randString(5)}" }
+                check: { status: 201 }
+          - weight: 70
+            name: moves on
+            steps:
+              - think: 1s
+  - name: scroller
+    weight: 2
+    steps:
+      - name: sign in
+        post: /api/login
+        json: { username: "${data.users.username}", password: "${data.users.password}" }
+        check: { status: 200 }
+        extract: { token: "$.token" }
+      - name: feed
+        get: /api/feed
+        headers: { Authorization: "Bearer ${token}" }
+        check: { status: 200 }
+        extract: { cursor: "$.next_cursor" }
+      - think: 2s..5s
+      - name: next page
+        get: /api/feed?before=${cursor}
+        headers: { Authorization: "Bearer ${token}" }
+        check: { status: 200 }
+  - name: celebrity
+    weight: 1
+    steps:
+      - name: sign in
+        post: /api/login
+        json: { username: "${vars.celebrity}", password: "${vars.password}" }
+        check: { status: 200 }
+        extract: { token: "$.token" }
+      - name: fan signs in
+        post: /api/login
+        json: { username: "user${rand(3000, 4999)}", password: "${vars.password}" }
+        check: { status: 200 }
+        extract: { fanToken: "$.token" }
+      - name: notification socket
+        ws: /api/notifications/ws
+        headers: { Authorization: "Bearer ${token}" }
+        timeout: 5s
+        steps:
+          - name: welcome
+            expect: { json: { "$.type": welcome }, timeout: 5s }
+          - name: latest post
+            get: /api/users/${vars.celebrity}/posts?limit=1
+            headers: { Authorization: "Bearer ${token}" }
+            check: { status: 200 }
+            extract: { postId: "$.posts[0].id" }
+          - send: { type: ping }
+          - name: pong
+            expect: { json: { "$.type": pong }, timeout: 5s }
+          - name: fan comments
+            post: /api/posts/${postId}/comments
+            headers: { Authorization: "Bearer ${fanToken}" }
+            json: { text: "First! ${randString(5)}" }
+            check: { status: 201 }
+          # Any comment notification will do: during the spike many arrive.
+          - name: comment notification
+            expect: { json: { "$.type": notification, "$.kind": comment }, timeout: 5s }
+          - think: 5s
+load:
+  shape: spike
+  mode: rate
+  start: 10/s
+  max: 300/s
+  duration: 3m
+targets:
+  - "fan/like.p95 < 300ms"
+  - "scroller/feed.p95 < 500ms"
+  - "celebrity/comment notification.p95 < 2s"
+  - errors < 1%

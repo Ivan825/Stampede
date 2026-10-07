@@ -1,0 +1,24 @@
+apiVersion: stampede.dev/v1
+kind: Pack
+name: government
+title: Government, results portals
+description: >
+  Government and public-sector portals: exam results looked up by roll
+  number and date of birth with PDF marksheets, notices, and online
+  applications (sign-in by one-time code, a form saved in sections,
+  document upload, submission with an acknowledgement and receipt), with
+  a results-day surge and a deadline-day surge. Built for portals shaped
+  like GovLab; adjust paths, fields and the sign-in to match yours.
+status: shipped
+protocols: [http]
+referenceApp: examples/packlab/govlab
+detect:
+  paths: ["/api/results", "/api/applications", "/api/notices", "/api/acknowledgements", "/api/admit-cards", "/api/certificates", "/api/grievances", "/api/otp"]
+  openapiTags: [results, applications, notices, acknowledgements, citizens, certificates, grievances, schemes]
+  htmlMeta: []
+  headers: {}
+variables:
+  TARGET_URL: { description: Base URL of the portal's API }
+targets:
+  - http.p95 < 1s
+  - errors < 1%

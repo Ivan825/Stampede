@@ -1,0 +1,9 @@
+# Default targets for serverless apps. Warm invocations should be quick
+# (the p50); cold starts land in the tail, so the p99 is where they show
+# and is held separately. A 429 at a concurrency limit is an answer, not
+# an error, where a stress says so.
+targets:
+  - http.p95 < 300ms
+  - errors < 1%
+  - "visitor/redirect.p50 < 50ms"
+  - "visitor/redirect.p99 < 500ms"

@@ -23,14 +23,23 @@ import (
 
 	"github.com/Ivan825/Stampede/examples/packlab/apilab"
 	"github.com/Ivan825/Stampede/examples/packlab/authlab"
+	"github.com/Ivan825/Stampede/examples/packlab/banklab"
 	"github.com/Ivan825/Stampede/examples/packlab/chatlab"
 	"github.com/Ivan825/Stampede/examples/packlab/dblab"
+	"github.com/Ivan825/Stampede/examples/packlab/edgelab"
+	"github.com/Ivan825/Stampede/examples/packlab/examlab"
 	"github.com/Ivan825/Stampede/examples/packlab/gamelab"
+	"github.com/Ivan825/Stampede/examples/packlab/govlab"
 	"github.com/Ivan825/Stampede/examples/packlab/iotlab"
 	"github.com/Ivan825/Stampede/examples/packlab/labkit"
 	"github.com/Ivan825/Stampede/examples/packlab/llmlab"
+	"github.com/Ivan825/Stampede/examples/packlab/mobilelab"
+	"github.com/Ivan825/Stampede/examples/packlab/newslab"
 	"github.com/Ivan825/Stampede/examples/packlab/pipelinelab"
+	"github.com/Ivan825/Stampede/examples/packlab/ridelab"
 	"github.com/Ivan825/Stampede/examples/packlab/saaslab"
+	"github.com/Ivan825/Stampede/examples/packlab/sociallab"
+	"github.com/Ivan825/Stampede/examples/packlab/streamlab"
 	"github.com/Ivan825/Stampede/examples/packlab/ticketlab"
 )
 
@@ -70,6 +79,15 @@ var products = map[string]product{
 	"event-pipelines": {pack: "event-pipelines", addr: ":8112", open: pipelinelab.Open, listen: ":8113", plugins: []string{"kafka"}},
 	"databases":       {pack: "databases", addr: ":8114", open: dblab.Open, listen: ":8115", plugins: []string{"sql", "redis"}, postgres: true},
 	"gaming":          {pack: "gaming", addr: ":8116", open: gamelab.Open, listen: ":8117", plugins: []string{"udp"}},
+	"fintech":         {pack: "fintech", addr: ":8097", new: banklab.New},
+	"social":          {pack: "social", addr: ":8098", new: sociallab.New},
+	"content":         {pack: "content", addr: ":8099", new: newslab.New},
+	"streaming":       {pack: "streaming", addr: ":8100", new: streamlab.New},
+	"edtech":          {pack: "edtech", addr: ":8101", new: examlab.New},
+	"government":      {pack: "government", addr: ":8102", new: govlab.New},
+	"delivery":        {pack: "delivery", addr: ":8103", new: ridelab.New},
+	"mobile-backends": {pack: "mobile-backends", addr: ":8104", new: mobilelab.New},
+	"serverless":      {pack: "serverless", addr: ":8105", new: edgelab.New},
 }
 
 func names() []string {

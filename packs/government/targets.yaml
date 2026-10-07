@@ -1,0 +1,8 @@
+# Default targets for government portals. On results day the lookup is
+# the whole site; on deadline day it is saving and submitting the form.
+# Both must hold under the surge, not just on a quiet afternoon.
+targets:
+  - http.p95 < 1s
+  - errors < 1%
+  - "check-result/lookup.p95 < 500ms"
+  - "check-result/marksheet.p95 < 1s"

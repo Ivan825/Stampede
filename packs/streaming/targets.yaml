@@ -1,0 +1,9 @@
+# Default targets for streaming. Start-up time is the sum of four
+# requests (start playback, multivariant playlist, media playlist, first
+# segment), so each is held tight; after that a segment must arrive well
+# inside its own duration (2 seconds) or the player stalls.
+targets:
+  - errors < 1%
+  - "start-up/play.p95 < 500ms"
+  - "start-up/first segment.p95 < 500ms"
+  - "watch/segment.p95 < 1s"

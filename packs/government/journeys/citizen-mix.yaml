@@ -1,0 +1,60 @@
+# An ordinary day on a results and services portal: people read notices,
+# check a result by roll number and date of birth and download the
+# marksheet, and some mistype their details (a quick 404 is the right
+# answer, with nothing about whether the roll number exists).
+apiVersion: stampede.dev/v1
+kind: Scenario
+metadata:
+  name: government-citizen-mix
+  description: Weighted notice, result lookup, marksheet and mistyped-details journeys.
+  tags: [pack:government]
+target:
+  baseURL: ${env.TARGET_URL}
+data:
+  candidates: { csv: ../data/candidates.csv, mode: random }
+journeys:
+  - name: notices
+    weight: 30
+    steps:
+      - name: notices
+        get: /api/notices
+        check: { status: 200, json: { "$.notices[0].title": exists } }
+      - name: results status
+        get: /api/results/status
+        check: { status: 200, json: { "$.published": true } }
+  - name: check-result
+    weight: 55
+    steps:
+      - name: results status
+        get: /api/results/status
+        check: { status: 200 }
+      - think: 3s..10s
+      - name: lookup
+        post: /api/results/lookup
+        json: { rollNumber: "${data.candidates.rollNumber}", dateOfBirth: "${data.candidates.dateOfBirth}" }
+        check: { status: 200, json: { "$.subjects[0].marks": exists, "$.result": exists } }
+      - think: 5s..15s
+      - name: marksheet
+        get: /api/results/${data.candidates.rollNumber}/marksheet?dob=${data.candidates.dateOfBirth}
+        check: { status: 200, bodyContains: "%PDF-", expr: "headers['content-type'] == 'application/pdf'" }
+  - name: mistyped
+    weight: 15
+    steps:
+      - name: lookup
+        post: /api/results/lookup
+        json: { rollNumber: "${data.candidates.rollNumber}", dateOfBirth: "1999-01-01" }
+        check: { status: 404 }
+      - think: 3s..8s
+      - name: lookup again
+        post: /api/results/lookup
+        json: { rollNumber: "${data.candidates.rollNumber}", dateOfBirth: "${data.candidates.dateOfBirth}" }
+        check: { status: 200 }
+load:
+  mode: rate
+  rate: 10/s
+  duration: 5m
+targets:
+  - http.p95 < 1s
+  - errors < 1%
+  - "check-result/lookup.p95 < 500ms"
+  - "check-result/marksheet.p95 < 1s"

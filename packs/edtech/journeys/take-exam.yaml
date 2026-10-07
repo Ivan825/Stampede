@@ -1,0 +1,70 @@
+# One student sits a timed exam: start the attempt, keep the exam's live
+# channel open (the timer comes down it, proctoring heartbeats go up it),
+# read and answer questions with every answer saved as it is given, then
+# submit. A real exam lasts an hour; here a student answers eight
+# questions, so the file runs in about a minute.
+apiVersion: stampede.dev/v1
+kind: Scenario
+metadata:
+  name: edtech-take-exam
+  description: A timed exam with autosaved answers and a live WebSocket channel for the timer and heartbeats.
+  tags: [pack:edtech, websocket]
+target:
+  baseURL: ${env.TARGET_URL}
+data:
+  students: { csv: ../data/students.csv, mode: random }
+vars:
+  exam: EX-101
+journeys:
+  - name: exam
+    steps:
+      - name: sign in
+        post: /api/login
+        json: { studentId: "${data.students.studentId}", password: "${data.students.password}" }
+        check: { status: 200 }
+        extract: { token: "$.token" }
+      - name: exam
+        get: /api/exams/${vars.exam}
+        headers: { Authorization: "Bearer ${token}" }
+        check: { status: 200, json: { "$.durationMinutes": exists } }
+      - name: start attempt
+        post: /api/exams/${vars.exam}/attempts
+        headers: { Authorization: "Bearer ${token}" }
+        check: { status: 201 }
+        extract: { attempt: "$.attemptId" }
+      - name: live channel
+        ws: /api/exams/${vars.exam}/live?attempt=${attempt}
+        headers: { Authorization: "Bearer ${token}" }
+        timeout: 5s
+        steps:
+          - name: timer
+            expect: { json: { "$.type": timer }, timeout: 5s }
+          - loop: 8
+            steps:
+              - name: question
+                get: /api/attempts/${attempt}/questions/${rand(1, 40)}
+                headers: { Authorization: "Bearer ${token}" }
+                check: { status: 200 }
+                extract: { n: "$.n" }
+              - think: 3s..10s
+              - name: save answer
+                put: /api/attempts/${attempt}/answers/${n}
+                headers: { Authorization: "Bearer ${token}" }
+                json: { choice: "${rand(0, 3)}" }
+                check: { status: 200, json: { "$.saved": true } }
+              - send: { type: heartbeat, focus: true }
+              - name: heartbeat ack
+                expect: { json: { "$.type": ack }, timeout: 5s }
+          - name: submit
+            post: /api/attempts/${attempt}/submit
+            headers: { Authorization: "Bearer ${token}" }
+            check: { status: 200, json: { "$.submitted": true } }
+load:
+  mode: rate
+  rate: 5/s
+  duration: 3m
+targets:
+  - "exam/start attempt.p95 < 1s"
+  - "exam/save answer.p95 < 300ms"
+  - "exam/heartbeat ack.p95 < 200ms"
+  - errors < 1%

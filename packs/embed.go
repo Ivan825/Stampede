@@ -6,5 +6,5 @@ import "embed"
 // FS holds catalog.yaml and every shipped pack directory. Add a new
 // shipped pack's directory to the embed list below.
 //
-//go:embed catalog.yaml ecommerce llm-apps identity public-apis chat ticketing saas iot gaming event-pipelines databases
+//go:embed catalog.yaml ecommerce llm-apps identity public-apis chat ticketing saas iot gaming event-pipelines databases fintech social content streaming edtech government delivery mobile-backends serverless
 var FS embed.FS

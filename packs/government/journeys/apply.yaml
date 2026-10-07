@@ -1,0 +1,85 @@
+# Applying for a scheme online: sign in with a one-time code, start an
+# application, fill in its four sections (each saved as the applicant
+# moves on), upload a certificate, submit, download the acknowledgement
+# receipt and check the application can be tracked.
+apiVersion: stampede.dev/v1
+kind: Scenario
+metadata:
+  name: government-apply
+  description: One-time-code sign-in, a sectioned form, a document upload, submission, receipt and tracking.
+  tags: [pack:government, forms]
+target:
+  baseURL: ${env.TARGET_URL}
+data:
+  applicants: { csv: ../data/applicants.csv, mode: random }
+journeys:
+  - name: apply
+    steps:
+      - name: request code
+        post: /api/otp/request
+        json: { mobile: "${data.applicants.mobile}" }
+        check: { status: 200 }
+        # GovLab's test mode returns the code; for a real portal, use its
+        # test numbers or a fixed code in staging.
+        extract: { requestId: "$.requestId", code: "$.testCode" }
+      - think: 5s..10s
+      - name: verify code
+        post: /api/otp/verify
+        json: { requestId: "${requestId}", code: "${code}" }
+        check: { status: 200 }
+        extract: { token: "$.token" }
+      - name: start application
+        post: /api/applications
+        headers: { Authorization: "Bearer ${token}" }
+        check: { status: 201, json: { "$.status": draft } }
+        extract: { app: "$.applicationId" }
+      - think: 5s..10s
+      - name: save section
+        put: /api/applications/${app}/sections/personal
+        headers: { Authorization: "Bearer ${token}" }
+        json: { name: "${data.applicants.name}", dateOfBirth: "2007-05-14", gender: "F", category: "General" }
+        check: { status: 200 }
+      - think: 5s..10s
+      - name: save section
+        put: /api/applications/${app}/sections/address
+        headers: { Authorization: "Bearer ${token}" }
+        json: { line1: "12 Station Road", district: "North", state: "Karnataka", pin: "560001" }
+        check: { status: 200 }
+      - think: 5s..10s
+      - name: save section
+        put: /api/applications/${app}/sections/education
+        headers: { Authorization: "Bearer ${token}" }
+        json: { board: "State Board", year: 2026, percentage: 87.5 }
+        check: { status: 200 }
+      - think: 5s..10s
+      - name: save section
+        put: /api/applications/${app}/sections/income
+        headers: { Authorization: "Bearer ${token}" }
+        json: { annualFamilyIncome: 240000, earners: 2 }
+        check: { status: 200 }
+      - name: upload certificate
+        post: /api/applications/${app}/documents?type=income-certificate
+        headers: { Authorization: "Bearer ${token}", Content-Type: application/pdf }
+        body: "%PDF-1.4 ${randString(4096)}${randString(4096)}${randString(4096)}${randString(4096)}"
+        check: { status: 201 }
+      - think: 3s..8s
+      - name: submit
+        post: /api/applications/${app}/submit
+        headers: { Authorization: "Bearer ${token}" }
+        check: { status: 200, json: { "$.acknowledgementNumber": exists } }
+        extract: { ack: "$.acknowledgementNumber" }
+      - name: receipt
+        get: /api/applications/${app}/receipt
+        headers: { Authorization: "Bearer ${token}" }
+        check: { status: 200, bodyContains: "%PDF-" }
+      - name: track
+        get: /api/acknowledgements/${ack}
+        check: { status: 200, json: { "$.status": received } }
+load:
+  mode: rate
+  rate: 2/s
+  duration: 5m
+targets:
+  - "apply/save section.p95 < 300ms"
+  - "apply/submit.p95 < 500ms"
+  - errors < 1%

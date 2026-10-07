@@ -1,0 +1,8 @@
+# Default targets for social apps. The feed is the product and is held
+# tight; likes must feel instant; a notification should reach an open
+# socket within a couple of seconds.
+targets:
+  - http.p95 < 500ms
+  - errors < 1%
+  - "scroll/feed.p95 < 300ms"
+  - "like/like.p95 < 200ms"

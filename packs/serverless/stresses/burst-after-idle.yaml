@@ -1,0 +1,41 @@
+# Cold starts: a quiet trickle keeps only a few instances warm, then a
+# burst arrives (a newsletter goes out, a link goes viral) and every
+# request beyond the warm instances starts cold. After two quiet minutes
+# the platform has reclaimed the extra instances, and the second burst
+# starts cold again. Warm requests stay fast (the p50); cold starts land
+# in the tail (the p99), which must stay acceptable.
+apiVersion: stampede.dev/v1
+kind: Scenario
+metadata:
+  name: serverless-burst-after-idle
+  tags: [pack:serverless, cold-start]
+target:
+  baseURL: ${env.TARGET_URL}
+  http: { maxRedirects: -1 }
+journeys:
+  - name: visitor
+    weight: 8
+    steps:
+      - name: redirect
+        get: /r/go${rand(1000, 1999)}
+        check: { status: 301 }
+  - name: stats
+    weight: 2
+    steps:
+      - name: link stats
+        get: /api/links/go${rand(1000, 1999)}/stats
+        check: { status: 200 }
+load:
+  mode: rate
+  stages:
+    - { duration: 1m, target: 1/s }
+    - { duration: 5s, target: 150/s }
+    - { duration: 30s, target: 150/s }
+    - { duration: 5s, target: 1/s }
+    - { duration: 2m, target: 1/s }
+    - { duration: 5s, target: 150/s }
+    - { duration: 30s, target: 150/s }
+targets:
+  - "visitor/redirect.p50 < 50ms"
+  - "visitor/redirect.p99 < 500ms"
+  - errors < 1%

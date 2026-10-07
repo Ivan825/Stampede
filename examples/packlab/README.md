@@ -17,6 +17,15 @@ is [ShopLab](../shoplab), which uses PostgreSQL and Redis.)
 | `ticketing` | [TicketLab](#ticketlab) | 8094 | | [ticketing](../../packs/ticketing) |
 | `identity` | [AuthLab](#authlab) | 8095 | | [identity](../../packs/identity) |
 | `public-apis` | [APILab](#apilab) | 8096 | | [public-apis](../../packs/public-apis) |
+| `fintech` | [BankLab](#banklab) | 8097 | | [fintech](../../packs/fintech) |
+| `social` | [SocialLab](#sociallab) | 8098 | | [social](../../packs/social) |
+| `content` | [NewsLab](#newslab) | 8099 | | [content](../../packs/content) |
+| `streaming` | [StreamLab](#streamlab) | 8100 | | [streaming](../../packs/streaming) |
+| `edtech` | [ExamLab](#examlab) | 8101 | | [edtech](../../packs/edtech) |
+| `government` | [GovLab](#govlab) | 8102 | | [government](../../packs/government) |
+| `delivery` | [RideLab](#ridelab) | 8103 | | [delivery](../../packs/delivery) |
+| `mobile-backends` | [MobileLab](#mobilelab) | 8104 | | [mobile-backends](../../packs/mobile-backends) |
+| `serverless` | [EdgeLab](#edgelab) | 8105 | | [serverless](../../packs/serverless) |
 | `iot` | [IoTLab](#iotlab) | 8110 | 8111 MQTT | [iot](../../packs/iot) |
 | `event-pipelines` | [PipelineLab](#pipelinelab) | 8112 | 8113 Kafka | [event-pipelines](../../packs/event-pipelines) |
 | `databases` | [DBLab](#dblab) | 8114 | 8115 Redis | [databases](../../packs/databases) |
@@ -35,8 +44,9 @@ An app with a second port logs the variables its pack needs at start,
 such as `MQTT_BROKER=tcp://localhost:8111`.
 
 `-fast` shortens deliberate costs (token pacing, delivery and admission
-ticks, simulated database round trips, password-hashing rounds) so tests
-finish quickly; the bottlenecks stay in place.
+ticks, simulated database round trips, password-hashing rounds, render
+times, cold starts, the trip clock) so tests finish quickly; the
+bottlenecks stay in place.
 
 Each app has planted bottlenecks, and each has a fix behind a `-fix` name.
 The demo is the same as ShopLab's: run the pack's stress, find the
@@ -50,14 +60,15 @@ done or the most requests in a critical section at once, not by timing.
 `packs_test.go` starts every app in-process and, for its pack:
 
 1. probes it as `stampede init` does and checks the right pack scores
-   highest (and that `init` proposes it);
+   highest with a clear margin (the runner-up scores at most half as
+   much, and at least 6 points less), and that `init` proposes it;
 2. runs `stampede pack test` on the pack (think times cut to 10ms), which
    dry-runs every journey of every file once;
 3. runs every journey and stress file through the real runner for a
    couple of seconds (rates and user counts capped, think times cut to a
    tenth), and fails on any failed request or iteration. Stresses whose
-   point is a refusal (the rate-limit burst, the seat race) must also
-   provoke it.
+   point is a refusal (the rate-limit burst, the seat race, the
+   serverless concurrency limit) must also provoke it.
 
 For packs that use plugins it first builds them from `../../plugins` into
 a temporary plugin directory, and passes the app's variables to both
@@ -162,6 +173,164 @@ simulated receiver that takes 20ms each.
 | `keys` | A key is found by scanning all 20,001 key hashes | every request; `api-mix.yaml` p95 |
 | `limiter` | Rate limits are a sliding-window log behind one global lock that also logs refused attempts, so a client that retries without backing off never gets through, and every key waits on the one lock | `noisy-neighbour.yaml`: the `noisy-client` journey's status counts (5 of 1,680 requests got a 200 in a 15-second run); with heavier floods, `well-behaved` p95 |
 | `webhooks` | One worker delivers every webhook, so a burst of events queues up | `webhook-burst.yaml`: the `webhook` journey's duration and polls |
+
+## BankLab
+
+A retail bank. Customers `c0001` ... `c1000` (password `banklab-pass`)
+each have a current account (`acc_0001_cur`) and a savings account
+(`acc_0001_sav`) with three months of history. `POST /api/login` returns a
+bearer token; then accounts, transactions, monthly statements, `POST
+/api/transfers` and `POST /api/payments` (to the bank's own billers; no
+payment provider is involved), both requiring an `Idempotency-Key`.
+Amounts are in cents. `GET /api/ledger/check` reconciles: every balance
+adds up to zero across the bank and no key moved money twice. Each
+transfer runs a fraud check that takes 5ms.
+
+| Fix | Bottleneck | Where it shows |
+|---|---|---|
+| `lock` | Every transfer and payment holds one ledger-wide lock, fraud check included, so money moves one transfer at a time and balance reads queue behind it | `month-end-peak.yaml`: `payment` and `accounts` p95 as arrivals climb |
+| `balance` | A balance is the sum of the account's whole history, recomputed on every read and every transfer | `banking-mix.yaml`: `accounts` and `transfer`, slower as postings pile up |
+| `statements` | A monthly statement scans the whole bank's journal (about 100,000 postings) for one account's lines | `month-end-peak.yaml`: `statement` p95 |
+
+## SocialLab
+
+A social network with 5,000 accounts (`user0001` ... `user5000`,
+password `sociallab-pass`) and a week of posts. The 20 celebrities
+(`user0001` ... `user0020`) post a lot and are followed by everyone; other
+accounts follow 50 to 400 others. `POST /api/login` returns a bearer
+token; then the home feed, posts, likes, comments, profiles, follows,
+trending posts and notifications, live on the WebSocket
+`/api/notifications/ws`. Writing a like or a notification costs a 2ms
+database round trip.
+
+| Fix | Bottleneck | Where it shows |
+|---|---|---|
+| `timeline` | The home feed gathers every post of every followed account (several thousand) and sorts them all to show twenty | `feed-rush.yaml`: `feed` p95 and CPU as the rate climbs |
+| `likes` | Every like takes one global lock, scans the post's likers for a repeat and writes the like row before letting go, so likes run one at a time across the app | `viral-spike.yaml`: `like` p95 |
+| `notify` | Notifications are stored and written to the recipient's sockets inside the like, comment or follow request, under one lock | `viral-spike.yaml`: `like` and `comment` p95 |
+
+## NewsLab
+
+A news site with 20,000 articles (`story-00001` ... `story-20000`) in
+eight sections, behind a page cache like a CDN's: `Cache-Control`
+(`s-maxage` 60 seconds for fronts and feeds, 5 minutes for articles),
+`ETag`, `Age`, `X-Cache: HIT|MISS` and 304s for `If-None-Match`. Pages
+are HTML (`/`, `/section/{name}`, `/articles/{slug}`), plus `/feed.xml`
+and a JSON API. The origin renders four pages at a time and a render
+costs 40ms (article) to 100ms (home page). The newsroom publishes with
+`POST /api/articles` and the bearer token `newslab-editor`;
+`GET /api/cache/stats` reports hits, misses and renders.
+
+| Fix | Bottleneck | Where it shows |
+|---|---|---|
+| `cachekey` | The cache key is the full URL, so links with tracking parameters (`utm_*`, `fbclid`) never hit and every such reader waits for the origin | `breaking-news.yaml`: `social-reader` `article` p95 (seconds, against under a millisecond with the fix) |
+| `stampede` | A page that is not cached is rendered by every request that asks for it, so an expired or purged home page sends a crowd to the four render slots | `breaking-news.yaml` and `cold-cache.yaml`: `home` p99 |
+| `purge` | Publishing an article empties the whole cache instead of the pages it appears on | `breaking-news.yaml`: `top story` p99 after each update |
+
+## StreamLab
+
+A video service that delivers HLS: 30 on-demand videos (`v001` ...
+`v030`, ten minutes each) and two live channels (`live1`, `live2`, on
+air since an hour before start-up) in four renditions, 240p to 1080p.
+`POST /api/playback` returns a manifest URL and a signed token, which
+every playlist and segment request must carry. Segments are two-second
+MPEG-TS files at the rendition's real bitrate (100 KB at 240p to 1.5 MB
+at 1080p); live playlists list the newest six. Starting playback calls
+three backends (entitlement, DRM license, CDN choice) of 40ms each.
+
+| Fix | Bottleneck | Where it shows |
+|---|---|---|
+| `package` | Every segment request packages the segment again, so a thousand live viewers wanting the newest segment do the same work a thousand times | `live-event.yaml`: `newest segment` p95 and CPU |
+| `playlist` | Every live playlist request lists every segment since the event began (thousands, growing by one every two seconds) to find the newest six | `live-event.yaml`: `live playlist` p95, worse the longer the event runs |
+| `startup` | Starting playback calls its three backends one after another (120ms) instead of together (40ms) | `premiere-spike.yaml` and `vod-mix.yaml`: `play` p95 |
+
+## ExamLab
+
+A learning platform. Students `s00001` ... `s05000` (password
+`examlab-pass`), ten courses (`C101` ...), each with a 40-question,
+60-minute exam (`EX-101` ...) drawn from a 2,000-question bank and an
+essay assignment (`A-101` ...) due an hour after start-up. Answers are
+saved one at a time; the live channel `/api/exams/{id}/live?attempt=`
+sends the timer every 30 seconds, acknowledges heartbeats and relays
+announcements staff post with the bearer token `examlab-staff`.
+Submissions are fingerprinted (winnowed 8-grams) and scored for
+similarity. Writing an attempt costs 5ms.
+
+| Fix | Bottleneck | Where it shows |
+|---|---|---|
+| `start` | Starting an attempt shuffles the question bank and writes the attempt while holding the exam's one lock, so at 10:00 students start one at a time (at most 200 a second) | `exam-start.yaml`: `start attempt` p95 (seconds, against a few milliseconds with the fix) |
+| `autosave` | Every saved answer goes into one log for all attempts, and each save and status read scans the whole log (200ns a row) to find the attempt's answers | `exam-start.yaml` and `take-exam.yaml`: `save answer` p95, rising as answers pile up |
+| `similarity` | Each submission is compared with every earlier one under the assignment's lock, so the rush slows down submission by submission and blocks reading the assignment | `deadline-rush.yaml`: `submit work` and `assignment` p95 |
+
+## GovLab
+
+A government portal. Results for 100,000 candidates (roll numbers
+`26000001` ... `26100000`; dates of birth from 2008 to 2010, sampled in the pack's
+`data/candidates.csv`), PDF marksheets, notices, and applications for a
+scholarship that closes 48 hours after start-up: sign in with a one-time
+code (`POST /api/otp/request`; test mode returns the code as
+`testCode`), save four sections, upload documents, submit for an
+acknowledgement number and a PDF receipt. Every query uses one of ten
+database connections.
+
+| Fix | Bottleneck | Where it shows |
+|---|---|---|
+| `index` | Results are found by scanning all 100,000 rows (20ms) on a database connection, so on results day the ten connections run out and notices queue too | `results-day.yaml`: `lookup`, `marksheet` and `notices` p95 |
+| `pdf` | Every marksheet and receipt compresses the 400 KB letterhead image again | `results-day.yaml`: `marksheet` p95 and CPU |
+| `lock` | Every application save takes one portal-wide lock and writes the application and an audit entry (2ms) before letting go, so saves run one at a time | `deadline-day.yaml`: `save section` and `submit` p95 as arrivals climb |
+
+## RideLab
+
+Rides and food delivery in a 15 km square city. 10,000 simulated
+drivers (`d00001` ... `d10000`) circle their neighbourhoods; riders are
+`r0001` ... `r5000`; everyone's password is `ridelab-pass`; 300
+restaurants. A trip is matched half a second after it is requested, to
+the free driver with the shortest ETA among the five closest; trips run
+thirty times faster than real time. ETAs come from a routing service
+that takes 5ms a call plus a shortest-path search over 22,500 road
+blocks. Drivers who stream locations on `/api/drivers/stream` appear on
+the map where their app says.
+
+| Fix | Bottleneck | Where it shows |
+|---|---|---|
+| `dispatch` | Matching calls the routing service for each candidate while holding the fleet lock, so trips are matched one at a time (at most about 30 a second) and the map and location updates wait | `dinner-rush.yaml`: `matched` and `nearby cars` p95 (seconds, against the half-second dispatch delay with the fix) |
+| `geo` | Finding nearby drivers, for the map and for matching, checks the distance to all 10,000 under the fleet lock | `location-flood.yaml`: `nearby cars`, `cancel` and `location ack` p95 |
+| `eta` | Every ETA is a routing call: each price check, each match, and each tracking update to each rider, every second; nothing is cached | `rider-mix.yaml`: CPU, and a routing call a second for every rider following a trip |
+
+## MobileLab
+
+The backend of a mobile to-do and habits app. Users `u00001` ...
+`u20000` (password `mobilelab-pass`) have 20 to 1,000 items each. Every
+API request needs `X-App-Version` of at least 3.0.0 (older versions get
+426 with `minVersion`); remote config at `/api/v1/config` evaluates 300
+feature flags for the platform, version and rollout bucket; `/api/v1/sync`
+takes offline changes and returns changes since a `v<number>` token
+(the counter starts at 1000); analytics come in batches; the home screen
+is GraphQL at `/api/v1/graphql` with automatic persisted queries.
+
+| Fix | Bottleneck | Where it shows |
+|---|---|---|
+| `config` | Every config request parses the whole 700 KB config document (300 flags with targeting rules) and evaluates it, and forbids caching | `push-storm.yaml`: `config` p95, and everything else as the CPU runs out |
+| `sync` | Delta sync ignores the token and sends every item the user has, every launch | `slow-network.yaml`: `delta sync` (about 570ms against 310ms with the fix on 3G); `push-storm.yaml`: `delta sync` |
+| `events` | Each analytics event is written on its own (200µs) under one global lock | `offline-catchup.yaml` and `push-storm.yaml`: `events` p95 |
+
+## EdgeLab
+
+A link shortener running as functions on a simulated serverless
+platform. Each route is a function with its own instances: a request
+takes a warm instance if one is free, otherwise starts a new one (a cold
+start), up to the function's reserved concurrency (100 for redirects, 5
+for the preview image, 50 for the rest; 200 across the account), beyond
+which it gets 429 with `Retry-After`. Instances idle for a minute are
+reclaimed. Responses carry `X-Cold-Start`, `X-Function-Instance` and
+`Server-Timing`; `/_platform/functions` shows instances, cold starts and
+throttles. Links `go1000` ... `go1999` exist.
+
+| Fix | Bottleneck | Where it shows |
+|---|---|---|
+| `init` | A cold start loads the whole bundle, 400 modules, before serving (800ms) instead of 40 up front and the rest when first needed (80ms) | `burst-after-idle.yaml`: `redirect` p99 (about 825ms against 7ms with every fix in a 150/s burst) |
+| `prewarm` | No instances are kept ready, so every burst starts cold | `burst-after-idle.yaml`: `redirect` p99 at the start of each burst |
+| `pool` | Every invocation opens its own database connection (20ms) instead of reusing the instance's | `app-mix.yaml` and both stresses: `redirect` and `link stats` p50 |
 
 ## IoTLab
 

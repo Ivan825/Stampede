@@ -1,0 +1,24 @@
+apiVersion: stampede.dev/v1
+kind: Pack
+name: content
+title: News, blogs, content
+description: >
+  News sites, blogs and content platforms behind a cache or CDN: home,
+  section and article pages, RSS and a JSON API, conditional requests,
+  readers arriving from social links with tracking parameters, a
+  breaking-news spike while the newsroom keeps publishing, and a cold
+  cache. Built for sites shaped like NewsLab; adjust paths, CSS selectors
+  and the editor's publish call to match yours.
+status: shipped
+protocols: [http]
+referenceApp: examples/packlab/newslab
+detect:
+  paths: ["/api/articles", "/api/sections", "/api/stories", "/feed.xml", "/rss.xml", "/feed", "/rss", "/sitemap.xml"]
+  openapiTags: [articles, sections, stories, authors, feeds, newsroom]
+  htmlMeta: ['itemtype="https://schema.org/NewsArticle"', 'itemtype="https://schema.org/BlogPosting"', 'og:type" content="article', 'type="application/rss+xml"']
+  headers: {}
+variables:
+  TARGET_URL: { description: Base URL of the site (as readers reach it, through the cache or CDN) }
+targets:
+  - http.p95 < 200ms
+  - errors < 1%

@@ -1,0 +1,24 @@
+apiVersion: stampede.dev/v1
+kind: Pack
+name: edtech
+title: EdTech, exam platforms
+description: >
+  Learning platforms and online exams: browsing courses, practice
+  quizzes, a full timed exam with every answer saved as it is given and a
+  live WebSocket channel for the timer and proctoring heartbeats,
+  assignment submissions, the moment everyone starts the exam at once,
+  and the rush before a submission deadline. Built for platforms shaped
+  like ExamLab; adjust paths, exam ids and payloads to match yours.
+status: shipped
+protocols: [http, websocket]
+referenceApp: examples/packlab/examlab
+detect:
+  paths: ["/api/exams", "/api/attempts", "/api/courses", "/api/assignments", "/api/submissions", "/api/quizzes", "/api/enrollments", "/api/grades"]
+  openapiTags: [exams, attempts, courses, assignments, submissions, quizzes, grades, proctoring]
+  htmlMeta: ['itemtype="https://schema.org/Course"']
+  headers: {}
+variables:
+  TARGET_URL: { description: Base URL of the learning platform's API (HTTP; the WebSocket path is joined to it) }
+targets:
+  - http.p95 < 500ms
+  - errors < 1%

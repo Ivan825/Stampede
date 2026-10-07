@@ -1,0 +1,78 @@
+# Payday and the last days of the month: salaries land, everyone checks
+# their balance, pays rent and bills and downloads last month's
+# statement, all within a few hours. Arrivals rise from 5/s to 80/s and
+# hold. Money movement must stay fast while statements (big reads) run
+# alongside it; balance checks must not queue behind payments.
+apiVersion: stampede.dev/v1
+kind: Scenario
+metadata:
+  name: fintech-month-end-peak
+  tags: [pack:fintech, peak]
+target:
+  baseURL: ${env.TARGET_URL}
+data:
+  customers: { csv: ../data/customers.csv, mode: random }
+journeys:
+  - name: check-balance
+    weight: 40
+    steps:
+      - name: sign in
+        post: /api/login
+        json: { customerId: "${data.customers.customerId}", password: "${data.customers.password}" }
+        check: { status: 200 }
+        extract: { token: "$.token" }
+      - name: accounts
+        get: /api/accounts
+        headers: { Authorization: "Bearer ${token}" }
+        check: { status: 200 }
+  - name: pay-bills
+    weight: 35
+    steps:
+      - name: sign in
+        post: /api/login
+        json: { customerId: "${data.customers.customerId}", password: "${data.customers.password}" }
+        check: { status: 200 }
+        extract: { token: "$.token" }
+      - loop: 2
+        steps:
+          - think: 1s..3s
+          - name: payment
+            post: /api/payments
+            headers: { Authorization: "Bearer ${token}", Idempotency-Key: "${uuid()}" }
+            json: { fromAccount: "${data.customers.current}", payee: "${pick(['electric', 'water', 'phone', 'internet', 'insurance'])}", amount: "${rand(2000, 15000)}", currency: EUR, reference: "Month end" }
+            # A customer drawn many times may run out of money: that
+            # answer is correct.
+            check: { status: [201, 422], expr: "status == 201 || (status == 422 && json.error.code == 'insufficient_funds')" }
+      - name: accounts
+        get: /api/accounts
+        headers: { Authorization: "Bearer ${token}" }
+        check: { status: 200 }
+  - name: statement
+    weight: 25
+    steps:
+      - name: sign in
+        post: /api/login
+        json: { customerId: "${data.customers.customerId}", password: "${data.customers.password}" }
+        check: { status: 200 }
+        extract: { token: "$.token" }
+      - name: statements
+        get: /api/accounts/${data.customers.current}/statements
+        headers: { Authorization: "Bearer ${token}" }
+        check: { status: 200 }
+        extract: { month: "$.statements[0].month" }
+      - name: statement
+        get: /api/accounts/${data.customers.current}/statements/${month}
+        headers: { Authorization: "Bearer ${token}" }
+        check: { status: 200, json: { "$.closingBalance": exists } }
+load:
+  mode: rate
+  stages:
+    - { duration: 1m, target: 5/s }
+    - { duration: 2m, target: 80/s }
+    - { duration: 3m, target: 80/s }
+    - { duration: 1m, target: 5/s }
+targets:
+  - "pay-bills/payment.p95 < 300ms"
+  - "check-balance/accounts.p95 < 200ms"
+  - "statement/statement.p95 < 1s"
+  - errors < 1%
