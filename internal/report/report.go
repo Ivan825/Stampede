@@ -43,8 +43,8 @@ type Report struct {
 	Curve []CurvePoint `json:"curve,omitempty"`
 	Knee  *Knee        `json:"knee,omitempty"`
 	Notes []string     `json:"notes,omitempty"`
-	// Workers describes each worker of a distributed run (empty for a
-	// single in-process engine).
+	// Workers describes each worker of a distributed run; an in-process
+	// run lists its machine only when it was saturated.
 	Workers []WorkerRow `json:"workers,omitempty"`
 	// Faults are the faults a stampede agent injected during the run.
 	Faults []FaultEvent `json:"faults,omitempty"`

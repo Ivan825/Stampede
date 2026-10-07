@@ -12,6 +12,7 @@ import (
 
 	workerv1 "github.com/Ivan825/Stampede/gen/stampede/worker/v1"
 	"github.com/Ivan825/Stampede/internal/engine"
+	"github.com/Ivan825/Stampede/internal/health"
 	"github.com/Ivan825/Stampede/internal/metrics"
 	"github.com/Ivan825/Stampede/internal/scenario"
 	"github.com/Ivan825/Stampede/internal/wire"
@@ -717,24 +718,13 @@ func (r *Run) handleSnapshot(m *member, idx int, p *workerv1.Snapshot) {
 	if h != nil && h.Saturated {
 		m.saturated = append(m.saturated, s.Interval)
 		for _, why := range h.Reasons {
-			m.satReasons[satKind(why)] = true
+			m.satReasons[health.Kind(why)] = true
 		}
 		r.event(RunEvent{
 			Type: EventWorkerSaturated, Interval: s.Interval, Reasons: h.Reasons,
 			Message: fmt.Sprintf("%s is saturated: %s", m.cand.name, strings.Join(h.Reasons, "; ")),
 		}, m)
 	}
-}
-
-// satKind strips the figures from a saturation reason so the summary
-// lists each kind once ("cpu", "scheduling lag", ...).
-func satKind(reason string) string {
-	for _, k := range []string{"cpu", "scheduling lag", "iterations dropped", "GC pause", "file descriptors"} {
-		if strings.Contains(reason, k) {
-			return k
-		}
-	}
-	return reason
 }
 
 // lossAfter is how long a worker may be silent: three heartbeats plus

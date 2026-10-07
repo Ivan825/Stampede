@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"log/slog"
 	"sort"
-	"strings"
 	"sync"
 	"time"
 
@@ -188,23 +187,14 @@ func Annotate(rep *report.Report, res *coordinator.Result) {
 		}
 		if len(ws.Saturated) > 0 {
 			saturated = true
-			var total float64
-			var parts []string
-			for _, s := range row.Saturated {
-				total += s.To - s.From
-				parts = append(parts, fmtSecs(s.From)+"–"+fmtSecs(s.To))
-			}
-			rep.Notes = append(rep.Notes, fmt.Sprintf(
-				"Worker %s was saturated for %s (%s: %s). Latency measured in those windows may reflect the load generator rather than the target; add workers or capacity.",
-				who, fmtSecs(total), strings.Join(parts, ", "), strings.Join(ws.SaturationReasons, ", ")))
+			noteSaturated(rep, "Worker "+who, row)
 		}
 	}
 	sort.SliceStable(rep.Workers, func(i, j int) bool { return rep.Workers[i].ShareLo < rep.Workers[j].ShareLo })
 	// A failed target measured by saturated workers says as much about
 	// the generator as about the system under test.
-	if saturated && rep.Verdict == report.VerdictFail {
-		rep.Verdict = report.VerdictGeneratorLimit
-		rep.Notes = append(rep.Notes, "Targets failed while workers were saturated, so the failure may be the generator's; the verdict is generator-limited rather than fail.")
+	if saturated {
+		generatorLimited(rep)
 	}
 }
 

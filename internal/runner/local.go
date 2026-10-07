@@ -74,11 +74,14 @@ func Run(ctx context.Context, o Options) (*report.Report, error) {
 			return nil, err
 		}
 	}
+	self := NewSelfMonitor()
+	defer self.Close()
 	start := time.Now()
 	onSnap := func(s *metrics.Snapshot) {
 		mu.Lock()
 		snaps = append(snaps, s)
 		mu.Unlock()
+		self.Observe(s)
 		if bp != nil && bp.Observe(s) && eng != nil {
 			eng.Stop("breakpoint reached")
 		}
@@ -126,6 +129,8 @@ func Run(ctx context.Context, o Options) (*report.Report, error) {
 	}
 	rep := report.Build(in)
 	rep.Faults = events
+	self.Close()
+	self.Annotate(rep, time.Second)
 	return rep, nil
 }
 

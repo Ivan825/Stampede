@@ -10,6 +10,7 @@ import (
 	"github.com/Ivan825/Stampede/internal/engine"
 	"github.com/Ivan825/Stampede/internal/metrics"
 	"github.com/Ivan825/Stampede/internal/report"
+	"github.com/Ivan825/Stampede/internal/runner"
 	"github.com/Ivan825/Stampede/internal/safety"
 	"github.com/Ivan825/Stampede/internal/scenario"
 )
@@ -103,6 +104,7 @@ type localExec struct {
 	res    *engine.Result
 	err    error
 	t0     time.Time
+	self   *runner.SelfMonitor
 }
 
 // Start compiles the scenario and runs it on an in-process engine.
@@ -117,6 +119,7 @@ func (l *LocalExecutor) Start(ctx context.Context, spec ExecSpec) (Execution, er
 	}
 	policy := safety.NewHostPolicy(spec.TargetHost, spec.AllowHosts)
 	x := &localExec{
+		self:   runner.NewSelfMonitor(),
 		snaps:  make(chan *metrics.Snapshot, 256),
 		events: make(chan ExecEvent, 16),
 		done:   make(chan struct{}),
@@ -130,16 +133,18 @@ func (l *LocalExecutor) Start(ctx context.Context, spec ExecSpec) (Execution, er
 		Program: prog, Plan: plan, RunID: spec.RunID,
 		Env: spec.Env, Secrets: spec.Secrets,
 		AllowHost:  func(u *url.URL) bool { return policy.Allow(u) },
-		OnSnapshot: func(s *metrics.Snapshot) { x.snaps <- s },
+		OnSnapshot: func(s *metrics.Snapshot) { x.self.Observe(s); x.snaps <- s },
 		Logger:     log.With("run", spec.RunID), T0: x.t0,
 	})
 	if err != nil {
+		x.self.Close()
 		return nil, err
 	}
 	x.events <- ExecEvent{Type: "worker.started", Message: "load generator started inside the server", Worker: "local"}
 	var once sync.Once
 	go func() {
 		x.res, x.err = x.eng.Run(context.WithoutCancel(ctx))
+		x.self.Close()
 		once.Do(func() {
 			close(x.snaps)
 			close(x.events)
@@ -169,5 +174,6 @@ func (x *localExec) Wait(ctx context.Context) (*ExecResult, error) {
 	return &ExecResult{
 		T0: x.res.T0, End: x.res.End, StopReason: x.res.StopReason,
 		Phases: x.res.Phases, PeakVUs: x.res.PeakVUs, Workers: 1,
+		Annotate: func(r *report.Report) { x.self.Annotate(r, time.Second) },
 	}, nil
 }
