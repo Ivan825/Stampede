@@ -40,6 +40,30 @@ export function permissions(role: Role | undefined) {
 
 export type Permissions = ReturnType<typeof permissions>;
 
+/** The higher of two roles. */
+export function higherRole(a: Role | undefined, b: Role | undefined): Role | undefined {
+  if (!a) return b;
+  if (!b) return a;
+  return rank[a] >= rank[b] ? a : b;
+}
+
+/**
+ * Whether someone may change a project's settings and roles: admins in the
+ * organisation, and anyone with the admin role in the project through an
+ * override. The server enforces the same rule.
+ */
+export function canAdminProject(orgRole: Role | undefined, projectRole: Role | undefined) {
+  return atLeast(orgRole, 'admin') || atLeast(projectRole, 'admin');
+}
+
+/**
+ * Roles that may be given as a project override: up to the caller's own,
+ * and never owner, which is an organisation role.
+ */
+export function overrideRoles(orgRole: Role | undefined, projectRole: Role | undefined): Role[] {
+  return grantableRoles(higherRole(orgRole, projectRole)).filter((r) => r !== 'owner');
+}
+
 /** Roles a user of `role` may grant to others or to a token. */
 export function grantableRoles(role: Role | undefined): Role[] {
   if (!role) return [];

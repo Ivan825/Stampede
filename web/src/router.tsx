@@ -162,6 +162,12 @@ const secretsRoute = createRoute({
   component: lazyRouteComponent(() => import('@/pages/Secrets'), 'SecretsPage'),
 });
 
+const projectSettingsRoute = createRoute({
+  getParentRoute: () => projectRoute,
+  path: '/settings',
+  component: lazyRouteComponent(() => import('@/pages/ProjectSettings'), 'ProjectSettingsPage'),
+});
+
 const aiStudioRoute = createRoute({
   getParentRoute: () => projectRoute,
   path: '/ai',
@@ -272,6 +278,7 @@ const routeTree = rootRoute.addChildren([
       schedulesRoute,
       targetsRoute,
       secretsRoute,
+      projectSettingsRoute,
       aiStudioRoute,
       aiJobRoute,
       compareRoute,
