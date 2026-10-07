@@ -50,7 +50,8 @@ type generateFlags struct {
 func newGenerateCmd() *cobra.Command {
 	f := &generateFlags{}
 	cmd := &cobra.Command{
-		Use:   "generate",
+		Use:     "generate",
+		Aliases: []string{"gen"},
 		Short: "Draft a scenario with an AI model and dry-run every journey (optional, bring your own key)",
 		Long: `Generate a scenario from a description, an OpenAPI spec, a HAR recording
 and/or an access log, using a language model you choose. The model only

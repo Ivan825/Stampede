@@ -135,3 +135,10 @@ func TestGenerateFlagErrors(t *testing.T) {
 		t.Error("unknown provider accepted")
 	}
 }
+
+func TestGenIsAnAliasOfGenerate(t *testing.T) {
+	cmd, _, err := NewRoot().Find([]string{"gen"})
+	if err != nil || cmd.Name() != "generate" {
+		t.Fatalf("stampede gen resolves to %v (%v)", cmd, err)
+	}
+}
