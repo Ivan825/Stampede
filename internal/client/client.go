@@ -49,9 +49,8 @@ func ConfigPath() (string, error) {
 	return filepath.Join(dir, "stampede", "config.yaml"), nil
 }
 
-// LoadConfig reads the stored config; env vars STAMPEDE_SERVER,
-// STAMPEDE_TOKEN and STAMPEDE_PROJECT override it.
-func LoadConfig() (Config, error) {
+// ReadConfigFile reads the stored config without environment overrides.
+func ReadConfigFile() (Config, error) {
 	var c Config
 	if p, err := ConfigPath(); err == nil {
 		if b, err := os.ReadFile(p); err == nil {
@@ -59,6 +58,16 @@ func LoadConfig() (Config, error) {
 				return c, fmt.Errorf("%s: %w", p, err)
 			}
 		}
+	}
+	return c, nil
+}
+
+// LoadConfig reads the stored config; env vars STAMPEDE_SERVER,
+// STAMPEDE_TOKEN and STAMPEDE_PROJECT override it.
+func LoadConfig() (Config, error) {
+	c, err := ReadConfigFile()
+	if err != nil {
+		return c, err
 	}
 	if v := os.Getenv("STAMPEDE_SERVER"); v != "" {
 		c.Server = v

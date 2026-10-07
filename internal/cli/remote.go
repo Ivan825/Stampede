@@ -1,7 +1,6 @@
 package cli
 
 import (
-	"bufio"
 	"bytes"
 	"context"
 	"encoding/json"
@@ -14,7 +13,6 @@ import (
 	"time"
 
 	"github.com/spf13/cobra"
-	"golang.org/x/term"
 
 	"github.com/Ivan825/Stampede/internal/api/gen"
 	"github.com/Ivan825/Stampede/internal/client"
@@ -27,38 +25,29 @@ func newLoginCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "login",
 		Short: "Sign in to a Stampede server and store an API token for this CLI",
+		Long: `Sign in with your email and password and store an API token for this
+CLI in the config file, so later commands need no credentials. The
+password is read from STAMPEDE_PASSWORD or asked without echo. For CI,
+set STAMPEDE_SERVER and STAMPEDE_TOKEN instead (stampede tokens create).`,
+		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			in := bufio.NewReader(cmd.InOrStdin())
-			out := cmd.ErrOrStderr()
+			p := newPrompter(cmd)
 			if server == "" {
 				server = "http://localhost:8080"
 			}
 			if email == "" {
-				fmt.Fprint(out, "Email: ")
-				line, _ := in.ReadString('\n')
-				email = strings.TrimSpace(line)
+				email = p.line("Email: ")
 			}
-			fmt.Fprint(out, "Password: ")
-			var pw string
-			if f, ok := cmd.InOrStdin().(*os.File); ok && term.IsTerminal(int(f.Fd())) {
-				b, err := term.ReadPassword(int(f.Fd()))
-				fmt.Fprintln(out)
-				if err != nil {
-					return err
-				}
-				pw = string(b)
-			} else {
-				line, _ := in.ReadString('\n')
-				pw = strings.TrimSpace(line)
+			pw, err := p.secret("Password: ", "STAMPEDE_PASSWORD")
+			if err != nil {
+				return err
 			}
 			host, _ := os.Hostname()
 			tok, me, err := client.Login(cmd.Context(), server, email, pw, "cli on "+host)
 			if err != nil {
 				return err
 			}
-			cfg, _ := client.LoadConfig()
-			cfg.Server, cfg.Token = server, tok
-			path, err := client.SaveConfig(cfg)
+			path, err := saveLogin(server, tok)
 			if err != nil {
 				return err
 			}
