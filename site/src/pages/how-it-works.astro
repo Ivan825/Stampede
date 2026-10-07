@@ -33,7 +33,7 @@ const groups = features();
         <tr><td>Shard</td><td>Load split by worker capacity; each worker takes a non-overlapping share of arrivals and of unique test data.</td></tr>
         <tr><td>Synchronise</td><td>Clock offsets measured over several round trips; one start time sent ahead in each worker's own clock.</td></tr>
         <tr><td>Stream</td><td>Histograms and counters every second with sequence numbers; a resend is never counted twice.</td></tr>
-        <tr><td>Survive</td><td>Three missed heartbeats mark a worker lost; its data is kept, the window is marked, the run continues.</td></tr>
+        <tr><td>Survive</td><td>Three missed heartbeats mark a worker lost; its data is kept, an idle worker takes over its share from the next interval, and the report marks the gap.</td></tr>
         <tr><td>Stop</td><td>Kill reaches every worker at once; a worker that loses the server stops by itself after 10 seconds.</td></tr>
       </tbody></table></div>
       <p class="muted" style="margin-top:16px">In the project's tests: workers with clocks set seconds apart start within 0.4 ms of each other; a kill reaches three workers in under 0.5 ms; 200 workers register and run in one test.</p>

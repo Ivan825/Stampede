@@ -97,7 +97,8 @@ cluster here.
 **Distributed.** `stampede worker` connects out to the server over gRPC.
 Load is split by capacity with no arrival lost or duplicated, start times are
 synchronised to within a millisecond, results merge losslessly, a lost
-worker is marked rather than silently ignored, and a kill reaches every
+worker's share is taken over by an idle worker (or the gap is marked in the
+report when there is none), and a kill reaches every
 worker in under a millisecond on a local network. With `--worker-mtls`
 (the default in Compose and Helm) every worker gets its own certificate from
 a CA built into the server, and the join token never crosses the network.

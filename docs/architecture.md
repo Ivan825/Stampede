@@ -47,8 +47,15 @@ One Go binary in several roles.
    five slowest requests of each step with their trace IDs, with a
    sequence number; the coordinator merges them per second (a resend is never
    counted twice) and the server stores and streams them.
-5. Three missed heartbeats mark a worker lost: its data so far is kept, the
-   run continues with less load, and the report marks the window.
+5. Three missed heartbeats mark a worker lost and its data so far is kept.
+   If an idle worker is connected, it takes over the lost worker's exact
+   share from the next interval boundary at least two seconds away: it
+   synchronises its clock, starts part-way through the plan (arrivals
+   before that point are skipped, so nothing is sent twice) and reports as
+   a new member. Otherwise the run continues with less load. Either way
+   the report marks the window in which the share was missing. Runs with
+   a fixed iteration count, or with `unique` table data whose progress the
+   lost worker took with it, are never handed over.
 6. At the end the server builds the report from the merged snapshots,
    adds target metrics from Prometheus and trace links when the scenario
    asks for them (through the organisation's integrations), stores it with
@@ -101,5 +108,6 @@ own CA (`--worker-tls-cert`, `--worker-tls-key`, workers `--ca`) or no TLS
 on a trusted network (`--insecure`). In both cases the join token travels
 in `Hello`.
 
-**Planned:** handing a run to another replica when its owner dies, and
-reassigning a lost worker's share.
+**Planned:** handing a run to another server replica when its owner dies.
+A spare takes over a lost worker's share only when it is idle; shares are
+not redistributed across workers that are already busy with the run.
