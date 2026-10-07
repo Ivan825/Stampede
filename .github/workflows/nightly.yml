@@ -109,3 +109,24 @@ jobs:
           name: scale-nightly-${{ github.run_number }}
           path: scale-*.json
           retention-days: 90
+
+  fuzz:
+    # The scenario parser, templates, replay recordings and targets get
+    # untrusted input; each fuzz test runs for two minutes. A failing
+    # input is uploaded so it can be added to testdata/fuzz.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - name: fuzz
+        run: |
+          for f in FuzzParse FuzzTemplate FuzzParseRecording FuzzParseThreshold; do
+            go test ./internal/scenario -run '^$' -fuzz "^$f\$" -fuzztime 2m || exit 1
+          done
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: fuzz-failures-${{ github.run_number }}
+          path: internal/scenario/testdata/fuzz
