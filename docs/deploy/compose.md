@@ -21,9 +21,9 @@ Everything else (projects, targets, scenarios, runs) is done with the
 `stampede` CLI; the web UI is for analysis.
 
 The image is built from the repository's `Dockerfile` (distroless, nonroot)
-and tagged `ghcr.io/ivan825/stampede:${STAMPEDE_VERSION:-local}`. Once
-releases are published you can use a released image instead of building:
-`STAMPEDE_VERSION=<version> docker compose up -d --no-build`.
+and tagged `ghcr.io/ivan825/stampede:${STAMPEDE_VERSION:-local}`. To use a
+released image instead of building:
+`STAMPEDE_VERSION=1.0.0 docker compose up -d --no-build`.
 
 ## Settings
 

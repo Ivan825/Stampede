@@ -37,10 +37,9 @@ curl -fsSL https://raw.githubusercontent.com/Ivan825/Stampede/main/install.sh | 
 irm https://raw.githubusercontent.com/Ivan825/Stampede/main/install.ps1 | iex
 ```
 
-The installers download the latest release for your OS and CPU and check
-its SHA-256 checksum. Until v1.0 is tagged there is no release to download,
-so they build from source instead, which needs [Go](https://go.dev/dl/)
-1.27 or later. Then:
+The installers download the latest release for your OS and CPU (Linux,
+macOS or Windows; amd64 or arm64), check its SHA-256 checksum and install
+the single `stampede` binary. Nothing else is needed. Then:
 
 ```sh
 stampede init --target http://localhost:3000   # detect the product type, install a pack, dry-run its journeys
@@ -164,8 +163,8 @@ two versions with bootstrap confidence intervals and a measured noise floor,
 and exits 4 on a regression ([comparing](docs/guides/comparing.md),
 [CI](docs/guides/ci.md)). A composite GitHub Action in [`action/`](action/action.yml)
 runs a scenario, writes the job summary, uploads the reports and fails the
-step on a failed target; CI exercises it by building from source (release
-downloads are untested until a release is published).
+step on a failed target; CI exercises it both with the latest release and
+built from the commit.
 
 **Scheduled runs.** Schedules, managed with `stampede schedules` or the API
 (and shown read only in the web UI), start a saved scenario against a target on a cron expression in
@@ -243,10 +242,11 @@ slow-client stresses, and the website.
 | Air-gapped networks, offline bundle | [docs/deploy/airgap.md](docs/deploy/airgap.md) | a nightly CI job builds it, removes every image, and installs and starts Stampede from the bundle alone |
 | Upgrades, backups, restores | [docs/deploy/upgrades.md](docs/deploy/upgrades.md) | |
 
-Releases (binaries for Linux, macOS and Windows, signed multi-arch images
-on `ghcr.io/ivan825/stampede`, Homebrew and Scoop) are built by GoReleaser
-from version tags, with the Helm chart on `oci://ghcr.io/ivan825/charts`;
-none has been published yet.
+Each [release](https://github.com/Ivan825/Stampede/releases) has binaries for Linux, macOS and Windows (amd64 and
+arm64) with SBOMs and signed checksums, signed multi-arch images on
+`ghcr.io/ivan825/stampede`, the Helm chart on `oci://ghcr.io/ivan825/charts`
+and offline bundles. The latest is
+[v1.0.0](https://github.com/Ivan825/Stampede/releases/tag/v1.0.0).
 
 ## Documentation
 

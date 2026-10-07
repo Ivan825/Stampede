@@ -5,7 +5,7 @@
 | One-line installer | the CLI: `stampede run`, `init`, `compare`, the console | below |
 | `stampede up` | the full stack (server, web UI, workers, database) from released images, no clone | below |
 | `docker compose up` in a clone | the full stack plus the ShopLab demo | [deploy/compose.md](deploy/compose.md) |
-| Release archives, Homebrew, Scoop | the same binary by hand or with a package manager | the GitHub releases page once v1.0 is tagged |
+| Release archives | the same binary, downloaded by hand | [GitHub releases](https://github.com/Ivan825/Stampede/releases) |
 | Offline bundle | networks without internet access | [deploy/airgap.md](deploy/airgap.md) |
 | Helm chart | Kubernetes | [deploy/helm.md](deploy/helm.md) |
 | Operator | GitOps-style declared runs (alpha) | [deploy/operator.md](deploy/operator.md) |
@@ -28,8 +28,7 @@ and installs `stampede` into `~/.local/bin` (Windows:
 prefer: it is short. Set `STAMPEDE_VERSION=v1.0.0` for a particular
 release, `STAMPEDE_INSTALL_DIR` for another folder, or
 `STAMPEDE_DOWNLOAD_BASE` to download from an internal mirror of the
-release files. With no release published yet, it runs `go install`
-instead, which needs Go 1.27 or later.
+release files.
 
 CI checks both scripts on Linux, macOS and Windows against a release built
 from every commit, including that a tampered archive is refused.

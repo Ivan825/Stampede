@@ -19,8 +19,17 @@ has not been run.
 
 ## Install
 
-No release has been published yet, so build the image and deploy it with
-kustomize (CRDs, RBAC and the manager in `stampede-system`):
+Deploy it with kustomize from a clone (CRDs, RBAC and the manager in
+`stampede-system`). It runs the released `ghcr.io/ivan825/stampede-operator`
+image (the `latest` tag; each release also publishes its version, such as
+`1.0.0`):
+
+```sh
+git clone https://github.com/Ivan825/Stampede && cd Stampede
+kubectl apply -k deploy/operator/config/default
+```
+
+To run an operator built from the clone instead:
 
 ```sh
 docker build -t ghcr.io/ivan825/stampede-operator:dev deploy/operator
@@ -28,10 +37,6 @@ docker build -t ghcr.io/ivan825/stampede-operator:dev deploy/operator
 cd deploy/operator/config/manager && kustomize edit set image ghcr.io/ivan825/stampede-operator:dev && cd -
 kubectl apply -k deploy/operator/config/default
 ```
-
-After a release, `ghcr.io/ivan825/stampede-operator:<version>` is published
-alongside the Stampede image and `kubectl apply -k
-deploy/operator/config/default` works as is (it uses the `latest` tag).
 
 The manager runs nonroot with a read-only root filesystem in a namespace
 labelled for the `restricted` Pod Security Standard, with leader election

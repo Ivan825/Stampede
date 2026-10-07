@@ -45,7 +45,7 @@ the files it runs. This page lists what is defended today and what is not.
 | Eavesdropping or impersonation between server and workers | mutual TLS 1.3 with a CA derived from the master key (default in Compose and Helm); enrollment proofs bound to the TLS session; worker certificates valid only for client authentication; optional CA fingerprint pinning | built |
 | Denial of service on the worker port | gRPC pinned past GO-2026-6443; keepalive limits | partial: no rate limiting per peer |
 | Runaway run | kill switch (UI, CLI, API), worker dead man's switch after 10 s without the server, breakpoint auto-stop, auto-abort on sustained errors or latency (server floor 90% errors for 30 s by default) | built |
-| Supply chain | govulncheck and golangci-lint (gosec) in CI, dependency updates by the maintainers (`make update`), pinned workflow actions, distroless non-root images; signed releases and SBOMs from GoReleaser | built in config; not yet exercised by a published release |
+| Supply chain | govulncheck and golangci-lint (gosec) in CI, dependency updates by the maintainers (`make update`), pinned workflow actions, distroless non-root images; signed releases and SBOMs from GoReleaser | in place; v1.0.0 was published with cosign-signed checksums and images, and SBOMs |
 
 ## Known gaps
 

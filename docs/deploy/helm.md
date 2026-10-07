@@ -15,20 +15,13 @@ workers that must pass.
 
 Each release publishes the chart, versioned with the release, as an OCI
 artifact (`oci://ghcr.io/ivan825/charts/stampede`) and attaches it to the
-GitHub release. Until the first release is tagged, install it from a
-checkout as below.
-
-```sh
-helm install stampede oci://ghcr.io/ivan825/charts/stampede --version <release> \
-  -n stampede --create-namespace
-```
+GitHub release. The chart runs the Stampede image of the same version.
 
 ## Install
 
 ```sh
-git clone https://github.com/Ivan825/Stampede && cd Stampede
-helm install stampede deploy/helm/stampede -n stampede --create-namespace \
-  --set image.tag=<release version>     # until a release exists, see "Local image" below
+helm install stampede oci://ghcr.io/ivan825/charts/stampede --version 1.0.0 \
+  -n stampede --create-namespace
 kubectl -n stampede rollout status deploy/stampede-server
 helm test stampede -n stampede
 kubectl -n stampede port-forward svc/stampede 8080:8080   # then open http://localhost:8080
@@ -40,10 +33,12 @@ the `stampede` CLI too; the web UI is for analysis and reporting.
 
 ### Local image
 
-No release has been published yet, so build the image yourself and make it
-available to the cluster, for example on kind:
+To run an image built from a clone instead (for a change of your own), build
+it, make it available to the cluster (for example on kind) and install the
+chart from the checkout:
 
 ```sh
+git clone https://github.com/Ivan825/Stampede && cd Stampede
 docker build -t ghcr.io/ivan825/stampede:dev .
 kind load docker-image ghcr.io/ivan825/stampede:dev
 helm install stampede deploy/helm/stampede -n stampede --create-namespace \

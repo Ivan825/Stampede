@@ -60,7 +60,7 @@ groups:
       - { name: "Scheduled drift checks with notifications and AI repair proposals from the CLI, with results in the web UI", status: shipped, doc: docs/guides/schedules }
       - { name: "AI generation of gRPC journeys from .proto files", status: shipped, doc: docs/ai }
       - { name: "Scaffolds for new packs and plugins, checked by a dry run and the conformance suite", status: shipped, doc: docs/plugins }
-      - { name: "Packaged GitHub Action (Ivan825/Stampede/action@main; @v1 after the first release)", status: shipped, doc: docs/guides/ci }
+      - { name: "Packaged GitHub Action (Ivan825/Stampede/action@v1)", status: shipped, doc: docs/guides/ci }
   - name: Integrations
     features:
       - { name: "Target metrics from Prometheus charted in the report", status: shipped, doc: docs/guides/integrations }

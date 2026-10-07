@@ -113,10 +113,10 @@ A failed target (exit code 3) fails the `sh` step and the build. To mark
 the build unstable instead, wrap the step in
 `catchError(buildResult: 'UNSTABLE', stageResult: 'UNSTABLE') { ... }`.
 
-Neither example installs from a release yet: no release is published, so
-both build the CLI with `go install`. Once releases exist, the one-line
-installer (`curl -fsSL .../install.sh | sh`, see [installation](../install.md))
-downloads the binary instead. These two examples are not run in this
+Both examples build the CLI with `go install`, which needs Go on the agent.
+Without Go, use the one-line installer instead
+(`curl -fsSL .../install.sh | sh`, see [installation](../install.md)), which
+downloads the released binary. These two examples are not run in this
 repository's CI; the GitHub Action below is.
 
 ## GitHub Action
@@ -138,7 +138,7 @@ jobs:
       - name: start the app under test
         run: docker compose -f deploy/test.yml up -d --wait
       - id: load
-        uses: Ivan825/Stampede/action@main   # @v1 once a v1 tag is published
+        uses: Ivan825/Stampede/action@v1
         with:
           scenario: perf/checkout.yaml
           target-url: http://localhost:8080
@@ -146,8 +146,8 @@ jobs:
       - run: echo "p95 was ${{ steps.load.outputs.p95 }}s (${{ steps.load.outputs.verdict }})"
 ```
 
-`uses: Ivan825/Stampede/action@v1` will work once a `v1` tag is published;
-no release exists yet, so use `@main` (or pin a commit SHA) until then.
+`@v1` follows the latest 1.x release; pin `@v1.0.0` (or a commit SHA) to
+stay on one version.
 
 | Input | Default | Meaning |
 |---|---|---|
@@ -155,7 +155,7 @@ no release exists yet, so use `@main` (or pin a commit SHA) until then.
 | `target-url` | | overrides `target.baseURL` (`--base-url`) |
 | `shape`, `rate`, `vus`, `duration` | | the matching `stampede run` overrides |
 | `extra-args` | | more `stampede run` arguments, split on spaces, e.g. `-e TOKEN=abc` |
-| `version` | `latest` | `latest`; a release tag such as `v1.2.3` (downloads the release archive for the runner's OS and architecture and checks it against the release checksums); any other git ref such as `main` or a SHA (`go install ...@ref`, with `actions/setup-go`); or `local` to build the Stampede repository checked out in the workspace. While no release is published, `latest` builds the latest commit. |
+| `version` | `latest` | `latest`; a release tag such as `v1.2.3` (downloads the release archive for the runner's OS and architecture and checks it against the release checksums); any other git ref such as `main` or a SHA (`go install ...@ref`, with `actions/setup-go`); or `local` to build the Stampede repository checked out in the workspace. |
 | `output-dir` | `stampede-report` | where the reports are written |
 | `artifact-name` | `stampede-report` | name of the uploaded artifact; empty skips the upload |
 | `fail-on-target-failure` | `true` | fail the step when a target fails |
@@ -170,5 +170,6 @@ no release exists yet, so use `@main` (or pin a commit SHA) until then.
 
 The action is exercised in this repository's CI (the `action` job) with
 `version: local` against `bench/echoserver`: a passing run must set its
-outputs and a failing target must fail the step. Downloading a release
-binary has not been exercised yet because no release has been published.
+outputs and a failing target must fail the step. The same job runs it with
+`version: latest`, which downloads the latest release and checks it against
+the release checksums.
