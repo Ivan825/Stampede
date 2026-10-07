@@ -7,6 +7,10 @@ Start a schedule's run now, as you
 Start a schedule's run now, without changing when it next fires. Prints
 the run id; with --follow, follows it live and exits like stampede start.
 
+For a drift schedule, runs its drift check now and prints the result:
+each journey's dry run, endpoints removed from the spec and requests that
+match no endpoint. Exit code 4 when something drifted.
+
 ```
 stampede schedules run <schedule> [flags]
 ```
