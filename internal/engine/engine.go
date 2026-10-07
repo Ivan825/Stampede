@@ -213,6 +213,15 @@ func New(opts Options) (*Engine, error) {
 	if e.httpOpts.MaxRedirects == 0 {
 		e.httpOpts.MaxRedirects = h.MaxRedirects
 	}
+	switch h.TLSResumption {
+	case "off", "shared":
+		e.httpOpts.TLSResumption = h.TLSResumption
+	default:
+		// Per user, unless the users share one connection pool.
+		if h.Connections != "shared" {
+			e.httpOpts.TLSResumption = "per-transport"
+		}
+	}
 	if e.httpOpts.DialContext == nil && e.httpOpts.DNS == nil {
 		ttl := 30 * time.Second
 		if h.DNSCacheTTL != nil {

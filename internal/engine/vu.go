@@ -49,6 +49,8 @@ type VU struct {
 	plugins map[string]*pluginhost.Session
 	// js runs the user's script steps.
 	js script.Runner
+	// step is the step being run, named in trace baggage.
+	step *scenario.CStep
 }
 
 func newVU(e *Engine, id int) *VU {
@@ -170,6 +172,7 @@ func (v *VU) runStep(ctx context.Context, st *scenario.CStep, intended time.Time
 			return nil
 		}
 	}
+	v.step = st
 	switch st.Kind {
 	case scenario.StepRequest:
 		return v.request(ctx, st, intended)
@@ -513,9 +516,27 @@ func (v *VU) traceContext() (traceparent, baggage string) {
 	fillRandom(v.rng, span[:])
 	traceparent = "00-" + hex.EncodeToString(v.traceID[:]) + "-" + hex.EncodeToString(span[:]) + "-01"
 	if v.e.opts.RunID != "" {
-		baggage = "stampede.run_id=" + url.QueryEscape(v.e.opts.RunID) + ",stampede.vu=" + strconv.Itoa(v.ID)
+		baggage = "stampede.run_id=" + baggageEscape(v.e.opts.RunID) + ",stampede.vu=" + strconv.Itoa(v.ID)
+		if st := v.step; st != nil {
+			baggage += ",stampede.journey=" + baggageEscape(st.Journey) + ",stampede.step=" + baggageEscape(st.Name)
+		}
 	}
 	return traceparent, baggage
+}
+
+// baggageEscape percent-encodes everything but unreserved characters, as
+// W3C baggage values require for spaces, commas, semicolons and '='.
+func baggageEscape(s string) string {
+	var b strings.Builder
+	for i := 0; i < len(s); i++ {
+		c := s[i]
+		if c >= 'a' && c <= 'z' || c >= 'A' && c <= 'Z' || c >= '0' && c <= '9' || c == '-' || c == '.' || c == '_' || c == '~' {
+			b.WriteByte(c)
+		} else {
+			fmt.Fprintf(&b, "%%%02X", c)
+		}
+	}
+	return b.String()
 }
 
 // check evaluates a response check and returns a failure label or "".
