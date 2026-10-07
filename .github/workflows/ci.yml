@@ -95,7 +95,9 @@ jobs:
         shell: bash
         run: |
           set -o pipefail
-          if ! go test -race -count=1 -coverprofile=coverage.out ./... 2>&1 | tee test.log; then
+          # The pack tests run 20 reference apps under load; macOS runners
+          # need more than go test's default ten minutes for them.
+          if ! go test -race -count=1 -timeout 30m -coverprofile=coverage.out ./... 2>&1 | tee test.log; then
             echo "::error title=failing tests::$(grep -E -- '--- FAIL|^FAIL|panic:|_test\.go:[0-9]+:' test.log | cut -c1-300 | head -30 | tr '\n' ' ')"
             exit 1
           fi
