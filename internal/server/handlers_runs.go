@@ -15,6 +15,7 @@ import (
 	"github.com/google/uuid"
 	"go.opentelemetry.io/otel/trace"
 
+	"github.com/Ivan825/Stampede/internal/ai"
 	"github.com/Ivan825/Stampede/internal/api/gen"
 	"github.com/Ivan825/Stampede/internal/auth"
 	"github.com/Ivan825/Stampede/internal/observe"
@@ -170,6 +171,9 @@ func (h *handlers) prepareRun(ctx context.Context, org uuid.UUID, pr db.Project,
 		}
 		return nil, errInvalid(err.Error())
 	}
+	if err := guardThirdParties(s, tg); err != nil {
+		return nil, err
+	}
 	prog, err := scenario.Compile(s)
 	if err != nil {
 		return nil, errInvalid(err.Error())
@@ -259,6 +263,28 @@ func applyOverrides(s *scenario.Scenario, ov gen.RunOverrides) error {
 		}
 	}
 	return nil
+}
+
+// guardThirdParties refuses a run whose scenario sends requests to a
+// payment, SMS, email or CAPTCHA provider (the AI generator's guard list)
+// unless that host is one of the target's allowed hosts.
+func guardThirdParties(s *scenario.Scenario, tg db.Target) error {
+	allowed := map[string]bool{}
+	for _, h := range tg.AllowHosts {
+		allowed[strings.ToLower(h)] = true
+	}
+	var refused []string
+	for _, c := range ai.ThirdPartyCalls(s) {
+		if !allowed[c.Host] {
+			refused = append(refused, c.String())
+		}
+	}
+	if len(refused) == 0 {
+		return nil
+	}
+	return &apiError{status: 403, code: "third_party", details: refused,
+		msg: "the scenario sends requests to third-party services that must not receive load (payment, SMS, email or CAPTCHA providers); " +
+			"remove those steps or point them at a test-mode host, or, if you have permission to load test that service, add its host to the target's allowed hosts"}
 }
 
 // checkRegions refuses a run split by region when a region has no

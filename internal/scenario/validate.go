@@ -254,6 +254,20 @@ func stepURL(st Step) (string, bool) {
 	return "", false
 }
 
+// StepURL returns where a step sends traffic as written (templates not
+// rendered): the URL of an HTTP, GraphQL, SSE, WebSocket or browser step
+// or a goto action, or a gRPC step's target. ok is false for steps that
+// send nothing or use the target's base URL implicitly.
+func StepURL(st Step) (u string, ok bool) {
+	if st.Kind == StepGRPC && st.GRPC != nil {
+		return st.GRPC.Target, st.GRPC.Target != ""
+	}
+	return stepURL(st)
+}
+
+// WalkSteps calls fn for every step in steps, nested ones included.
+func WalkSteps(steps []Step, fn func(Step)) { walkSteps(steps, fn) }
+
 // EachStep calls fn for every step of every journey, nested ones included.
 func (s *Scenario) EachStep(fn func(Step)) {
 	for _, j := range s.Journeys {

@@ -1,6 +1,12 @@
 package ai
 
-import "strings"
+import (
+	"fmt"
+	"net/url"
+	"strings"
+
+	"github.com/Ivan825/Stampede/internal/scenario"
+)
 
 // The third-party guard keeps generated scenarios (and their dry runs) away
 // from services that cost money, message real people or exist to stop
@@ -73,6 +79,82 @@ func ThirdPartyCategory(host string) string {
 		}
 	}
 	return ""
+}
+
+// ThirdPartyCall is a place in a scenario that sends traffic to a host on
+// the guard list.
+type ThirdPartyCall struct {
+	// Journey and Step locate the call; both are empty for the target's
+	// base URL.
+	Journey  string `json:"journey,omitempty"`
+	Step     string `json:"step,omitempty"`
+	Host     string `json:"host"`
+	Category string `json:"category"`
+}
+
+func (c ThirdPartyCall) String() string {
+	where := "target.baseURL"
+	if c.Journey != "" {
+		where = "journey " + c.Journey
+		if c.Step != "" {
+			where += ", step " + c.Step
+		}
+	}
+	return fmt.Sprintf("%s calls %s, a %s provider", where, c.Host, c.Category)
+}
+
+// ThirdPartyCalls lists the steps of s (and its base URL) that send
+// traffic to a payment, SMS, email or CAPTCHA provider on the guard list.
+// Hosts written as templates cannot be known before a run and are not
+// reported; the run's host policy still applies to them.
+func ThirdPartyCalls(s *scenario.Scenario) []ThirdPartyCall {
+	var out []ThirdPartyCall
+	hostOf := func(raw string) string {
+		raw = strings.TrimSpace(raw)
+		i := strings.Index(raw, "://")
+		if i <= 0 {
+			return ""
+		}
+		// Templates become a marker so the rest of the URL parses; a host
+		// that is (partly) a template is unknown until the run.
+		const marker = "stampede-template"
+		u, err := url.Parse(strings.ReplaceAll(maskTemplates(raw), "\x00", marker))
+		if err != nil {
+			return ""
+		}
+		h := strings.ToLower(u.Hostname())
+		if h == "" || strings.Contains(h, marker) {
+			return ""
+		}
+		return h
+	}
+	if h := hostOf(s.Target.BaseURL); h != "" {
+		if cat := ThirdPartyCategory(h); cat != "" {
+			out = append(out, ThirdPartyCall{Host: h, Category: cat})
+		}
+	}
+	for _, j := range s.Journeys {
+		seen := map[string]bool{}
+		scenario.WalkSteps(j.Steps, func(st scenario.Step) {
+			raw, ok := scenario.StepURL(st)
+			if !ok {
+				return
+			}
+			h := hostOf(raw)
+			if h == "" || seen[h+"\x00"+st.Name] {
+				return
+			}
+			if cat := ThirdPartyCategory(h); cat != "" {
+				seen[h+"\x00"+st.Name] = true
+				name := st.Name
+				if name == "" && st.Kind == scenario.StepRequest && st.Request != nil {
+					name = st.Request.Method + " " + raw // the default name requests get
+				}
+				out = append(out, ThirdPartyCall{Journey: j.Name, Step: name, Host: h, Category: cat})
+			}
+		})
+	}
+	return out
 }
 
 // GuardList returns the blocked and test-mode hosts, for documentation and

@@ -8,6 +8,7 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/Ivan825/Stampede/internal/ai"
 	"github.com/Ivan825/Stampede/internal/pack"
 	"github.com/Ivan825/Stampede/internal/safety"
 	"github.com/Ivan825/Stampede/internal/scenario"
@@ -69,6 +70,9 @@ rules apply as for a run. Replay scenarios are checked statically only.`,
 				}
 				for _, name := range skipped {
 					fmt.Fprintf(cmd.ErrOrStderr(), "! %s: plugin %s is not installed here, so its steps' settings were not checked (stampede plugin install %s)\n", path, name, name)
+				}
+				for _, c := range ai.ThirdPartyCalls(s) {
+					fmt.Fprintf(cmd.ErrOrStderr(), "! %s: %s; load tests must not call payment, SMS, email or CAPTCHA services (a server refuses the run unless the host is one of the target's allowed hosts)\n", path, c)
 				}
 				plan, _ := s.Load.Plan()
 				load := fmt.Sprintf("peak %.0f VUs, %s", plan.Peak(), plan.TotalDuration())
