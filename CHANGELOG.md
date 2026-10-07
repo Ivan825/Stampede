@@ -5,6 +5,30 @@ Notable changes to Stampede. The format follows
 follow [Semantic Versioning](https://semver.org/). The website's changelog
 page is built from this file.
 
+## Unreleased
+
+### Run output
+
+- The run summary is coloured in a terminal: a PASS or FAIL badge, green
+  and red target marks, red error rates; plain text elsewhere and with
+  `NO_COLOR`.
+- `stampede run --max-vus` raises the user pool in rate mode for journeys
+  that take longer than the default allows.
+- Progress lines say `finishing` while users complete their journeys after
+  the planned time, and show no latency for a second without requests.
+
+### Console
+
+- The console keeps the newest lines in view when a run's live panel opens.
+
+### Website and web UI
+
+- Screenshots of the console, a run summary, the reports and the web UI on
+  the home page and in the README.
+- The navigation bar fits on a phone.
+- The knee and the last level that scaled are labelled without overlapping
+  on the throughput-against-load chart.
+
 ## 1.1.0 (2026-10-08)
 
 ### Console
@@ -25,26 +49,6 @@ page is built from this file.
   running command.
 - The bull draws itself in when the console opens, and an animated line
   shows while a command works.
-
-- The console keeps the newest lines in view when a run's live panel opens.
-
-### Run output
-
-- The run summary is coloured in a terminal: a PASS or FAIL badge, green
-  and red target marks, red error rates; plain text elsewhere and with
-  `NO_COLOR`.
-- `stampede run --max-vus` raises the user pool in rate mode for journeys
-  that take longer than the default allows.
-- Progress lines say `finishing` while users complete their journeys after
-  the planned time, and show no latency for a second without requests.
-
-### Website and web UI
-
-- Screenshots of the console, a run summary, the reports and the web UI on
-  the home page and in the README.
-- The navigation bar fits on a phone.
-- The knee and the last level that scaled are labelled without overlapping
-  on the throughput-against-load chart.
 
 ### Benchmarks
 
