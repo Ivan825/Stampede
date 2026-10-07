@@ -13,7 +13,7 @@ this repository). Every protocol step:
   rate and error labels, and can be named in targets
   (`journey/step.p95 < 300ms`);
 - passes the same safety host policy as HTTP requests;
-- carries W3C trace context (`traceparent`, and `baggage` with the run ID)
+- carries W3C trace context (`traceparent`, and `baggage` with `stampede.run_id`, `stampede.vu`, `stampede.journey` and `stampede.step`)
   as headers or gRPC metadata;
 - can `extract` variables that later steps of any kind use.
 

@@ -20,6 +20,7 @@ The authoritative definition is the [JSON Schema](../../schema/scenario.schema.j
 | `target.http.disableKeepAlive`, `insecureSkipVerify` | bool | |
 | `target.http.maxRedirects` | int | 0 = 10, -1 = do not follow |
 | `target.http.dnsCacheTTL` | duration | default 30s, `0s` disables |
+| `target.http.tlsResumption` | `per-vu` \| `shared` \| `off` | where TLS sessions are resumed from: each user's own (default with per-vu connections, like separate browsers), any user's (default with shared connections), or never |
 | `target.network` | `{profile, rtt, jitter, loss, down, up}` | emulate a slower network per user; profiles `slow-3g 3g 4g slow-wifi` |
 | `vars` | map | static variables |
 | `data.<name>` | feeder | `csv` \| `json` \| `list` \| `range` \| `generate` \| `sql`, `mode`, `onExhausted` |
