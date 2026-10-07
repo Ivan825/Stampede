@@ -416,6 +416,7 @@ jobs:
       - name: a release built from this commit
         shell: bash
         run: |
+          trap 'echo "::error title=release build::line $LINENO: $BASH_COMMAND"' ERR
           os=$(go env GOOS) arch=$(go env GOARCH) exe=stampede
           if [ "$os" = windows ]; then exe=stampede.exe; fi
           mkdir -p "$RUNNER_TEMP/pkg" "$RUNNER_TEMP/rel"
@@ -433,8 +434,9 @@ jobs:
       - name: install.sh
         if: runner.os != 'Windows'
         run: |
+          trap 'echo "::error title=install.sh::line $LINENO: $BASH_COMMAND"' ERR
           python3 -m http.server 18788 --bind 127.0.0.1 --directory "$RUNNER_TEMP/rel" >/dev/null 2>&1 &
-          sleep 1
+          for _ in $(seq 50); do curl -fs -o /dev/null http://127.0.0.1:18788/ && break; sleep 0.2; done
           STAMPEDE_VERSION=v$V STAMPEDE_DOWNLOAD_BASE=http://127.0.0.1:18788 STAMPEDE_INSTALL_DIR="$RUNNER_TEMP/bin" sh install.sh
           "$RUNNER_TEMP/bin/stampede" version | grep -q "stampede $V"
           # A tampered archive is refused.
@@ -446,24 +448,33 @@ jobs:
         if: runner.os == 'Windows'
         shell: pwsh
         run: |
-          $server = Start-Process python -ArgumentList '-m','http.server','18788','--bind','127.0.0.1','--directory',"$env:RUNNER_TEMP\rel" -PassThru -WindowStyle Hidden
-          Start-Sleep 2
-          $env:STAMPEDE_VERSION = "v$env:V"
-          $env:STAMPEDE_DOWNLOAD_BASE = 'http://127.0.0.1:18788'
-          $env:STAMPEDE_INSTALL_DIR = "$env:RUNNER_TEMP\bin"
-          ./install.ps1
-          $out = & "$env:RUNNER_TEMP\bin\stampede.exe" version
-          if ($out -notmatch "stampede $env:V") { throw "unexpected version: $out" }
-          Stop-Process $server
+          try {
+            $server = Start-Process python -ArgumentList '-m','http.server','18788','--bind','127.0.0.1','--directory',"$env:RUNNER_TEMP\rel" -PassThru -WindowStyle Hidden
+            foreach ($i in 1..50) {
+              try { Invoke-WebRequest -UseBasicParsing http://127.0.0.1:18788/ | Out-Null; break } catch { Start-Sleep -Milliseconds 200 }
+            }
+            $env:STAMPEDE_VERSION = "v$env:V"
+            $env:STAMPEDE_DOWNLOAD_BASE = 'http://127.0.0.1:18788'
+            $env:STAMPEDE_INSTALL_DIR = "$env:RUNNER_TEMP\bin"
+            ./install.ps1
+            $out = & "$env:RUNNER_TEMP\bin\stampede.exe" version
+            if ($out -notmatch "stampede $env:V") { throw "unexpected version: $out" }
+            Stop-Process $server
+          } catch {
+            $msg = ($_ | Out-String) -replace "`r?`n", ' '
+            Write-Output "::error title=install.ps1::$msg"
+            throw
+          }
       - name: the installed CLI runs a test
         shell: bash
         run: |
           work="$RUNNER_TEMP/work"
           mkdir -p "$work/site" && echo ok > "$work/site/index.html"
           cd "$work"
+          trap 'echo "::error title=installed CLI::line $LINENO: $BASH_COMMAND"' ERR
           py=$(command -v python3 || command -v python)
           "$py" -m http.server 18789 --bind 127.0.0.1 --directory site >/dev/null 2>&1 &
-          sleep 1
+          for _ in $(seq 50); do curl -fs -o /dev/null http://127.0.0.1:18789/ && break; sleep 0.2; done
           cat > smoke.yaml <<'YAML'
           metadata: {name: install-smoke}
           target: {baseURL: "http://127.0.0.1:18789"}
@@ -471,7 +482,10 @@ jobs:
           load: {iterations: 20, vus: 2}
           targets: ["errors < 1%"]
           YAML
-          "$RUNNER_TEMP/bin/stampede" run smoke.yaml -o report.html --csv steps.csv
+          if ! "$RUNNER_TEMP/bin/stampede" run smoke.yaml -o report.html --csv steps.csv > run.log 2>&1; then
+            echo "::error title=stampede run::$(tail -25 run.log | tr '\n' ' ' | cut -c1-1500)"
+            exit 1
+          fi
           test -s report.html && grep -q "home,GET /,20,0" steps.csv
       - name: stampede up outside a clone
         if: runner.os == 'Linux'
