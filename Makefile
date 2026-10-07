@@ -48,7 +48,9 @@ web:
 # Reference pages generated from the source; CI fails when they are stale.
 docs: cli-docs api-docs
 
+# Removed first, so a removed command's page goes too.
 cli-docs:
+	rm -rf docs/reference/cli
 	$(GO) run ./cmd/stampede gen-docs docs/reference/cli
 
 api-docs:

@@ -56,6 +56,25 @@ jobs:
           fi
           buf breaking --against ".git#ref=$BASE"
 
+  docs:
+    # The CLI and REST API reference pages are generated from the commands
+    # and api/openapi.yaml; they must match this commit.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - run: make docs
+      - name: generated reference pages are current
+        run: |
+          if [ -n "$(git status --porcelain -- docs/reference)" ]; then
+            echo "::error title=docs/reference is stale::run make docs and commit the result"
+            git status --porcelain -- docs/reference
+            git diff --stat -- docs/reference
+            exit 1
+          fi
+
   test:
     strategy:
       fail-fast: false
