@@ -1,5 +1,4 @@
 import {
-  applyNodeChanges,
   Background,
   Controls,
   Handle,
@@ -8,24 +7,14 @@ import {
   ReactFlow,
   type Edge,
   type Node,
-  type NodeChange,
   type NodeProps,
 } from '@xyflow/react';
 import '@xyflow/react/dist/base.css';
 import { clsx } from 'clsx';
+import { X } from 'lucide-react';
 import { memo, useMemo, useState } from 'react';
-import {
-  buildJourneyGraph,
-  COL_W,
-  dropIndex,
-  nodeKey,
-  pathKey,
-  textHash,
-  type GraphNode,
-  type GraphResult,
-} from './graphLayout';
-import { moveStep } from './scenarioEdit';
-import { StepPanel } from './StepPanel';
+import { Button } from '@/components/ui';
+import { buildJourneyGraph, COL_W, nodeKey, type GraphNode, type GraphResult } from './graphLayout';
 
 type FlowNode = Node<{ g: GraphNode; selected: boolean }, 'step'>;
 
@@ -92,14 +81,14 @@ const StepNode = memo(function StepNode({ data }: NodeProps<FlowNode>) {
 
 const nodeTypes = { step: StepNode };
 
-function flowNodes(result: GraphResult, editable: boolean, selected: string | null): FlowNode[] {
+function flowNodes(result: GraphResult, selected: string | null): FlowNode[] {
   if (!result.ok) return [];
   return result.graph.nodes.map((g) => ({
     id: g.id,
     type: 'step',
     position: { x: g.kind === 'think' ? g.x + (COL_W - 30 - 150) / 2 : g.x, y: g.y },
     data: { g, selected: selected != null && nodeKey(g) === selected },
-    draggable: editable && g.seq != null,
+    draggable: false,
     connectable: false,
     selectable: nodeKey(g) != null,
     ariaLabel:
@@ -107,37 +96,67 @@ function flowNodes(result: GraphResult, editable: boolean, selected: string | nu
   }));
 }
 
+const kindLabel: Record<GraphNode['kind'], string> = {
+  start: 'Scenario',
+  journey: 'Journey',
+  request: 'HTTP request',
+  think: 'Think',
+  branch: 'Branch',
+  loop: 'Loop',
+  while: 'While',
+  group: 'Group',
+};
+
+/** What the selected step or journey is, read-only. */
+function StepDetails({ node, onClose }: { node: GraphNode; onClose: () => void }) {
+  const rows: [string, string | undefined][] = [
+    ['Method', node.method],
+    ['URL', node.fields?.url],
+    ['Name', node.fields?.name],
+    ['Duration', node.fields?.think],
+    ['Group', node.fields?.group],
+    ['Where', node.subtitle && !node.fields?.url ? node.subtitle : undefined],
+  ];
+  const shown = rows.filter((r): r is [string, string] => !!r[1]);
+  return (
+    <aside
+      className="flex w-64 shrink-0 flex-col gap-3 overflow-y-auto border-l border-line bg-surface p-3 text-[13px]"
+      aria-label="Selected step"
+    >
+      <div className="flex items-start gap-2">
+        <div className="min-w-0 flex-1">
+          <div className="label-caps">{kindLabel[node.kind]}</div>
+          <div className="truncate font-medium" title={node.title}>
+            {node.title}
+          </div>
+        </div>
+        <Button size="sm" variant="ghost" aria-label="Close" onClick={onClose}>
+          <X className="size-3.5" aria-hidden />
+        </Button>
+      </div>
+      {shown.length > 0 && (
+        <dl className="grid grid-cols-[4.5rem_1fr] gap-x-2 gap-y-1.5 text-xs">
+          {shown.map(([k, v]) => (
+            <div key={k} className="contents">
+              <dt className="text-muted">{k}</dt>
+              <dd className="font-mono break-all">{v}</dd>
+            </div>
+          ))}
+        </dl>
+      )}
+    </aside>
+  );
+}
+
 /**
- * The journeys as a graph. With `onChange` it also edits the YAML: drag a
- * step to reorder it among its siblings, select a node to change it, add
- * steps or remove it in the side panel. Every edit parses the YAML and
- * rewrites the lines it changes (see scenarioEdit.ts), so the YAML stays
- * the single source of truth and the editor and the graph never disagree.
+ * The journeys as a read-only graph: a start node fans out to each journey
+ * by weight, steps chain downwards, branches split into columns and loops
+ * draw a back edge. Select a node to see its details.
  */
-export function JourneyGraphView({
-  yaml,
-  onChange,
-  readOnly,
-}: {
-  yaml: string;
-  onChange?: (yaml: string) => void;
-  readOnly?: boolean;
-}) {
-  const editable = !!onChange && !readOnly;
+export function JourneyGraphView({ yaml }: { yaml: string }) {
   const result = useMemo(() => buildJourneyGraph(yaml), [yaml]);
   const [selected, setSelected] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const laidOut = useMemo(
-    () => flowNodes(result, editable, selected),
-    [result, editable, selected],
-  );
-  const [nodes, setNodes] = useState<FlowNode[]>(laidOut);
-  const [base, setBase] = useState(laidOut);
-  // Every new layout (a YAML change, a selection) replaces dragged positions.
-  if (base !== laidOut) {
-    setBase(laidOut);
-    setNodes(laidOut);
-  }
+  const nodes = useMemo(() => flowNodes(result, selected), [result, selected]);
 
   const edges = useMemo<Edge[]>(() => {
     if (!result.ok) return [];
@@ -158,46 +177,13 @@ export function JourneyGraphView({
   if (!result.ok) {
     return <p className="p-4 text-[13px] text-muted">{result.error}</p>;
   }
-  const graphNodes = result.graph.nodes;
-  const current = selected ? graphNodes.find((g) => nodeKey(g) === selected) : undefined;
-
-  /** Applies an edit; `select` picks the node to select afterwards. */
-  const apply = (edit: () => string, select?: string | null) => {
-    try {
-      const next = edit();
-      setError(null);
-      if (select !== undefined) setSelected(select);
-      if (next !== yaml) onChange?.(next);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : String(e));
-    }
-  };
-
-  const onDragStop = (_: unknown, node: FlowNode) => {
-    const g = node.data.g;
-    if (!g.seq || !editable) return;
-    const key = pathKey(g.seq.path);
-    const siblings = graphNodes.filter((s) => s.seq && pathKey(s.seq.path) === key);
-    const to = dropIndex(siblings, g, node.position.y);
-    if (to === g.seq.index) {
-      setNodes(laidOut);
-      return;
-    }
-    const seq = g.seq;
-    apply(() => moveStep(yaml, seq.path, seq.index, to), pathKey([...seq.path, to]));
-  };
+  const current = selected ? result.graph.nodes.find((g) => nodeKey(g) === selected) : undefined;
 
   return (
     <div className="flex h-full min-h-0 flex-col">
       <p className="num border-b border-line px-3 py-1.5 text-xs text-muted">
         {result.graph.journeys} journeys · {result.graph.steps} steps
-        {editable && (
-          <span className="font-sans">
-            {' '}
-            · Drag a step to reorder it; select one to edit it. Graph edits change only the YAML
-            lines of the steps they touch.
-          </span>
-        )}
+        <span className="font-sans"> · Select a step to see its details.</span>
       </p>
       <div className="flex min-h-0 flex-1">
         <div className="min-h-0 min-w-0 flex-1" role="group" aria-label="Journey graph">
@@ -205,16 +191,12 @@ export function JourneyGraphView({
             nodes={nodes}
             edges={edges}
             nodeTypes={nodeTypes}
-            onNodesChange={(changes: NodeChange<FlowNode>[]) =>
-              setNodes((ns) => applyNodeChanges(changes, ns))
-            }
             onNodeClick={(_, n) => setSelected(nodeKey(n.data.g))}
             onPaneClick={() => setSelected(null)}
-            onNodeDragStop={onDragStop}
             fitView
             fitViewOptions={{ padding: 0.15, maxZoom: 1 }}
             minZoom={0.2}
-            nodesDraggable={editable}
+            nodesDraggable={false}
             nodesConnectable={false}
             elementsSelectable
           >
@@ -222,18 +204,7 @@ export function JourneyGraphView({
             <Controls showInteractive={false} />
           </ReactFlow>
         </div>
-        {current && (
-          <StepPanel
-            key={`${selected}:${textHash(yaml)}`}
-            node={current}
-            nodes={graphNodes}
-            yaml={yaml}
-            editable={editable}
-            error={error}
-            apply={apply}
-            onClose={() => setSelected(null)}
-          />
-        )}
+        {current && <StepDetails node={current} onClose={() => setSelected(null)} />}
       </div>
     </div>
   );
