@@ -5,6 +5,44 @@ Notable changes to Stampede. The format follows
 follow [Semantic Versioning](https://semver.org/). The website's changelog
 page is built from this file.
 
+## 1.1.0 (2026-10-08)
+
+### Console
+
+- `stampede` on its own opens a console that stays open until you leave:
+  every CLI command works in it as `/<command>`, alongside `/run` with its
+  live panel, `/init` and plain-language requests.
+- Sessions are saved as you go; `stampede --continue` reopens the last one,
+  `stampede --resume <id>` a particular one, and `/sessions` and `/resume`
+  switch inside the console. Input history carries across sessions, with
+  the values of flags such as `--token` hidden.
+- A welcome screen with who you are signed in as, the server and project,
+  the last session and what to try first.
+- Commands that ask for a password or show a secret (`/setup`, `/login`,
+  `/tokens`, `/keygen` and others) get the terminal, then return to the
+  console; their output is not saved.
+- `exit`, `quit` or `/exit` to leave, or Ctrl-C twice; one Ctrl-C stops the
+  running command.
+- The bull draws itself in when the console opens, and an animated line
+  shows while a command works.
+
+### Benchmarks
+
+- wrk2 joins the nightly comparison with Stampede and k6, published as
+  measured.
+- The benchmarks page shows one process's measured throughput.
+
+### Build
+
+- arm64 images cross-compile instead of building under emulation, so
+  releases finish in minutes.
+- The nightly comparison fails when a tool does not run, and its steps
+  have time limits.
+
+### Fixes
+
+- TicketLab admits a visitor to an empty waiting room at once.
+
 ## 1.0.0 (2026-10-07)
 
 The first release. Features still being built are listed as planned in

@@ -469,8 +469,14 @@ func (s *server) joinQueue(w http.ResponseWriter, r *http.Request) {
 	q := e.waiting
 	q.mu.Lock()
 	if _, ok := q.index[sess]; !ok {
+		// An empty waiting room lets the next visitor straight through;
+		// the admission rate applies once people are waiting.
+		idle := q.admitted == len(q.queue)
 		q.index[sess] = len(q.queue)
 		q.queue = append(q.queue, sess)
+		if idle {
+			q.admitted++
+		}
 	}
 	q.mu.Unlock()
 	pos, _ := s.position(e, sess)
