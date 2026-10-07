@@ -45,10 +45,11 @@ not built yet are marked **planned**.
 
 - [Scenario format](reference/scenario.md) and its [JSON Schema](../schema/scenario.schema.json)
 - [CLI](reference/cli/stampede.md) (generated from the binary)
-- [REST API](../api/openapi.yaml) (OpenAPI; also served at `/api/v1/openapi.yaml`)
+- [REST API](reference/api.md) (generated from [api/openapi.yaml](../api/openapi.yaml), which the server also serves at `/api/v1/openapi.yaml`)
 
 ## Project
 
 - [Architecture](architecture.md)
+- [Frequently asked questions](faq.md)
 - [Troubleshooting](troubleshooting.md)
 - [Contributing](../CONTRIBUTING.md), [Security policy](../SECURITY.md)
