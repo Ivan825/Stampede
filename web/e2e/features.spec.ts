@@ -54,6 +54,10 @@ test('the library lists packs and their files', async ({ page }) => {
   await expect(page.getByLabel('journeys/shop-mix.yaml YAML')).toContainText(
     'name: ecommerce-shop-mix',
   );
+  // Saving a pack file is done from the terminal.
+  await expect(page.getByText('stampede pack install ecommerce')).toBeVisible();
+  await expect(page.getByText(/^stampede push --project/)).toBeVisible();
+  await expect(page.getByRole('button', { name: /Create scenario/ })).toHaveCount(0);
 });
 
 const spec = `openapi: 3.0.3
@@ -87,6 +91,7 @@ test('checks a scenario’s API coverage and drift', async ({ page }) => {
   await page.getByRole('tab', { name: 'Drift' }).click();
   const drift = page.getByRole('form', { name: 'Check drift' });
   await drift.getByLabel('OpenAPI document (YAML or JSON)').first().fill(spec);
+  await expect(drift.getByLabel('Dry run against')).toHaveCount(0);
   await drift.getByRole('button', { name: 'Check drift' }).click();
   await expect(page.getByText('The scenario drifted from the API.')).toBeVisible();
 });
@@ -101,42 +106,61 @@ test('admins see SSO and limits settings', async ({ page }) => {
   await expect(page.getByRole('table', { name: 'Target caps' })).toContainText('staging');
 });
 
-test('the journey graph and the YAML editor edit the same scenario', async ({ page }) => {
+test('settings are read-only: account, tokens, users, integrations, AI providers and audit', async ({
+  page,
+}) => {
+  await open(page, '/');
+  await nav(page, 'Settings');
+  await expect(page.getByText('Who you are signed in as.')).toBeVisible();
+  await expect(page.getByText('stampede login', { exact: true })).toBeVisible();
+  await expect(page.getByLabel(/password/i)).toHaveCount(0);
+
+  await page.getByRole('tab', { name: 'API tokens' }).click();
+  await expect(page.getByRole('table', { name: 'API tokens' })).toBeVisible();
+  await expect(page.getByRole('button', { name: /New token|Revoke/ })).toHaveCount(0);
+
+  await page.getByRole('tab', { name: 'Users' }).click();
+  await expect(page.getByRole('table', { name: 'Users' })).toContainText('Ana Lima');
+  await expect(page.getByRole('table', { name: 'Users' }).getByRole('combobox')).toHaveCount(0);
+
+  await page.getByRole('tab', { name: 'Integrations' }).click();
+  await expect(page.getByRole('table', { name: 'Integrations' })).toContainText('prod-prometheus');
+  await page.getByRole('tab', { name: 'Notifications' }).click();
+  await expect(page.getByRole('table', { name: 'Notification channels' })).toContainText(
+    'perf-alerts',
+  );
+  await page.getByRole('tab', { name: 'AI providers' }).click();
+  await expect(page.getByRole('table', { name: 'AI providers' })).toContainText('stored');
+  await page.getByRole('tab', { name: 'Audit log' }).click();
+  await expect(page.getByRole('table', { name: 'Audit log' })).toBeVisible();
+
+  // Nothing on these pages writes.
+  await expect(page.getByRole('main').getByRole('textbox')).toHaveCount(0);
+});
+
+test('a scenario is shown read-only: highlighted YAML, journey graph, plan and history', async ({
+  page,
+}) => {
   await open(page, '/');
   await nav(page, 'Scenarios');
+  await expect(page.getByText(/^stampede push --project \S+ <scenario.yaml>$/)).toBeVisible();
+  await expect(page.getByRole('button', { name: /New scenario/ })).toHaveCount(0);
   // Scenario links only: the page before may still list runs of it.
   await page.locator('a[href*="/scenarios/"]', { hasText: 'checkout-stress' }).first().click();
-  const graph = page.getByRole('group', { name: 'Journey graph' });
-  const editor = page.locator('.monaco-editor .view-lines');
-  await expect(editor).toContainText('name: home');
+  const yaml = page.getByLabel('checkout-stress YAML');
+  await expect(yaml).toContainText('name: home');
+  await expect(page.locator('.monaco-editor')).toHaveCount(0);
+  await expect(page.getByRole('button', { name: /Save|Create scenario|Delete/ })).toHaveCount(0);
 
-  // Graph → YAML: change a request in the side panel.
+  const graph = page.getByRole('group', { name: 'Journey graph' });
   await graph.getByLabel('GET home', { exact: true }).click();
   const panel = page.getByRole('complementary', { name: 'Selected step' });
-  await panel.getByLabel('URL').fill('/landing');
-  await panel.getByRole('button', { name: 'Apply' }).click();
-  await expect(editor).toContainText('get: /landing');
-  await expect(page.getByText('unsaved')).toBeVisible();
+  await expect(panel).toContainText('HTTP request');
+  await expect(panel.getByRole('textbox')).toHaveCount(0);
+  await expect(panel.getByRole('button', { name: /Apply|Remove|Move/ })).toHaveCount(0);
 
-  // Drag a step below its next sibling to reorder it.
-  const home = graph.getByLabel('GET home', { exact: true });
-  const search = graph.getByLabel('GET search', { exact: true });
-  const from = (await home.boundingBox())!;
-  const to = (await search.boundingBox())!;
-  await page.mouse.move(from.x + from.width / 2, from.y + from.height / 2);
-  await page.mouse.down();
-  await page.mouse.move(from.x + from.width / 2, to.y + to.height + 10, { steps: 12 });
-  await page.mouse.up();
-  await expect
-    .poll(async () => {
-      const h = await graph.getByLabel('GET home', { exact: true }).boundingBox();
-      const s = await graph.getByLabel('GET search', { exact: true }).boundingBox();
-      return h && s ? h.y > s.y : false;
-    })
-    .toBe(true);
-
-  // YAML → graph: rename a step in the editor.
-  await editor.getByText('search', { exact: true }).first().dblclick();
-  await page.keyboard.type('find');
-  await expect(graph.getByLabel('GET find', { exact: true })).toBeVisible();
+  await page.getByRole('tab', { name: 'Plan' }).click();
+  await expect(page.getByText('Peak load')).toBeVisible();
+  await page.getByRole('tab', { name: 'History' }).click();
+  await expect(page.getByText('latest')).toBeVisible();
 });

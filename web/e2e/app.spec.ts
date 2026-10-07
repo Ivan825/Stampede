@@ -12,53 +12,51 @@ test('signs in', async ({ page }) => {
   await page.getByRole('button', { name: 'Sign in' }).click();
   await expect(page.getByRole('navigation', { name: 'Main' })).toBeVisible();
   await expect(page).toHaveURL(/\/projects\/[0-9a-f-]{36}$/);
+  await expect(page.getByText(/Read-only analysis/)).toBeVisible();
+
+  // Sign out again.
+  await page.getByRole('button', { name: /Account menu/ }).click();
+  await page.getByRole('menuitem', { name: 'Sign out' }).click();
+  await expect(page.getByRole('heading', { name: 'Sign in' })).toBeVisible();
 });
 
-test('creates a project, target and scenario, runs it and reads the report', async ({ page }) => {
-  await open(page, '/projects');
-  await page.getByRole('button', { name: 'New project' }).click();
-  const project = page.getByRole('dialog', { name: 'New project' });
-  await project.getByLabel('Name').fill('E2E shop');
-  await project.getByRole('button', { name: 'Create project' }).click();
-  await expect(page.getByRole('heading', { name: 'E2E shop' })).toBeVisible();
+test('first-time setup points to stampede setup instead of a form', async ({ page }) => {
+  await page.goto('/?mock=setup');
+  await expect(page.getByRole('heading', { name: 'Set up Stampede' })).toBeVisible();
+  await expect(page).toHaveURL(/\/setup$/);
+  await expect(page.getByText('stampede setup', { exact: true })).toBeVisible();
+  await expect(page.getByRole('textbox')).toHaveCount(0);
+  await page.getByRole('button', { name: /I have run it, continue/ }).click();
+  await expect(page.getByText(/still needs setting up/)).toBeVisible();
+});
 
-  await nav(page, 'Targets');
-  await page.getByRole('button', { name: 'New target' }).click();
-  const target = page.getByRole('dialog', { name: 'New target' });
-  await target.getByLabel('Name').fill('local');
-  await target.getByLabel('Base URL').fill('http://localhost:8090');
-  await target.getByRole('button', { name: 'Create target' }).click();
-  await expect(page.getByText('http://localhost:8090', { exact: true })).toBeVisible();
+test('browses runs and reads a finished run’s report and downloads', async ({ page }) => {
+  await open(page, '/');
+  // The overview points to the CLI instead of a New run button.
+  await expect(page.getByText(/^stampede start --project \S+ --scenario/)).toBeVisible();
+  await expect(page.getByRole('button', { name: /New run/ })).toHaveCount(0);
 
-  await nav(page, 'Scenarios');
-  await page.getByRole('button', { name: 'New scenario' }).click();
-  await expect(page.getByRole('heading', { name: 'New scenario' })).toBeVisible();
-  // The template is valid; wait for the server's validation before saving.
-  await page.getByRole('tab', { name: /Problems/ }).click();
-  await expect(page.getByText('No problems found.')).toBeVisible();
-  await page.getByRole('button', { name: 'Create scenario' }).click();
-  await expect(page.getByRole('heading', { name: /my-scenario/ })).toBeVisible();
-
-  await page.getByRole('button', { name: 'Run', exact: true }).click();
-  const run = page.getByRole('dialog', { name: 'New run' });
-  await expect(run.getByLabel('Target')).toHaveValue(/.+/);
-  await run.getByRole('button', { name: /Load overrides/ }).click();
-  await run.getByLabel('Duration').fill('6s');
-  await run.getByRole('button', { name: 'Start run' }).click();
-
-  // Live: charts, stats and the worker health grid.
+  await nav(page, 'Runs');
+  await expect(page.getByRole('heading', { name: 'Runs' })).toBeVisible();
+  await expect(page.getByRole('button', { name: /New run/ })).toHaveCount(0);
+  await page
+    .getByRole('row')
+    .filter({ hasText: 'catalog-breakpoint' })
+    .filter({ hasText: 'completed' })
+    .first()
+    .getByRole('link')
+    .first()
+    .click();
   await expect(page).toHaveURL(/\/runs\/[0-9a-f-]{36}$/);
-  const health = page.getByRole('list', { name: 'Worker health' });
-  await expect(health.getByRole('listitem').first()).toBeVisible();
-  await expect(health.getByRole('meter').first()).toBeVisible();
-
-  // The run finishes and the report replaces the live view.
-  await expect(page.getByRole('heading', { name: 'Journeys and steps' })).toBeVisible({
-    timeout: 30_000,
-  });
-  await expect(page.getByText(/Every target held|At least one target was missed/)).toBeVisible();
-  await expect(page.getByRole('heading', { name: 'Workers', exact: true })).toBeVisible();
-  await expect(page.getByRole('img', { name: /Throughput and users chart/ })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Journeys and steps' })).toBeVisible();
+  const downloads = page.getByRole('group', { name: 'Download report' });
+  for (const f of ['HTML', 'JSON', 'CSV', 'JUnit', 'Markdown']) {
+    await expect(downloads.getByRole('link', { name: f, exact: true })).toBeVisible();
+  }
+  await expect(downloads.getByRole('button', { name: /PDF/ })).toBeVisible();
+  await expect(page.getByText(/^stampede start --project/)).toBeVisible();
+  // No safety controls on a finished run.
+  await expect(page.getByRole('group', { name: 'Safety controls' })).toHaveCount(0);
 });
 
 test('compares finished runs', async ({ page }) => {
@@ -84,24 +82,16 @@ test('compares finished runs', async ({ page }) => {
   await expect(page.getByRole('button', { name: 'Copy Markdown' })).toBeVisible();
 });
 
-test('generates journeys in the AI studio', async ({ page }) => {
+test('AI jobs are read-only, with the CLI commands to generate and approve', async ({ page }) => {
   await open(page, '/');
-  await nav(page, 'AI studio');
-  await expect(page.getByRole('heading', { name: 'AI studio' })).toBeVisible();
-  await page.getByRole('button', { name: /Generate journeys/ }).click();
-  const dialog = page.getByRole('dialog', { name: 'Generate journeys' });
-  await dialog.getByLabel('Description').fill('Shoppers browse the catalogue and sometimes buy.');
-  const targetSelect = dialog.getByLabel('Target', { exact: true });
-  const staging = await targetSelect
-    .locator('option', { hasText: 'staging' })
-    .getAttribute('value');
-  expect(staging).toBeTruthy();
-  await targetSelect.selectOption(staging ?? '');
-  await dialog.getByRole('button', { name: 'Generate' }).click();
-  await expect(page).toHaveURL(/\/ai\/[0-9a-f-]{36}$/);
-  await expect(page.getByRole('status', { name: 'Progress' })).toBeVisible();
-  // The mock pipeline finishes within a few seconds with a proposal.
-  await expect(page.getByRole('region', { name: /^Journey / }).first()).toBeVisible({
-    timeout: 30_000,
-  });
+  await nav(page, 'AI jobs');
+  await expect(page.getByRole('heading', { name: 'AI jobs' })).toBeVisible();
+  await expect(page.getByText('stampede ai jobs create')).toBeVisible();
+  await expect(page.getByRole('button', { name: /Generate journeys/ })).toHaveCount(0);
+  await page.getByRole('row').filter({ hasText: 'needs review' }).getByRole('link').click();
+  await expect(page.getByRole('heading', { name: /^Job [0-9a-f]{8}/ })).toBeVisible();
+  await expect(page.getByRole('region', { name: 'Journey checkout' })).toBeVisible();
+  await expect(page.getByLabel('Proposed scenario YAML')).toContainText('name: shop-generated');
+  await expect(page.getByText(/^stampede ai jobs approve [0-9a-f-]{36}$/)).toBeVisible();
+  await expect(page.getByRole('button', { name: /Approve/ })).toHaveCount(0);
 });
