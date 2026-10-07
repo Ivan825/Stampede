@@ -85,6 +85,9 @@ func (e *Engine) browserCtx() (context.Context, error) {
 			chromedp.Flag("disable-background-networking", true),
 			chromedp.Flag("disable-extensions", true),
 			chromedp.Flag("mute-audio", true),
+			// A busy machine can take a while to start Chrome; the
+			// default wait is 20s.
+			chromedp.WSURLReadTimeout(time.Minute),
 		)
 		if os.Getenv("STAMPEDE_CHROME_NO_SANDBOX") == "true" {
 			// Containers that run Chrome as root need this; see docs.

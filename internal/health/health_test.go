@@ -1,6 +1,7 @@
 package health
 
 import (
+	"github.com/Ivan825/Stampede/internal/wire"
 	"strings"
 	"testing"
 	"time"
@@ -84,10 +85,20 @@ func TestMonitorSamplesProcess(t *testing.T) {
 	if _, limit, ok := fdUsage(); ok && (h.FDLimit != limit || h.OpenFDs == 0) {
 		t.Errorf("fds %d of %d", h.OpenFDs, h.FDLimit)
 	}
-	if got := m.Observe(20*time.Millisecond, 0); got.Saturated {
+	// Only the lag is under test: a GC pause on a busy machine may add
+	// its own reason.
+	lagged := func(h wire.Health) bool {
+		for _, r := range h.Reasons {
+			if strings.Contains(r, "scheduling lag") {
+				return true
+			}
+		}
+		return false
+	}
+	if got := m.Observe(20*time.Millisecond, 0); lagged(got) {
 		t.Errorf("one interval of 20ms lag should not saturate yet: %+v", got)
 	}
-	if got := m.Observe(20*time.Millisecond, 0); !got.Saturated {
+	if got := m.Observe(20*time.Millisecond, 0); !lagged(got) || !got.Saturated {
 		t.Errorf("20ms scheduling lag for two intervals should saturate: %+v", got)
 	}
 	m.Idle()

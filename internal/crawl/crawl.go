@@ -134,7 +134,8 @@ func Crawl(ctx context.Context, o Options) (*Result, error) {
 	if err != nil {
 		return nil, err
 	}
-	opts := append(chromedp.DefaultExecAllocatorOptions[:], chromedp.ExecPath(chrome))
+	// A busy machine can take a while to start Chrome; the default wait is 20s.
+	opts := append(chromedp.DefaultExecAllocatorOptions[:], chromedp.ExecPath(chrome), chromedp.WSURLReadTimeout(time.Minute))
 	if os.Getenv("STAMPEDE_CHROME_NO_SANDBOX") == "true" {
 		opts = append(opts, chromedp.NoSandbox)
 	}
