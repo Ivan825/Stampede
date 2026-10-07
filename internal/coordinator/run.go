@@ -53,6 +53,9 @@ const (
 	// EventDegraded follows a loss: the lost share is not reassigned and
 	// the run continues with the remaining workers.
 	EventDegraded EventType = "degraded"
+	// EventTakeover follows a loss when a spare worker takes over the lost
+	// share from a later interval; until then the run is short of it.
+	EventTakeover EventType = "takeover"
 	// EventWorkerFinished: the worker's part of the run ended.
 	EventWorkerFinished EventType = "worker-finished"
 	// EventWorkerFailed: the worker reported an error and stopped.
@@ -110,8 +113,13 @@ type WorkerSummary struct {
 	// saturated, and SaturationReasons the distinct reasons.
 	Saturated         []Window `json:"saturated,omitempty"`
 	SaturationReasons []string `json:"saturationReasons,omitempty"`
-	// Lost is the window from the loss to the end of the run.
+	// Lost is the window from the loss until the share was taken over, or
+	// to the end of the run.
 	Lost *Window `json:"lost,omitempty"`
+	// Replaces names the lost worker whose share this one took over, from
+	// interval JoinedAt.
+	Replaces string `json:"replaces,omitempty"`
+	JoinedAt int64  `json:"joinedAt,omitempty"`
 	// Missing lists intervals emitted live without this worker's data.
 	Missing []int64 `json:"missing,omitempty"`
 }
@@ -173,6 +181,17 @@ type member struct {
 	missing      []int64
 	lostAt       int64
 	killSentAt   time.Time
+
+	// dataIndex partitions unique test data: the original member's index,
+	// kept by whoever takes over its share.
+	dataIndex int
+	// joinAt is the first interval a takeover reports (0 otherwise).
+	joinAt int64
+	// attempt counts takeovers of this share; replaces and replacedBy
+	// link a lost member and its successor (-1 when none).
+	attempt              int
+	replaces, replacedBy int
+	resume               time.Duration
 }
 
 type inMsg struct {
@@ -180,18 +199,32 @@ type inMsg struct {
 	msg      *workerv1.WorkerMessage
 	at       time.Time
 	reattach bool
+	// joined reports a takeover's clock synchronisation.
+	joined *joinResult
+}
+
+type joinResult struct {
+	offset, rtt time.Duration
+	err         error
 }
 
 // Run is a distributed run in progress.
 type Run struct {
-	c       *Coordinator
-	spec    RunSpec
-	plan    *scenario.Plan
-	t0      time.Time
-	iv      time.Duration
+	c    *Coordinator
+	spec RunSpec
+	plan *scenario.Plan
+	t0   time.Time
+	iv   time.Duration
+	// members grows when a spare takes over a lost share; mmu guards the
+	// slice for Stop and Kill, which run outside the run's goroutine.
+	mmu     sync.RWMutex
 	members []*member
-	merger  *merger
-	phases  map[int]*[metrics.NumPhases]*metrics.Histogram
+	// dataCount is the number of original members.
+	dataCount int
+	// noTakeover explains why lost shares cannot be handed over.
+	noTakeover string
+	merger     *merger
+	phases     map[int]*[metrics.NumPhases]*metrics.Histogram
 
 	inbox  chan inMsg
 	snaps  chan *metrics.Snapshot
@@ -310,6 +343,37 @@ func (c *Coordinator) Start(ctx context.Context, spec RunSpec) (*Run, error) {
 	return r, nil
 }
 
+// spare finds an idle worker that speaks protocol v1.4 (resumable
+// starts) and attaches it to r as member idx. With sameRegion only a
+// worker in region qualifies; otherwise one there is preferred.
+func (c *Coordinator) spare(r *Run, idx int, region string, sameRegion bool) (*workerConn, candidate) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	now := time.Now()
+	stale := 3 * c.cfg.HeartbeatInterval
+	var best *workerConn
+	var bestCand candidate
+	for _, w := range c.workers {
+		w.mu.Lock()
+		ok := w.stream != nil && w.run == nil && !w.busyElsewhere && now.Sub(w.seen()) < stale && w.minor >= 4
+		cand := candidate{id: w.id, name: w.name, region: w.region, cpus: float64(max(w.capacity.CPUs, 1)), maxVUs: w.capacity.MaxVUs}
+		w.mu.Unlock()
+		if !ok || (sameRegion && cand.region != region) {
+			continue
+		}
+		in, bestIn := cand.region == region, best != nil && bestCand.region == region
+		if best == nil || (in && !bestIn) || (in == bestIn && cand.cpus > bestCand.cpus) {
+			best, bestCand = w, cand
+		}
+	}
+	if best != nil {
+		best.mu.Lock()
+		best.run, best.member = r, idx
+		best.mu.Unlock()
+	}
+	return best, bestCand
+}
+
 // reserve chooses the workers and marks them busy with the new run.
 func (c *Coordinator) reserve(spec RunSpec, plan *scenario.Plan) (*Run, error) {
 	c.mu.Lock()
@@ -354,10 +418,41 @@ func (c *Coordinator) reserve(spec RunSpec, plan *scenario.Plan) (*Run, error) {
 		w.mu.Unlock()
 		r.members = append(r.members, &member{
 			w: w, cand: cand, sh: sel.shares[i], lastInterval: -1, lostAt: -1, satReasons: map[string]bool{},
+			dataIndex: i, replaces: -1, replacedBy: -1,
 		})
 	}
+	r.dataCount = len(r.members)
+	r.noTakeover = takeoverBlocker(spec, plan, c.cfg.NoTakeover)
 	c.runs[spec.ID] = r
 	return r, nil
+}
+
+// takeoverBlocker says why a lost worker's share cannot be handed to a
+// spare in this run, or "" when it can.
+func takeoverBlocker(spec RunSpec, plan *scenario.Plan, disabled bool) string {
+	if disabled {
+		return "takeover is disabled"
+	}
+	if plan.Executor == scenario.ExecIterations {
+		return "a fixed iteration count cannot be split mid-run"
+	}
+	sc, err := scenario.Parse(spec.Scenario)
+	if err != nil {
+		return err.Error()
+	}
+	for name, f := range sc.Data {
+		if f.Mode == scenario.FeedUnique && len(f.Generate) == 0 {
+			return fmt.Sprintf("data.%s is unique and the lost worker's progress through it is unknown", name)
+		}
+	}
+	return ""
+}
+
+// members returns the run's members for use outside its goroutine.
+func (r *Run) memberList() []*member {
+	r.mmu.RLock()
+	defer r.mmu.RUnlock()
+	return append([]*member(nil), r.members...)
 }
 
 // abort undoes a Start that failed: workers that may have accepted are
@@ -439,7 +534,7 @@ func (r *Run) StopWithReason(reason string) {
 	}
 	r.stopReason, r.stopAt = reason, time.Now()
 	r.ctl.Unlock()
-	for _, m := range r.members {
+	for _, m := range r.memberList() {
 		m.w.send(stopMsg(r.spec.ID, false, reason))
 	}
 }
@@ -457,7 +552,7 @@ func (r *Run) Kill() {
 		r.stopAt = time.Now()
 	}
 	r.ctl.Unlock()
-	for _, m := range r.members {
+	for _, m := range r.memberList() {
 		m.w.send(stopMsg(r.spec.ID, true, engine.StopKilled))
 	}
 }
@@ -538,6 +633,17 @@ func (r *Run) ack(m *member, seq uint64, finished bool) {
 // handle applies one worker message to the run's state.
 func (r *Run) handle(in inMsg) {
 	m := r.members[in.member]
+	if j := in.joined; j != nil {
+		if j.err != nil {
+			if !m.state.terminal() {
+				m.state, m.errMsg = memberFailed, j.err.Error()
+				r.event(RunEvent{Type: EventWorkerFailed, Interval: m.joinAt, Message: fmt.Sprintf("%s could not take over: %s", m.cand.name, m.errMsg)}, m)
+			}
+			return
+		}
+		m.offset, m.rtt = j.offset, j.rtt
+		return
+	}
 	if in.reattach {
 		if m.state == memberLost {
 			// Too late: the run has already accounted for it as lost.
@@ -688,6 +794,10 @@ func (r *Run) markLost(m *member, why string) {
 	m.w.send(stopMsg(r.spec.ID, true, "this worker was declared lost"))
 	r.c.log.Warn("worker lost", "run", r.spec.ID, "worker", m.w.id, "name", m.cand.name, "reason", why)
 	r.event(RunEvent{Type: EventWorkerLost, Interval: m.lostAt, Message: fmt.Sprintf("%s lost: %s", m.cand.name, why)}, m)
+	blocked := r.takeOver(m)
+	if blocked == "" {
+		return
+	}
 	var remaining float64
 	for _, o := range r.members {
 		if !o.state.terminal() || o.state == memberFinished {
@@ -696,14 +806,90 @@ func (r *Run) markLost(m *member, why string) {
 	}
 	r.event(RunEvent{
 		Type: EventDegraded, Interval: m.lostAt,
-		Message: fmt.Sprintf("%.1f%% of the load (the share of %s) is not reassigned; the run continues at %.1f%% of plan",
-			100*(m.sh.hi-m.sh.lo), m.cand.name, 100*remaining),
+		Message: fmt.Sprintf("%.1f%% of the load (the share of %s) is not reassigned (%s); the run continues at %.1f%% of plan",
+			100*(m.sh.hi-m.sh.lo), m.cand.name, blocked, 100*remaining),
 	}, m)
+}
+
+// takeOver hands a lost member's share to a spare worker, which starts
+// at the next interval boundary at least TakeoverLead away. It returns
+// why it could not, or "" once the spare is on its way.
+func (r *Run) takeOver(lost *member) string {
+	if r.noTakeover != "" {
+		return r.noTakeover
+	}
+	r.ctl.Lock()
+	stopping := r.killed || !r.stopAt.IsZero()
+	r.ctl.Unlock()
+	if stopping {
+		return "the run is stopping"
+	}
+	resume := time.Since(r.t0) + r.c.cfg.TakeoverLead
+	resume = (resume + r.iv - 1) / r.iv * r.iv
+	if total := r.plan.TotalDuration(); total > 0 && resume >= total {
+		return "too little of the run is left"
+	}
+	idx := len(r.members)
+	w, cand := r.c.spare(r, idx, lost.cand.region, len(r.spec.Regions) > 0)
+	if w == nil {
+		return "no spare worker is connected"
+	}
+	m := &member{
+		w: w, cand: cand, sh: lost.sh, lastInterval: -1, lostAt: -1, satReasons: map[string]bool{},
+		dataIndex: lost.dataIndex, joinAt: int64(resume / r.iv), attempt: lost.attempt + 1,
+		replaces: r.indexOf(lost), replacedBy: -1, resume: resume,
+	}
+	lost.replacedBy = idx
+	r.mmu.Lock()
+	r.members = append(r.members, m)
+	r.mmu.Unlock()
+	r.merger.grow()
+	r.event(RunEvent{
+		Type: EventTakeover, Interval: m.joinAt,
+		Message: fmt.Sprintf("%s takes over the %.1f%% share of %s from %s", cand.name, 100*(lost.sh.hi-lost.sh.lo), lost.cand.name, resume),
+	}, m)
+	go r.startTakeover(m, idx)
+	return ""
+}
+
+func (r *Run) indexOf(m *member) int {
+	for i, o := range r.members {
+		if o == m {
+			return i
+		}
+	}
+	return -1
+}
+
+// startTakeover synchronises the spare's clock and sends it the lost
+// share. The outcome of the clock sync reaches the run's goroutine
+// through the inbox, ahead of the spare's own messages.
+func (r *Run) startTakeover(m *member, idx int) {
+	ctx, cancel := context.WithTimeout(context.Background(), r.c.cfg.TakeoverLead)
+	defer cancel()
+	offset, rtt, err := m.w.syncClock(ctx, r.c.cfg.ClockSamples)
+	start := &workerv1.StartRun{
+		RunId: r.spec.ID, Scenario: r.spec.Scenario, Env: r.spec.Env, Secrets: r.spec.Secrets,
+		ShareLo: m.sh.lo, ShareHi: m.sh.hi, WorkerIndex: uint32(m.dataIndex), WorkerCount: uint32(r.dataCount),
+		T0UnixNano: r.t0.Add(offset).UnixNano(), AllowHosts: r.spec.AllowHosts, IntervalNs: int64(r.iv),
+		ResumeNs: int64(m.resume), Attempt: uint32(m.attempt),
+	}
+	if err == nil && !m.w.send(&workerv1.ServerMessage{Msg: &workerv1.ServerMessage_StartRun{StartRun: start}}) {
+		err = errNotConnected(m.cand.name)
+	}
+	if err != nil {
+		err = fmt.Errorf("clock synchronisation: %w", err)
+	}
+	// handle accepts this before or after the spare's own replies.
+	r.deliver(inMsg{member: idx, joined: &joinResult{offset: offset, rtt: rtt, err: err}, at: time.Now()})
 }
 
 // expected reports whether member i should still report interval k.
 func (r *Run) expected(i int, k int64) bool {
 	m := r.members[i]
+	if k < m.joinAt {
+		return false
+	}
 	switch m.state {
 	case memberLost, memberFailed:
 		return false
@@ -771,6 +957,9 @@ func (r *Run) finish() {
 			Requests: m.requests, Iterations: m.iterations, Snapshots: m.snapshots,
 			Saturated: windows(m.saturated), Missing: m.missing,
 		}
+		if m.replaces >= 0 {
+			ws.Replaces, ws.JoinedAt = r.members[m.replaces].cand.name, m.joinAt
+		}
 		for k := range m.satReasons {
 			ws.SaturationReasons = append(ws.SaturationReasons, k)
 		}
@@ -791,6 +980,11 @@ func (r *Run) finish() {
 		default:
 			ws.State = WorkerLost
 			ws.Lost = &Window{From: m.lostAt, To: max(last, m.lostAt)}
+			if m.replacedBy >= 0 {
+				if s := r.members[m.replacedBy]; s.started {
+					ws.Lost.To = max(s.joinAt-1, m.lostAt)
+				}
+			}
 			res.Degraded = true
 		}
 		res.PeakVUs += m.peakVUs

@@ -54,6 +54,15 @@ func newMerger(n int, t0 time.Time, iv, grace time.Duration, planned func(int64)
 	return m
 }
 
+// grow adds a member (a spare taking over a lost share).
+func (m *merger) grow() {
+	m.n++
+	m.seen = append(m.seen, map[uint64]bool{})
+	for _, acc := range m.pending {
+		acc.reported = append(acc.reported, false)
+	}
+}
+
 // add merges a snapshot from member. dup reports a resend that was
 // ignored; late reports data for an interval already emitted.
 func (m *merger) add(member int, s *metrics.Snapshot) (dup, late bool) {

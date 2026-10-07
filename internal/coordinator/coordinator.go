@@ -104,6 +104,13 @@ type Config struct {
 	// waits for slow workers before it is emitted without them (default
 	// two snapshot intervals).
 	MergeGrace time.Duration
+
+	// TakeoverLead is how far ahead a spare worker that takes over a lost
+	// worker's share is told to start (default 2s): time to synchronise
+	// its clock and prepare the scenario.
+	TakeoverLead time.Duration
+	// NoTakeover keeps lost shares unassigned: the run continues degraded.
+	NoTakeover bool
 }
 
 // Coordinator registers workers and runs distributed tests on them.
@@ -129,6 +136,9 @@ func New(cfg Config) *Coordinator {
 	}
 	if cfg.ClockSamples <= 0 {
 		cfg.ClockSamples = 8
+	}
+	if cfg.TakeoverLead <= 0 {
+		cfg.TakeoverLead = 2 * time.Second
 	}
 	return &Coordinator{
 		cfg: cfg, log: cfg.Logger,
@@ -213,8 +223,10 @@ type workerConn struct {
 
 	lastSeen atomic.Int64 // time.Now Unix nanoseconds of the last message
 
-	mu             sync.Mutex
-	name, version  string
+	mu            sync.Mutex
+	name, version string
+	// minor is the worker's protocol minor version.
+	minor          uint32
 	region         string
 	labels         map[string]string
 	capacity       Capacity
@@ -412,6 +424,7 @@ func (c *Coordinator) attach(h *workerv1.Hello, ss *serverStream) (*workerConn, 
 		old.cancel()
 	}
 	w.name, w.version, w.region = h.GetName(), h.GetVersion(), h.GetRegion()
+	w.minor = h.GetProtocol().GetMinor()
 	if w.region == "" {
 		w.region = h.GetLabels()["region"]
 	}
