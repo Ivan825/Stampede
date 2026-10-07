@@ -17,6 +17,7 @@ import {
   Settings,
   SlidersHorizontal,
   Sparkles,
+  SquareTerminal,
   Target as TargetIcon,
 } from 'lucide-react';
 import { useEffect, type ReactNode } from 'react';
@@ -292,6 +293,13 @@ export function Shell() {
               Settings
             </NavItem>
           </nav>
+          <p className="flex gap-2 border-t border-line px-4 py-3 text-[11px] leading-snug text-muted">
+            <SquareTerminal className="mt-px size-3.5 shrink-0 text-accent" aria-hidden />
+            <span>
+              Read-only analysis. Make changes with the <span className="font-mono">stampede</span>{' '}
+              CLI.
+            </span>
+          </p>
         </aside>
         <div className="flex min-w-0 flex-1 flex-col">
           <header className="flex h-12 shrink-0 items-center gap-3 border-b border-line bg-surface px-4">

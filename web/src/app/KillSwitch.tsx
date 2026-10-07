@@ -5,10 +5,12 @@ import { StatusChip } from '@/components/chips';
 import { Confirm } from '@/components/dialog';
 import { Button } from '@/components/ui';
 import { useToast } from '@/components/toast';
+import { cli } from '@/lib/cli';
 import { permissions } from '@/lib/roles';
 
 /**
- * The organisation-wide kill switch. Always in the header while any run is
+ * The organisation-wide kill switch, a safety control and one of the few
+ * actions the read-only UI keeps. Always in the header while any run is
  * active; stops all load at once after a confirmation.
  */
 export function KillSwitch() {
@@ -28,7 +30,11 @@ export function KillSwitch() {
           variant="danger-solid"
           size="sm"
           disabled={!allowed}
-          title={allowed ? undefined : 'Your role cannot stop runs'}
+          title={
+            allowed
+              ? 'Safety control: stops every active run in the organisation now'
+              : 'Your role cannot stop runs'
+          }
           aria-label={`Kill switch: stop all ${label}`}
         >
           <OctagonX className="size-4" aria-hidden />
@@ -36,15 +42,16 @@ export function KillSwitch() {
           <span className="num rounded bg-black/20 px-1.5 py-0.5 text-[11px]">{runs.length}</span>
         </Button>
       }
-      title="Stop all load now?"
+      title="Kill switch: stop all load now?"
       width="max-w-xl"
       destructive
       confirmLabel={`Kill ${label}`}
       description={
         <div className="flex flex-col gap-3">
           <p>
-            Every active run in the organisation stops immediately. In-flight requests are abandoned
-            and the runs end as aborted.
+            A safety control. Every active run in the organisation stops immediately. In-flight
+            requests are abandoned and the runs end as aborted. The same as{' '}
+            <code className="font-mono text-xs">{cli.killAll}</code>.
           </p>
           <ul className="flex flex-col gap-1.5 rounded-md border border-line p-2">
             {runs.map((r) => (
