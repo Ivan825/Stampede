@@ -13,8 +13,15 @@ It is tested on kind by [`deploy/kind/smoke.sh`](../../deploy/kind/smoke.sh)
 database, `helm test`, then a 10-second distributed run on two in-cluster
 workers that must pass.
 
-The chart is not yet published to a chart repository; install it from a
-checkout.
+Each release publishes the chart, versioned with the release, as an OCI
+artifact (`oci://ghcr.io/ivan825/charts/stampede`) and attaches it to the
+GitHub release. Until the first release is tagged, install it from a
+checkout as below.
+
+```sh
+helm install stampede oci://ghcr.io/ivan825/charts/stampede --version <release> \
+  -n stampede --create-namespace
+```
 
 ## Install
 

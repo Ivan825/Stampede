@@ -151,8 +151,10 @@ Limitations in this version:
   fight over the replica count.
 - The operator must reach the server URL over HTTP from its own pod.
 - Progress is polled, not streamed; live metrics are in the web UI.
-- Runs on a server with more than one replica are not supported (see the
-  Helm guide).
+- A StampedeCluster runs one server replica. A StampedeRun can point at a
+  Helm install with `server.ha: active`: status and stop go through the
+  database, so any replica answers, but the kind test covers one replica
+  only.
 
 ## Verification
 
@@ -163,7 +165,5 @@ Limitations in this version:
 - `golangci-lint` with the repository config: no issues.
 - `deploy/kind/operator-smoke.sh` (StampedeCluster on kind, then a
   StampedeRun that scales workers from 2 to 3 and runs a real 10-second
-  distributed test) is wired into CI but has not yet completed a run: the
-  local attempt stopped when Docker Desktop shut down before the operator
-  image finished building. Treat the kind path as unverified until the
-  `kubernetes` workflow has passed.
+  distributed test) passes in the `kubernetes` workflow on every change to
+  the chart or the operator.

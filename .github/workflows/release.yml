@@ -2,8 +2,8 @@ name: release
 
 # Pushing a tag v* publishes a release with GoReleaser (.goreleaser.yaml):
 # archives, checksums, SBOMs, multi-arch images on ghcr.io/ivan825/stampede,
-# keyless cosign signatures, and (when their tokens exist) the Homebrew cask
-# and Scoop manifest.
+# keyless cosign signatures, the Helm chart on ghcr.io/ivan825/charts, and
+# (when their tokens exist) the Homebrew cask and Scoop manifest.
 #
 # Optional repository secrets:
 #   HOMEBREW_TAP_GITHUB_TOKEN  can push to Ivan825/homebrew-tap
@@ -93,3 +93,28 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: gh release upload "${GITHUB_REF_NAME}" dist/airgap/*.tar.gz dist/airgap/*.sha256 --clobber
+
+  chart:
+    # The Helm chart as an OCI artifact on ghcr.io/ivan825/charts/stampede,
+    # versioned with the release, and attached to the release.
+    needs: goreleaser
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: azure/setup-helm@v4
+      - name: package
+        run: |
+          version="${GITHUB_REF_NAME#v}"
+          helm lint deploy/helm/stampede
+          helm package deploy/helm/stampede --version "$version" --app-version "$version" -d dist/chart
+      - name: push to ghcr.io
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          echo "$GH_TOKEN" | helm registry login ghcr.io -u "${{ github.actor }}" --password-stdin
+          helm push dist/chart/stampede-*.tgz oci://ghcr.io/ivan825/charts
+      - name: attach it to the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release upload "${GITHUB_REF_NAME}" dist/chart/stampede-*.tgz --clobber
