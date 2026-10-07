@@ -21,8 +21,27 @@
 | `--public-url` | `STAMPEDE_PUBLIC_URL` | — | external URL of the web UI; notifications link to `<url>/runs/<id>` when set |
 | `--ha` | `STAMPEDE_HA` | `standby` | how server replicas share the work: `standby` (one serves, the others wait) or `active` (all serve; see [Helm](../deploy/helm.md#server-replicas)) |
 | `--scheduler-interval` | `STAMPEDE_SCHEDULER_INTERVAL` | `15s` | how often a serving replica looks for due [schedules](../guides/schedules.md); `0` disables scheduled runs |
+| `--metrics-retention` | `STAMPEDE_METRICS_RETENTION` | `0` (keep forever) | how long per-second run metrics are kept, such as `30d`; at least `1d`. See below |
 | `--log-level`, `--log-format` | `STAMPEDE_LOG_LEVEL`, `STAMPEDE_LOG_FORMAT` | `info`, `json` | logging |
 | `--migrate-only`, `--migrate-dry-run` | — | — | apply or report migrations, then exit |
+
+### Run metrics: rollups and retention
+
+Runs record one row of metrics per second. Migration 11 adds two rollups,
+`run_metrics_10s` and `run_metrics_1m`, served by
+`GET /api/v1/runs/{runId}/timeline?resolution=10s` (or `1m`): requests
+and errors summed, rate averaged, p50 the mean and p95/p99 the worst
+per-second value of each bucket. Exact quantiles stay in the run's report.
+
+- With TimescaleDB (the Compose stack and Helm chart) the rollups are
+  continuous aggregates, refreshed every minute, and `--metrics-retention`
+  becomes a retention policy that drops whole chunks of per-second rows.
+  Rollups and reports are kept.
+- On plain PostgreSQL the rollups are views over the per-second rows, and
+  the serving replica deletes rows older than the retention every hour, so
+  the rollups lose them too. Reports are kept.
+
+With the default `0` nothing is deleted.
 
 Back up the master key with the database: secrets cannot be decrypted
 without it. See [upgrades and backups](../deploy/upgrades.md).

@@ -172,6 +172,8 @@ stampede generate
   --graphql-path /graphql       where the GraphQL API is served
   --from-har session.har        HAR recording
   --from-log access.log         access log (journey mix)
+  --proto file.proto            .proto file whose services become grpc steps (repeatable)
+  --proto-import-path DIR       where imports of the --proto files are found (repeatable)
   --crawl URL                   crawl the site in headless Chrome instead of a HAR (default --target)
   --crawl-pages 30              most pages to visit
   --crawl-depth 3               most clicks away from the crawl URL
@@ -191,13 +193,32 @@ stampede generate
   --max-tokens N                maximum tokens per reply (default 16000)
 ```
 
-You need at least one of the four inputs. The command prints each stage,
+You need at least one input. The command prints each stage,
 a per-journey dry-run summary (with the failing step's trace for flagged
 journeys) and the tokens used. It writes the scenario only when every
 journey passed, or with `--allow-unvalidated`. Otherwise it exits with
 code 4 and writes nothing. With `--no-dry-run`, passing the static check
 is enough. The written file sets `target.baseURL` to `--target`, and its
 header comment records the provider, the model and the dry-run result.
+
+### gRPC from .proto files
+
+With `--proto`, the generator compiles the files and lists each service's
+unary and server streaming methods, with an example request message, for
+the model, which writes `grpc:` steps for them. Client and bidirectional
+streaming methods are listed as not callable. The static check flags grpc
+steps that call a method the files do not define. The dry run calls each
+grpc step against `--target` (`http://` for plaintext gRPC, `https://` for
+TLS) using the compiled descriptors, so the target needs no reflection
+service, and checks and extracts from the response as JSON as a run does.
+The written steps name the files in `proto:` (and `importPaths:` with
+`--proto-import-path`), so runs load the same descriptors.
+
+```sh
+stampede generate --proto protos/orders.proto --proto-import-path protos \
+  --describe "clients place an order and poll its status" \
+  --target http://localhost:9090 -o orders.yaml
+```
 
 ## In the web UI
 
@@ -240,7 +261,8 @@ All endpoints are under `/api/v1` with the `ai` tag. See
 | `GET /ai/providers` | viewer | Lists providers with `hasKey`, `monthlyTokenCap` and `usedTokensThisMonth`. Keys are never returned. |
 | `POST /ai/providers` | admin | Creates (201) or replaces (200) a provider by `name` (default `"default"`): `{kind, model?, baseURL?, apiKey?, monthlyTokenCap?}`. The key is sealed with the server's master key, using the same envelope encryption as project secrets. Omit `apiKey` to keep the stored one. |
 | `DELETE /ai/providers/{providerId}` | admin | Deletes a provider. Past jobs stay readable. |
-| `POST /projects/{projectId}/ai/jobs` | editor | Starts a job (202): `{description?, openapi?, har?, accessLog?, targetId?, scenarioId?, providerId?, dryRun = true, maxRepairs = 3}`. `targetId` is required for the dry run. `scenarioId` is the scenario to diff against. |
+| `POST /projects/{projectId}/ai/jobs` | editor | Starts a job (202): `{description?, openapi?, har?, accessLog?, proto?, targetId?, scenarioId?, providerId?, dryRun = true, maxRepairs = 3}`. `proto` maps file names to `.proto` sources (5 MiB in all); the dry run uses them, and the proposed grpc steps leave `proto:` out, so runs rely on the target's reflection service. `targetId` is required for the dry run. `scenarioId` is the scenario to diff against. |
+| `POST /drift-results/{driftId}/repair` | editor | Starts a job (202) that repairs the journeys a [scheduled drift check](guides/schedules.md#drift-checks) found broken, with the scenario as the starting point. Approve it like any job. |
 | `GET /projects/{projectId}/ai/jobs` | viewer | Job summaries, newest first. |
 | `GET /ai/jobs/{jobId}` | viewer | `status` (`queued`, `running`, `succeeded`, `needs_review`, `failed`), `stage`, `round`, `usage`, `yaml`, `journeys` (status, attempts, problems and redacted `traces`), `problems`, `diff` and `error`. |
 | `POST /ai/jobs/{jobId}/approve` | editor | `{scenarioId?, message?, allowUnvalidated?}` saves the proposal as a new version of `scenarioId` (default: the job's diff scenario), or otherwise as a new scenario. Jobs in `needs_review` need `allowUnvalidated: true`. A job can be approved once. Approval is audited. |
