@@ -92,4 +92,10 @@ address the workers see inside Compose) in the web UI. `start` saves the file
 as a new scenario version, splits the load across the two workers, and
 streams the run until it finishes. The web UI shows the same run live.
 
+`stampede run --cluster` does the same with `run`'s flags and outputs:
+
+```sh
+stampede run examples/shoplab/scenarios/shop-mix.yaml --cluster --target http://shoplab:8090 -o report.html
+```
+
 Next: [your first real target](guides/first-target.md).

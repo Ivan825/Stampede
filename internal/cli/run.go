@@ -67,6 +67,16 @@ type runFlags struct {
 	pause                 string
 	verbose               bool
 	ai                    aiFlags
+	cluster               clusterFlags
+}
+
+// clusterFlags send a run to the server's workers (run --cluster).
+type clusterFlags struct {
+	on              bool
+	project, target string
+	workers         int
+	note            string
+	detach          bool
 }
 
 func newRunCmd() *cobra.Command {
@@ -78,13 +88,27 @@ func newRunCmd() *cobra.Command {
 no server, no database. Prints a summary and can write HTML, PDF, CSV,
 JSON, JUnit and Markdown reports.
 
+With --cluster the scenario runs on the workers of the server you signed
+in to with stampede login instead: the file is saved to the server as a
+new version, the run is started against a target saved on the server
+(--target, or the one whose base URL is --base-url, or the project's only
+target) and followed live, and the server's report is written to the same
+outputs. This is the same as stampede start --file.
+
 Exit codes: 0 when every target passes (or none are set), 3 when a target
 fails, 1 on any other error.`,
 		Example: `  stampede run checkout.yaml
   stampede run checkout.yaml --shape spike --rate 200/s -o report.html
-  stampede run smoke.yaml -e TARGET_URL=http://localhost:8090 --junit junit.xml`,
+  stampede run smoke.yaml -e TARGET_URL=http://localhost:8090 --junit junit.xml
+  stampede run checkout.yaml --cluster --project shop --target staging --duration 10m -o report.html`,
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
+			if f.cluster.on {
+				return runCluster(cmd, args[0], f)
+			}
+			if err := f.cluster.unused(cmd.Flags()); err != nil {
+				return err
+			}
 			return runScenario(cmd.Context(), cmd.OutOrStdout(), cmd.ErrOrStderr(), args[0], f)
 		},
 	}
@@ -107,6 +131,12 @@ fails, 1 on any other error.`,
 	fl.StringVar(&f.pause, "pause", "10s", "pause between repeats")
 	fl.BoolVarP(&f.verbose, "verbose", "v", false, "log step errors as they happen")
 	f.ai.register(fl)
+	fl.BoolVar(&f.cluster.on, "cluster", false, "run on the signed-in server's workers instead of in-process")
+	fl.StringVar(&f.cluster.project, "project", "", "with --cluster: project name, slug or id (default: the only project)")
+	fl.StringVar(&f.cluster.target, "target", "", "with --cluster: target name, base URL or id saved on the server")
+	fl.IntVar(&f.cluster.workers, "workers", 0, "with --cluster: number of workers (0 = all)")
+	fl.StringVar(&f.cluster.note, "note", "", "with --cluster: note recorded with the run")
+	fl.BoolVarP(&f.cluster.detach, "detach", "d", false, "with --cluster: print the run id and return without following")
 	return cmd
 }
 
