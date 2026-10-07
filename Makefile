@@ -8,7 +8,7 @@ LDFLAGS   := -s -w \
 	-X $(PKG)/internal/version.Commit=$(COMMIT) \
 	-X $(PKG)/internal/version.Date=$(DATE)
 
-.PHONY: build test race lint fmt tidy clean generate web
+.PHONY: build test race lint fmt tidy clean generate web docs cli-docs api-docs
 
 build:
 	$(GO) build -trimpath -ldflags "$(LDFLAGS)" -o bin/stampede ./cmd/stampede
@@ -44,3 +44,12 @@ generate:
 
 web:
 	cd web && pnpm install --frozen-lockfile && pnpm build
+
+# Reference pages generated from the source; CI fails when they are stale.
+docs: cli-docs api-docs
+
+cli-docs:
+	$(GO) run ./cmd/stampede gen-docs docs/reference/cli
+
+api-docs:
+	$(GO) run ./scripts/apidocs -in api/openapi.yaml -out docs/reference/api.md
