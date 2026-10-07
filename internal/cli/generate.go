@@ -45,6 +45,7 @@ type generateFlags struct {
 	maxTokens               int
 	crawl                   string
 	crawlPages, crawlDepth  int
+	protos, protoImports    []string
 }
 
 func newGenerateCmd() *cobra.Command {
@@ -53,9 +54,12 @@ func newGenerateCmd() *cobra.Command {
 		Use:     "generate",
 		Aliases: []string{"gen"},
 		Short:   "Draft a scenario with an AI model and dry-run every journey (optional, bring your own key)",
-		Long: `Generate a scenario from a description, an OpenAPI spec, a HAR recording
-and/or an access log, using a language model you choose. The model only
-writes the scenario; it is never used while load runs.
+		Long: `Generate a scenario from a description, an OpenAPI spec, a GraphQL schema,
+.proto files, a HAR recording and/or an access log, using a language model
+you choose. The model only writes the scenario; it is never used while load
+runs. With --proto, the services' unary and server streaming methods become
+grpc steps, dry-run against --target (plaintext gRPC for http://, TLS for
+https://).
 
 Stampede builds a dependency map from the inputs, asks the model for a
 scenario that fits the scenario schema, checks it statically (it must
@@ -77,7 +81,9 @@ OPENAI_API_KEY when it is set.`,
       --target http://localhost:8090 -o shop.yaml
   stampede generate --from-har session.har --from-log access.log --target http://localhost:8090 \
       --provider ollama --model qwen2.5-coder:14b -o mix.yaml
-  stampede generate --from-openapi api.yaml --provider openai --model gpt-5 --no-dry-run -o draft.yaml`,
+  stampede generate --from-openapi api.yaml --provider openai --model gpt-5 --no-dry-run -o draft.yaml
+  stampede generate --proto protos/orders.proto --describe "clients place and track orders" \
+      --target http://localhost:9090 -o orders.yaml`,
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			return runGenerate(cmd.Context(), cmd.OutOrStdout(), cmd.ErrOrStderr(), f)
@@ -90,6 +96,8 @@ OPENAI_API_KEY when it is set.`,
 	fl.BoolVar(&f.introspect, "introspect", false, "fetch the GraphQL schema from --target by introspection")
 	fl.StringVar(&f.har, "from-har", "", "HAR recording of real use (browser devtools or a proxy)")
 	fl.StringVar(&f.accessLog, "from-log", "", "web server access log, used to estimate the journey mix")
+	fl.StringArrayVar(&f.protos, "proto", nil, ".proto file whose services become grpc steps (repeatable); steps name it in proto: so runs load the same descriptors")
+	fl.StringArrayVar(&f.protoImports, "proto-import-path", nil, "directory where imports of the --proto files are found (repeatable); --proto paths are then relative to it")
 	fl.StringVar(&f.describe, "describe", "", "plain-language description of your users and what they do")
 	fl.StringVar(&f.target, "target", "", "base URL of the system to dry-run against, e.g. http://localhost:8090")
 	fl.StringVar(&f.providerName, "provider", "anthropic", "model provider: anthropic, openai, gemini, ollama or openai-compatible")
@@ -185,6 +193,9 @@ func runGenerate(ctx context.Context, stdout, stderr io.Writer, f *generateFlags
 		}
 	}
 	if in.AccessLog, err = readOptional(f.accessLog); err != nil {
+		return err
+	}
+	if err := readProtos(&in, f.protos, f.protoImports); err != nil {
 		return err
 	}
 	diffPath := f.diffAgainst
@@ -338,4 +349,39 @@ func introspect(ctx context.Context, url string) ([]byte, error) {
 		return nil, fmt.Errorf("introspection at %s returned HTTP %d (is introspection disabled? pass the schema with --from-graphql)", url, resp.StatusCode)
 	}
 	return b, nil
+}
+
+// readProtos reads --proto files into the generator's inputs, named as
+// imports and the scenario's proto: lists will name them: relative to the
+// first --proto-import-path that holds them, or as given.
+func readProtos(in *ai.Inputs, paths, importPaths []string) error {
+	if len(paths) == 0 {
+		if len(importPaths) > 0 {
+			return errors.New("--proto-import-path needs --proto")
+		}
+		return nil
+	}
+	in.Proto = map[string][]byte{}
+	for _, p := range paths {
+		name := filepath.ToSlash(filepath.Clean(p))
+		full := p
+		for _, dir := range importPaths {
+			if rel, err := filepath.Rel(dir, p); err == nil && !strings.HasPrefix(rel, "..") {
+				name = filepath.ToSlash(rel)
+				break
+			}
+			if _, err := os.Stat(filepath.Join(dir, p)); err == nil {
+				full = filepath.Join(dir, p)
+				break
+			}
+		}
+		b, err := readOptional(full)
+		if err != nil {
+			return fmt.Errorf("--proto: %w", err)
+		}
+		in.Proto[name] = b
+		in.ProtoPaths = append(in.ProtoPaths, name)
+	}
+	in.ProtoImportPaths = importPaths
+	return nil
 }

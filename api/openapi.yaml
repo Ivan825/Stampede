@@ -2277,6 +2277,15 @@ components:
         openapi: { type: string, description: OpenAPI 3.x document (YAML or JSON) }
         har: { type: string, description: HAR recording (JSON) }
         accessLog: { type: string, description: Web server access log }
+        proto:
+          type: object
+          description: |
+            .proto sources by file name (the name imports use), at most 5 MiB
+            in all. Their services' unary and server streaming methods
+            become grpc steps, dry-run against the target with these
+            descriptors. The steps leave proto out, so runs use the
+            target's gRPC reflection service.
+          additionalProperties: { type: string }
         targetId: { type: string, format: uuid, description: Required for the dry run. }
         scenarioId: { type: string, format: uuid, description: Existing scenario to compare the proposal with. }
         dryRun: { type: boolean, default: true }

@@ -41,6 +41,10 @@ type Inputs struct {
 	// run loads the same descriptors (the CLI passes the files it read).
 	// Without them steps rely on the server's reflection service.
 	ProtoPaths []string
+	// ProtoImportPaths are directories where imports of the .proto files
+	// that are not in Proto are found (CLI only; steps name them in
+	// importPaths).
+	ProtoImportPaths []string
 }
 
 // Endpoint is one operation of the system under test.
@@ -143,7 +147,7 @@ func Understand(in Inputs, red *Redactor) (*Understanding, error) {
 		ctx.WriteString(digest)
 	}
 	if len(in.Proto) > 0 {
-		digest, err := u.fromProto(in.Proto, in.ProtoPaths)
+		digest, err := u.fromProto(in.Proto, in.ProtoPaths, in.ProtoImportPaths)
 		if err != nil {
 			return nil, err
 		}

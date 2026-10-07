@@ -10,9 +10,10 @@ import (
 )
 
 // CompileSources compiles .proto sources held in memory, keyed by the
-// file name imports use. The well-known types are built in; any other
-// import must be among the sources.
-func CompileSources(ctx context.Context, sources map[string][]byte) (*protoregistry.Files, error) {
+// file name imports use. Imports not among the sources are the built-in
+// well-known types or, when importPaths is set, files found under those
+// directories.
+func CompileSources(ctx context.Context, sources map[string][]byte, importPaths []string) (*protoregistry.Files, error) {
 	srcs := make(map[string]string, len(sources))
 	names := make([]string, 0, len(sources))
 	for name, b := range sources {
@@ -20,8 +21,13 @@ func CompileSources(ctx context.Context, sources map[string][]byte) (*protoregis
 		names = append(names, name)
 	}
 	sort.Strings(names)
+	fromMap := protocompile.SourceAccessorFromMap(srcs)
+	var resolver protocompile.Resolver = &protocompile.SourceResolver{Accessor: fromMap}
+	if len(importPaths) > 0 {
+		resolver = protocompile.CompositeResolver{resolver, &protocompile.SourceResolver{ImportPaths: importPaths}}
+	}
 	c := protocompile.Compiler{
-		Resolver: protocompile.WithStandardImports(&protocompile.SourceResolver{Accessor: protocompile.SourceAccessorFromMap(srcs)}),
+		Resolver: protocompile.WithStandardImports(resolver),
 		// Comments are kept for the method summaries the generator shows.
 		SourceInfoMode: protocompile.SourceInfoStandard,
 	}

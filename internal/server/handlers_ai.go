@@ -451,9 +451,23 @@ func (h *handlers) CreateAIJob(ctx context.Context, req gen.CreateAIJobRequestOb
 		Description: strings.TrimSpace(str(b.Description)),
 		OpenAPI:     []byte(str(b.Openapi)), HAR: []byte(str(b.Har)), AccessLog: []byte(str(b.AccessLog)),
 	}
+	protoSize := 0
+	if b.Proto != nil && len(*b.Proto) > 0 {
+		in.Proto = map[string][]byte{}
+		for name, src := range *b.Proto {
+			name = strings.TrimSpace(name)
+			if name == "" || strings.Contains(name, "..") || strings.HasPrefix(name, "/") {
+				return nil, errInvalid(fmt.Sprintf("proto file name %q must be a relative path such as shop/v1/orders.proto", name))
+			}
+			in.Proto[name] = []byte(src)
+			protoSize += len(src)
+		}
+	}
 	switch {
-	case in.Description == "" && len(in.OpenAPI) == 0 && len(in.HAR) == 0 && len(in.AccessLog) == 0:
-		return nil, errInvalid("give at least one input: description, openapi, har or accessLog")
+	case in.Description == "" && len(in.OpenAPI) == 0 && len(in.HAR) == 0 && len(in.AccessLog) == 0 && len(in.Proto) == 0:
+		return nil, errInvalid("give at least one input: description, openapi, proto, har or accessLog")
+	case protoSize > maxAISpec:
+		return nil, errInvalid("proto files are larger than 5 MiB in all")
 	case len(in.Description) > maxAIDescription:
 		return nil, errInvalid("description is longer than 20,000 characters")
 	case len(in.OpenAPI) > maxAISpec:
@@ -550,7 +564,11 @@ func (h *handlers) launchAIJob(ctx context.Context, p *auth.Principal, pr db.Pro
 
 	// Record what was given, never the contents.
 	sizes := map[string]int{}
-	for k, v := range map[string]int{"description": len(in.Description), "openapi": len(in.OpenAPI), "har": len(in.HAR), "accessLog": len(in.AccessLog)} {
+	protoSize := 0
+	for _, src := range in.Proto {
+		protoSize += len(src)
+	}
+	for k, v := range map[string]int{"description": len(in.Description), "openapi": len(in.OpenAPI), "har": len(in.HAR), "accessLog": len(in.AccessLog), "proto": protoSize} {
 		if v > 0 {
 			sizes[k] = v
 		}

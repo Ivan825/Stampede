@@ -37,8 +37,8 @@ const (
 // fromProto compiles .proto sources and lists their services' methods for
 // the model. Client and bidirectional streaming methods are left out, as
 // grpc steps call only unary and server streaming methods.
-func (u *Understanding) fromProto(sources map[string][]byte, paths []string) (string, error) {
-	files, err := grpcx.CompileSources(context.Background(), sources)
+func (u *Understanding) fromProto(sources map[string][]byte, paths, importPaths []string) (string, error) {
+	files, err := grpcx.CompileSources(context.Background(), sources, importPaths)
 	if err != nil {
 		return "", fmt.Errorf("proto: %w", err)
 	}
@@ -87,9 +87,12 @@ func (u *Understanding) fromProto(sources map[string][]byte, paths []string) (st
 	b.WriteString("Call these with `grpc:` steps: `grpc: package.Service/Method`, `message:` (the request as JSON with protojson field names), ")
 	b.WriteString("`metadata:` for headers such as authorization, and `check: {status: OK}` (or the status codes a call may return). ")
 	b.WriteString("Extract values from responses with `extract:` and JSONPath, as for HTTP. Leave `target:` out so calls go to the target's host.")
-	if len(paths) > 0 {
+	switch {
+	case len(paths) > 0 && len(importPaths) > 0:
+		fmt.Fprintf(&b, " Give every grpc step `proto: [%s]` and `importPaths: [%s]` so runs load these descriptors.", strings.Join(paths, ", "), strings.Join(importPaths, ", "))
+	case len(paths) > 0:
 		fmt.Fprintf(&b, " Give every grpc step `proto: [%s]` so runs load these descriptors.", strings.Join(paths, ", "))
-	} else {
+	default:
 		b.WriteString(" Leave `proto:` out: descriptors come from the server's reflection service.")
 	}
 	b.WriteString("\n\n")
