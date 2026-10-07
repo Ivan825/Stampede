@@ -526,11 +526,22 @@ type FaultEvent struct {
 	Error string `json:"error,omitempty"`
 }
 
-func (r *Report) faultBands() []band {
+// timeBands are the stretches the timeline charts shade: injected faults,
+// windows in which a worker was saturated, and windows in which a lost
+// worker's share of the load was not generated.
+func (r *Report) timeBands() []band {
 	var out []band
 	for _, f := range r.Faults {
 		if f.Error == "" {
-			out = append(out, band{From: f.Start, To: f.End, Label: f.Label})
+			out = append(out, band{From: f.Start, To: f.End, Label: f.Label, Kind: bandFault})
+		}
+	}
+	for _, w := range r.Workers {
+		for _, s := range w.Saturated {
+			out = append(out, band{From: s.From, To: s.To, Label: w.saturatedLabel(), Kind: bandSaturated})
+		}
+		if w.Lost != nil {
+			out = append(out, band{From: w.Lost.From, To: w.Lost.To, Label: w.Name + " lost", Kind: bandLost})
 		}
 	}
 	return out

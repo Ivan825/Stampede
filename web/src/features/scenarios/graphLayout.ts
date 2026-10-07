@@ -1,7 +1,8 @@
 import { parse } from 'yaml';
+import type { YamlPath } from './scenarioEdit';
 
 /**
- * Builds a read-only graph of journeys and their steps from scenario YAML:
+ * Builds a graph of journeys and their steps from scenario YAML:
  * a start node fans out to each journey by weight; steps chain downwards;
  * branches fan out into one column per arm; loop, while and group blocks
  * show their body with a back edge for repeats.
@@ -18,6 +19,44 @@ export interface GraphNode {
   title: string;
   subtitle?: string;
   method?: string;
+  /** Where a step sits in the YAML: its list of steps and its index there. */
+  seq?: { path: YamlPath; index: number };
+  /** The list of steps a journey or block holds, for adding steps inside it. */
+  body?: YamlPath;
+  /** The step's own fields, for editing. */
+  fields?: { name?: string; url?: string; think?: string; group?: string };
+}
+
+/** The YAML path of a step node. */
+export const stepPath = (n: GraphNode): YamlPath | undefined =>
+  n.seq ? [...n.seq.path, n.seq.index] : undefined;
+
+/** A stable key for a step across re-layouts: its YAML path. */
+export const pathKey = (p: YamlPath) => p.join('/');
+
+/** A key that identifies a step or journey node across re-layouts. */
+export function nodeKey(g: GraphNode): string | null {
+  const p = stepPath(g);
+  if (p) return pathKey(p);
+  if (g.kind === 'journey' && g.body) return `journey:${pathKey(g.body)}`;
+  return null;
+}
+
+const NODE_H = 44;
+
+/**
+ * Where a dragged step lands among its siblings (the steps of the same
+ * list): the number of other siblings whose top is above its top.
+ */
+export function dropIndex(siblings: GraphNode[], dragged: GraphNode, y: number): number {
+  return siblings.filter((o) => o.id !== dragged.id && o.y + NODE_H / 2 < y + NODE_H / 2).length;
+}
+
+/** A short hash of a text, to notice any change to it cheaply. */
+export function textHash(s: string): string {
+  let h = 0;
+  for (let i = 0; i < s.length; i++) h = (Math.imul(h, 31) + s.charCodeAt(i)) | 0;
+  return (h >>> 0).toString(36);
 }
 
 export interface GraphEdge {
@@ -67,13 +106,22 @@ interface SeqResult {
   width: number;
 }
 
-function layoutSteps(ctx: Ctx, steps: unknown, x: number, y: number, from: string[]): SeqResult {
+function layoutSteps(
+  ctx: Ctx,
+  steps: unknown,
+  x: number,
+  y: number,
+  from: string[],
+  seqPath: YamlPath,
+): SeqResult {
   let prev = from;
   let width = 1;
   if (!Array.isArray(steps)) return { y, last: prev, width };
-  for (const raw of steps) {
+  for (const [index, raw] of steps.entries()) {
     if (!isObj(raw)) continue;
     ctx.steps++;
+    const seq = { path: seqPath, index };
+    const here: YamlPath = [...seqPath, index];
     const name = str(raw.name);
     const method = methods.find((m) => typeof raw[m] === 'string');
     if (method) {
@@ -87,6 +135,8 @@ function layoutSteps(ctx: Ctx, steps: unknown, x: number, y: number, from: strin
           method: method.toUpperCase(),
           title: name ?? path,
           subtitle: name ? path : undefined,
+          seq,
+          fields: { name, url: path },
         },
         prev,
       );
@@ -95,7 +145,14 @@ function layoutSteps(ctx: Ctx, steps: unknown, x: number, y: number, from: strin
     } else if ('think' in raw) {
       const id = add(
         ctx,
-        { kind: 'think', x, y, title: `think ${str(raw.think) ?? ''}`.trim() },
+        {
+          kind: 'think',
+          x,
+          y,
+          title: `think ${str(raw.think) ?? ''}`.trim(),
+          seq,
+          fields: { think: str(raw.think) ?? '' },
+        },
         prev,
       );
       prev = [id];
@@ -105,7 +162,14 @@ function layoutSteps(ctx: Ctx, steps: unknown, x: number, y: number, from: strin
       const total = arms.reduce((s, a) => s + (typeof a.weight === 'number' ? a.weight : 0), 0);
       const id = add(
         ctx,
-        { kind: 'branch', x, y, title: name ?? 'branch', subtitle: `${arms.length} paths` },
+        {
+          kind: 'branch',
+          x,
+          y,
+          title: name ?? 'branch',
+          subtitle: `${arms.length} paths`,
+          seq,
+        },
         prev,
       );
       y += ROW_H;
@@ -113,13 +177,14 @@ function layoutSteps(ctx: Ctx, steps: unknown, x: number, y: number, from: strin
       let maxY = y;
       let armX = x;
       let armsWidth = 0;
-      arms.forEach((arm, i) => {
+      raw.branch.forEach((arm: unknown, i: number) => {
+        if (!isObj(arm)) return;
         const w = typeof arm.weight === 'number' ? arm.weight : 0;
         const share = total > 0 ? `${Math.round((w / total) * 100)}%` : `w${w}`;
         const label = [str(arm.name) ?? `path ${i + 1}`, share].join(' · ');
         // Label the first edge of the arm by adding it to the arm's first node.
         const before = ctx.edges.length;
-        const r = layoutSteps(ctx, arm.steps, armX, y, [id]);
+        const r = layoutSteps(ctx, arm.steps, armX, y, [id], [...here, 'branch', i, 'steps']);
         const firstEdge = ctx.edges[before];
         if (firstEdge && firstEdge.source === id) firstEdge.label = label;
         lasts.push(...r.last);
@@ -142,9 +207,23 @@ function layoutSteps(ctx: Ctx, steps: unknown, x: number, y: number, from: strin
         kind === 'while'
           ? `${str(raw.while) ?? ''}${raw.max != null ? ` (max ${str(raw.max)})` : ''}`
           : name;
-      const id = add(ctx, { kind, x, y, title, subtitle }, prev);
+      const body: YamlPath = [...here, 'steps'];
+      const id = add(
+        ctx,
+        {
+          kind,
+          x,
+          y,
+          title,
+          subtitle,
+          seq,
+          body,
+          ...(kind === 'group' ? { fields: { group: str(raw.group) ?? '' } } : {}),
+        },
+        prev,
+      );
       y += ROW_H;
-      const r = layoutSteps(ctx, raw.steps, x, y, [id]);
+      const r = layoutSteps(ctx, raw.steps, x, y, [id], body);
       if (kind !== 'group') {
         for (const l of r.last) {
           ctx.edges.push({ id: `b${l}-${id}`, source: l, target: id, back: true, label: 'repeat' });
@@ -172,6 +251,7 @@ export function buildJourneyGraph(yamlText: string): GraphResult {
   }
   const ctx: Ctx = { nodes: [], edges: [], n: 0, steps: 0 };
   const journeys = doc.journeys.filter(isObj);
+  const all: unknown[] = doc.journeys;
   const total = journeys.reduce((s, j) => s + (typeof j.weight === 'number' ? j.weight : 1), 0);
   const meta = isObj(doc.metadata) ? doc.metadata : {};
   const startId = add(
@@ -187,16 +267,25 @@ export function buildJourneyGraph(yamlText: string): GraphResult {
   );
   let x = 0;
   const top = ROW_H + 30;
-  for (const j of journeys) {
+  for (const [ji, j] of all.entries()) {
+    if (!isObj(j)) continue;
     const w = typeof j.weight === 'number' ? j.weight : 1;
     const share = total > 0 ? `${Math.round((w / total) * 100)}%` : '0%';
+    const body: YamlPath = ['journeys', ji, 'steps'];
     const jid = add(
       ctx,
-      { kind: 'journey', x, y: top, title: str(j.name) ?? 'journey', subtitle: `weight ${w}` },
+      {
+        kind: 'journey',
+        x,
+        y: top,
+        title: str(j.name) ?? 'journey',
+        subtitle: `weight ${w}`,
+        body,
+      },
       [startId],
       share,
     );
-    const r = layoutSteps(ctx, j.steps, x, top + ROW_H, [jid]);
+    const r = layoutSteps(ctx, j.steps, x, top + ROW_H, [jid], body);
     x += r.width * COL_W + 30;
   }
   // Centre the start node over the journeys.

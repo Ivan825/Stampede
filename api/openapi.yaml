@@ -36,6 +36,10 @@ tags:
     description: Optional AI journey generation (bring your own key). Runs before load, never during.
   - name: integrations
     description: Prometheus and trace integrations for server runs, and notification channels. Admin only.
+  - name: packs
+    description: The product packs built into the server.
+  - name: settings
+    description: Read-only server configuration. Admin only.
 
 paths:
   /version:
@@ -1484,6 +1488,148 @@ paths:
         "403": { $ref: "#/components/responses/Forbidden" }
         "404": { $ref: "#/components/responses/NotFound" }
 
+  # ---------------------------------------------------------------------
+  # Live worker health, the pack library, scenario coverage and drift, and
+  # read-only server settings, for the web UI.
+
+  /runs/{runId}/workers:
+    parameters:
+      - $ref: "#/components/parameters/runId"
+    get:
+      tags: [runs]
+      operationId: listRunWorkers
+      summary: Health of the load generators running a run
+      description: |
+        Each worker's latest self-monitoring while the run executes on this
+        server: CPU, scheduling lag, whether it reports itself saturated and
+        its last heartbeat. A run executed in-process lists the server
+        itself. `live` is false once the run has ended, or while another
+        replica runs it; the list is then empty.
+      responses:
+        "200":
+          description: Worker health
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/RunWorkers" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /packs:
+    get:
+      tags: [packs]
+      operationId: listPacks
+      summary: The product packs built into this server
+      responses:
+        "200":
+          description: The pack catalogue, shipped and planned
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/PackEntry" }
+
+  /packs/{packName}:
+    parameters:
+      - name: packName
+        in: path
+        required: true
+        schema: { type: string }
+    get:
+      tags: [packs]
+      operationId: getPack
+      summary: A shipped pack with its journey and stress scenarios
+      responses:
+        "200":
+          description: The pack
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/PackDetail" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /scenarios/{scenarioId}/coverage:
+    parameters:
+      - $ref: "#/components/parameters/scenarioId"
+    post:
+      tags: [scenarios]
+      operationId: scenarioCoverage
+      summary: Which endpoints of an API the scenario's journeys exercise
+      description: |
+        The same mapping as `stampede coverage`: every endpoint of the API
+        with the journeys that call it, and requests that match no
+        endpoint. No model and no requests to the target are needed. Give
+        the API as an OpenAPI document, or as `specURL` on the host of one
+        of the project's targets (or a host it allows); fetching by URL needs
+        the editor role.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CoverageRequest" }
+      responses:
+        "200":
+          description: Coverage
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ScenarioCoverage" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "422": { $ref: "#/components/responses/Invalid" }
+
+  /scenarios/{scenarioId}/drift:
+    parameters:
+      - $ref: "#/components/parameters/scenarioId"
+    post:
+      tags: [scenarios]
+      operationId: scenarioDrift
+      summary: Find journeys an API change broke
+      description: |
+        The same checks as `stampede drift`: with a previous version of the
+        API, endpoints removed since and the journeys that call them;
+        requests that use no endpoint of the current API; and with
+        `targetId`, a dry run of every journey with one user (real requests,
+        which needs the runner role).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/DriftRequest" }
+      responses:
+        "200":
+          description: Drift
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ScenarioDrift" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "422": { $ref: "#/components/responses/Invalid" }
+
+  /settings/sso:
+    get:
+      tags: [settings]
+      operationId: getSSOSettings
+      summary: The server's single sign-on configuration (admin)
+      description: Read-only. Set with `stampede server --oidc-*` flags; the client secret is never returned.
+      responses:
+        "200":
+          description: SSO configuration
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SSOSettings" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+
+  /settings/limits:
+    get:
+      tags: [settings]
+      operationId: getLimitSettings
+      summary: The server's load caps and every target's caps (admin)
+      description: Read-only. A run must fit the server's caps, the caps for unverified public targets when they apply, and its target's own caps.
+      responses:
+        "200":
+          description: Limits
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/LimitSettings" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+
 components:
   securitySchemes:
     bearer:
@@ -2591,3 +2737,253 @@ components:
         error: { type: string }
         durationMs: { type: integer }
         at: { type: string, format: date-time }
+
+    # -------------------------------------------------------------------
+    # Live worker health, the pack library, scenario coverage and drift,
+    # and read-only server settings.
+
+    RunWorkers:
+      type: object
+      required: [live, workers]
+      properties:
+        live:
+          type: boolean
+          description: The run is executing on this server, so health is current.
+        workers:
+          type: array
+          items: { $ref: "#/components/schemas/RunWorkerHealth" }
+
+    RunWorkerHealth:
+      type: object
+      required: [id, name, status, saturated, cpuPercent, schedLagP99]
+      properties:
+        id: { type: string }
+        name: { type: string }
+        region: { type: string }
+        status:
+          type: string
+          enum: [healthy, saturated, lost]
+          x-enum-varnames: [RunWorkerHealthy, RunWorkerSaturated, RunWorkerLost]
+          description: "healthy: generating load normally; saturated: it may be what limits the measured load; lost: it stopped sending heartbeats during the run."
+        saturated: { type: boolean, description: The worker reports itself saturated, so it may limit the measured load. }
+        reasons:
+          type: array
+          items: { type: string }
+          description: Why it is saturated, such as cpu or sched-lag.
+        cpuPercent: { type: number, format: double, description: "Process CPU use as a share of all the machine's cores, 0 to 100." }
+        schedLagP99: { type: number, format: double, description: 99th percentile of how late iterations were dispatched, in seconds. }
+        gcPauseP99: { type: number, format: double, description: Seconds. }
+        dropped: { type: integer, format: int64, description: Iterations dropped in the last sample because no virtual user was free. }
+        lastHeartbeatAt: { type: string, format: date-time, nullable: true }
+
+    PackEntry:
+      type: object
+      required: [name, title, status, signature, drivers]
+      properties:
+        name: { type: string }
+        title: { type: string }
+        status: { type: string, description: "shipped: built in and tested against a reference app in CI; planned: not yet available." }
+        signature: { type: string, description: What the pack's journeys and stresses cover. }
+        drivers:
+          type: array
+          items: { type: string }
+
+    PackDetail:
+      type: object
+      required: [name, title, description, status, protocols, variables, files]
+      properties:
+        name: { type: string }
+        title: { type: string }
+        description: { type: string }
+        status: { type: string }
+        protocols:
+          type: array
+          items: { type: string }
+        referenceApp: { type: string }
+        variables:
+          type: array
+          items:
+            type: object
+            required: [name, description]
+            properties:
+              name: { type: string }
+              description: { type: string }
+        files:
+          type: array
+          items: { $ref: "#/components/schemas/PackFile" }
+
+    PackFile:
+      type: object
+      required: [path, kind, scenario, journeys, yaml]
+      properties:
+        path: { type: string, example: journeys/shop-mix.yaml }
+        kind: { type: string, enum: [journey, stress], x-enum-varnames: [PackFileJourney, PackFileStress] }
+        scenario: { type: string, description: The scenario's metadata.name. }
+        description: { type: string }
+        journeys:
+          type: array
+          items: { type: string }
+        shape: { type: string, description: The load shape, when it sets one. }
+        yaml: { type: string }
+
+    CoverageRequest:
+      type: object
+      properties:
+        openapi: { type: string, description: OpenAPI 3.x document (YAML or JSON). }
+        specURL: { type: string, description: Fetch the OpenAPI document from this URL; its host must be one of the project's targets or a host a target allows. Needs the editor role. }
+        version: { type: integer, minimum: 1, description: Scenario version to check; default the latest. }
+
+    CoverageEndpoint:
+      type: object
+      required: [method, path, journeys]
+      properties:
+        method: { type: string }
+        path: { type: string }
+        summary: { type: string }
+        journeys:
+          type: array
+          items: { type: string }
+          description: Journeys that call the endpoint; empty when none does.
+
+    RequestRef:
+      type: object
+      required: [journey, method, url]
+      properties:
+        journey: { type: string }
+        method: { type: string }
+        url: { type: string }
+
+    ScenarioCoverage:
+      type: object
+      required: [version, endpoints, unmatched, templated, covered, total]
+      properties:
+        version: { type: integer, description: The scenario version checked. }
+        endpoints:
+          type: array
+          items: { $ref: "#/components/schemas/CoverageEndpoint" }
+        unmatched:
+          type: array
+          items: { $ref: "#/components/schemas/RequestRef" }
+          description: Requests that use no endpoint of the API, often a typo or a renamed endpoint.
+        templated: { type: integer, description: Requests whose whole URL is an expression, which cannot be matched. }
+        covered: { type: integer }
+        total: { type: integer }
+
+    DriftRequest:
+      type: object
+      properties:
+        openapi: { type: string, description: The current OpenAPI document. }
+        specURL: { type: string, description: Fetch the current document from a target's host, as for coverage. }
+        previousOpenapi: { type: string, description: The previous OpenAPI document, to list removed endpoints. }
+        previousSpecURL: { type: string }
+        targetId: { type: string, format: uuid, description: Dry-run every journey once against this target (sends real requests). }
+        version: { type: integer, minimum: 1 }
+
+    DriftEndpoint:
+      type: object
+      required: [method, path]
+      properties:
+        method: { type: string }
+        path: { type: string }
+
+    DriftJourneyCheck:
+      type: object
+      required: [journey, ok]
+      properties:
+        journey: { type: string }
+        ok: { type: boolean }
+        step: { type: string, description: The first step that failed. }
+        error: { type: string }
+        status: { type: integer }
+
+    ScenarioDrift:
+      type: object
+      required: [version, drifted, unmatched]
+      properties:
+        version: { type: integer }
+        drifted: { type: boolean, description: Something broke; stampede drift exits with code 4. }
+        added:
+          type: array
+          items: { $ref: "#/components/schemas/DriftEndpoint" }
+          description: Endpoints added since the previous version (only with a previous version).
+        removed:
+          type: array
+          items: { $ref: "#/components/schemas/DriftEndpoint" }
+        broken:
+          type: array
+          description: Journeys that call a removed endpoint.
+          items:
+            type: object
+            required: [journey, endpoints]
+            properties:
+              journey: { type: string }
+              endpoints:
+                type: array
+                items: { $ref: "#/components/schemas/DriftEndpoint" }
+        unmatched:
+          type: array
+          items: { $ref: "#/components/schemas/RequestRef" }
+        dryRun:
+          type: array
+          items: { $ref: "#/components/schemas/DriftJourneyCheck" }
+          description: Set when targetId was given.
+
+    SSOSettings:
+      type: object
+      required: [enabled, passwordLogin, allowedDomains, scopes]
+      properties:
+        enabled: { type: boolean }
+        passwordLogin: { type: boolean, description: Email and password sign-in is available too. }
+        name: { type: string, description: Label of the sign-in button. }
+        issuer: { type: string }
+        redirectURL: { type: string }
+        allowedDomains:
+          type: array
+          items: { type: string }
+          description: Email domains allowed to sign in; empty means any.
+        defaultRole:
+          type: string
+          description: Role given on first sign-in; empty means only existing accounts may sign in.
+        scopes:
+          type: array
+          items: { type: string }
+
+    LimitCaps:
+      type: object
+      properties:
+        maxRate: { type: number, format: double, description: Iterations per second; absent means no cap. }
+        maxVUs: { type: integer }
+        maxDurationSeconds: { type: integer }
+
+    LimitSettings:
+      type: object
+      required: [server, unverifiedPublic, targets]
+      properties:
+        server: { $ref: "#/components/schemas/LimitCaps" }
+        unverifiedPublic: { $ref: "#/components/schemas/LimitCaps" }
+        abortFloor:
+          type: object
+          nullable: true
+          description: Stops any run whose target is clearly failing, even when its scenario sets no abort limits.
+          required: [forSeconds]
+          properties:
+            errorRate: { type: number, format: double }
+            p95Seconds: { type: number, format: double }
+            forSeconds: { type: number, format: double }
+        targets:
+          type: array
+          items: { $ref: "#/components/schemas/TargetLimits" }
+
+    TargetLimits:
+      type: object
+      required: [id, name, projectId, projectName, baseURL, private, verified, caps, effective]
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string }
+        projectId: { type: string, format: uuid }
+        projectName: { type: string }
+        baseURL: { type: string }
+        private: { type: boolean }
+        verified: { type: boolean }
+        caps: { $ref: "#/components/schemas/LimitCaps" }
+        effective: { $ref: "#/components/schemas/LimitCaps" }

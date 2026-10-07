@@ -1,6 +1,10 @@
 node_modules/
 *.tsbuildinfo
 coverage/
+# End-to-end tests: the mock build and Playwright output.
+.e2e-dist/
+test-results/
+playwright-report/
 # The built UI is committed so `go build` and `go install` embed a working
 # UI without Node. The repository root ignores web/dist/; re-include it here.
 !/dist/

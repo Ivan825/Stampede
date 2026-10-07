@@ -57,6 +57,7 @@ compile if they drift from the spec. The same handlers back the tests.
 | `pnpm lint`      | ESLint (typescript-eslint strict, react-hooks) and Prettier check |
 | `pnpm format`    | Prettier write                                                    |
 | `pnpm test`      | Vitest + Testing Library (jsdom)                                  |
+| `pnpm test:e2e`  | Playwright end-to-end tests in Chromium (see below)               |
 | `pnpm build`     | type-check and build to `dist/`                                   |
 
 Run `pnpm generate` whenever the OpenAPI spec changes, and commit the result.
@@ -88,6 +89,30 @@ Build size (Vite 8, minified): about 6.4 MB on disk, most of it Monaco
 scenario editor. The first page needs about 450 KB (140 KB gzipped): the app
 entry, the React/Router/Query/Radix vendor chunk and CSS. ECharts (550 KB)
 loads with run pages.
+
+## End-to-end tests
+
+`pnpm test:e2e` runs the Playwright tests in [`e2e/`](e2e) in Chromium
+(`pnpm exec playwright install chromium` once). They build the UI in mock
+mode and serve it with `vite preview`, so no server is needed: sign in,
+create a project, target and scenario and run it to its report, compare
+runs, generate journeys in the AI studio, the library, coverage and drift,
+server settings, and editing the journey graph (including dragging a step).
+The mock API lives in the page, so each test loads one URL and then
+navigates inside the app; a reload starts from fresh fixtures.
+
+## Journey graph
+
+The graph beside the YAML editor edits the same YAML: drag a step to
+reorder it among its siblings, or select a step or journey to change a
+request's method, URL and name, a think duration or a group name, move it,
+add an HTTP request, think or group step, or remove it. The YAML stays the
+single source of truth: an edit parses it, rewrites only the lines of the
+steps it touches (`src/features/scenarios/scenarioEdit.ts`), and reaches
+the editor as one undoable change, so comments and formatting elsewhere are
+kept. Steps written in flow style (`steps: [{get: /}]`) are the exception:
+editing them reprints the document, which keeps comments but may change
+spacing. Branch, loop and while settings are edited in the YAML.
 
 ## Layout
 

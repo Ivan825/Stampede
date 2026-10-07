@@ -1,11 +1,14 @@
 import { clsx } from 'clsx';
 import { AlertTriangle, Info, Radio, ServerCrash, WifiOff } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
+import { useRunWorkers } from '@/api/queries';
 import type { Point, Run, RunEvent } from '@/api/types';
+import { isActive } from '@/api/types';
 import { Card, CardHeader, Stat } from '@/components/ui';
 import { axisMs, axisPct, clock, count, ms, num, pct, rate } from '@/lib/format';
 import type { StreamState } from '@/lib/useRunStream';
 import { LiveChart, type LiveSeries } from './LiveChart';
+import { WorkerHealthGrid } from './WorkerHealth';
 
 const perSec = (v: number) => (v >= 1000 ? `${(v / 1000).toFixed(1)}k` : v.toFixed(0));
 const vusFmt = (v: number) => v.toFixed(0);
@@ -69,6 +72,7 @@ export function LiveView({
   state: StreamState;
 }) {
   const now = useNow(true);
+  const health = useRunWorkers(run.id, isActive(run.status));
   const started = run.startedAt ? Date.parse(run.startedAt) : null;
   const elapsed = started ? (now - started) / 1000 : 0;
   const planned = run.plan?.durationSeconds ?? 0;
@@ -190,6 +194,8 @@ export function LiveView({
           tone={dropped > 0 ? 'warn' : undefined}
         />
       </div>
+
+      <WorkerHealthGrid data={health.data} error={health.error} now={now} />
 
       <div className="grid items-start gap-3 xl:grid-cols-2">
         <LiveChart

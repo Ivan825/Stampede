@@ -19,6 +19,7 @@ type DistributedExecutor struct {
 
 type distExec struct {
 	run    *coordinator.Run
+	coord  *coordinator.Coordinator
 	events chan ExecEvent
 }
 
@@ -32,7 +33,7 @@ func (d *DistributedExecutor) Start(ctx context.Context, spec ExecSpec) (Executi
 	if err != nil {
 		return nil, err
 	}
-	x := &distExec{run: run, events: make(chan ExecEvent, 64)}
+	x := &distExec{run: run, coord: d.Coordinator, events: make(chan ExecEvent, 64)}
 	go func() {
 		defer close(x.events)
 		for ev := range run.Events() {

@@ -47,11 +47,18 @@ iterations, dropped iterations and the generator's scheduling lag.
 
 - **Targets**: each target, the observed value and pass or fail. A target
   with no data fails.
-- **Breakpoint** and **knee**: see [test types](test-types.md).
+- **Breakpoint** and **knee**: see [test types](test-types.md). The
+  breakpoint lists the confirmation holds that narrowed it; the knee comes
+  with a chart and a table of throughput, p95 and errors at each load level.
+- **Recovery** (spike and recovery shapes): how long after load returned to
+  normal the target was back to its baseline p95 and error rate, or that it
+  never was.
 - **Summary**: requests and rate, failed requests, p50/p95/p99, iterations,
   dropped iterations, peak users, bytes.
 - **Over time**: throughput with planned load and active users, latency
-  p50/p95/p99, error rate.
+  p50/p95/p99, error rate. Shaded bands mark injected faults, windows in
+  which a worker was saturated, and windows in which a lost worker's share
+  of the load was not generated.
 - **Journeys and steps**: per step requests, errors, percentiles, mean wait
   (time to first byte) and connect time; for streams, time to first event and
   events per second; the HTTP protocol versions used.
@@ -69,8 +76,16 @@ iterations, dropped iterations and the generator's scheduling lag.
   scenario did not read the body), with the trace ID. `Authorization`,
   cookies and API-key headers are replaced by `[redacted]`, and so is any
   value of the run's secrets, as written or URL-encoded.
-- **Workers** (distributed runs): each worker's share, requests, peak users,
-  clock offset, saturated windows and whether it was lost.
+- **Workers** (distributed runs, or an in-process run whose machine was
+  saturated): each worker's region, share, state, requests, peak users,
+  clock offset, saturated windows with their reasons, and the window in
+  which it was lost or the worker it replaced.
+
+The web UI shows every section of the HTML report; each error row there
+expands to its examples' request and response. While a run is going, the
+live view also shows each worker's health: CPU, scheduling lag p99, whether
+it reports itself saturated and its last heartbeat
+(`GET /api/v1/runs/{id}/workers`).
 - **Notes**: anything that affects how to read the numbers: dropped
   iterations, lost workers, saturation, an early stop.
 

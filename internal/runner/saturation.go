@@ -10,6 +10,7 @@ import (
 	"github.com/Ivan825/Stampede/internal/health"
 	"github.com/Ivan825/Stampede/internal/metrics"
 	"github.com/Ivan825/Stampede/internal/report"
+	"github.com/Ivan825/Stampede/internal/wire"
 )
 
 // SelfMonitor watches the machine running an in-process engine (`stampede
@@ -24,6 +25,19 @@ type SelfMonitor struct {
 	mu        sync.Mutex
 	saturated []int64
 	reasons   map[string]bool
+	// last is the latest sample and when it was taken.
+	last   wire.Health
+	lastAt time.Time
+}
+
+// Latest is the most recent health sample and when it was taken; the
+// time is zero before the first interval.
+func (m *SelfMonitor) Latest() (wire.Health, time.Time) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	h := m.last
+	h.Reasons = append([]string(nil), h.Reasons...)
+	return h, m.lastAt
 }
 
 // NewSelfMonitor starts sampling the process once a second; Close stops it.
@@ -40,11 +54,12 @@ func (m *SelfMonitor) Observe(s *metrics.Snapshot) {
 		lag = time.Duration(s.SchedLag.Quantile(0.99)) * time.Microsecond
 	}
 	h := m.mon.Observe(lag, s.Dropped)
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.last, m.lastAt = h, time.Now()
 	if !h.Saturated {
 		return
 	}
-	m.mu.Lock()
-	defer m.mu.Unlock()
 	m.saturated = append(m.saturated, s.Interval)
 	for _, r := range h.Reasons {
 		m.reasons[health.Kind(r)] = true

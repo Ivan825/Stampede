@@ -12,6 +12,7 @@ import {
   KeyRound,
   LayoutDashboard,
   LogOut,
+  Package,
   Server,
   Settings,
   Sparkles,
@@ -272,6 +273,9 @@ export function Shell() {
                 </NavItem>
               </div>
             )}
+            <NavItem to="/library" icon={<Package />}>
+              Library
+            </NavItem>
             <NavItem to="/workers" icon={<Server />}>
               Workers
             </NavItem>

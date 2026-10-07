@@ -1,7 +1,7 @@
 import * as Tabs from '@radix-ui/react-tabs';
 import { Link, useNavigate, useParams, useSearch } from '@tanstack/react-router';
 import { clsx } from 'clsx';
-import { AlertTriangle, CheckCircle2, History, Play, Save, Trash2 } from 'lucide-react';
+import { AlertTriangle, CheckCircle2, History, ListChecks, Play, Save, Trash2 } from 'lucide-react';
 import { useState } from 'react';
 import {
   useCreateScenario,
@@ -233,6 +233,8 @@ function EditorLayout({
   const [tab, setTab] = useState('journeys');
   const [reveal, setReveal] = useState<{ line: number; n: number }>();
   const [newRun, setNewRun] = useState(false);
+  // Bumped when the journey graph edits the YAML, so the editor takes it.
+  const [graphRev, setGraphRev] = useState(0);
 
   const shownYaml = viewing != null ? (viewed.data?.yaml ?? '') : yaml;
   const validation = useValidation(shownYaml);
@@ -319,6 +321,15 @@ function EditorLayout({
               </Button>
             </>
           )}
+          {scenario && (
+            <Link
+              to="/projects/$projectId/scenarios/$scenarioId/coverage"
+              params={{ projectId, scenarioId: scenario.id }}
+              className="inline-flex h-8 items-center gap-2 rounded-md border border-line bg-surface px-3 text-sm font-medium hover:border-line-strong hover:bg-surface-2"
+            >
+              <ListChecks className="size-3.5" aria-hidden /> API coverage
+            </Link>
+          )}
           {scenario && can.startRuns && (
             <Button onClick={() => setNewRun(true)}>
               <Play className="size-3.5" aria-hidden /> Run
@@ -380,6 +391,7 @@ function EditorLayout({
             onSave={save}
             onMarkers={setMarkers}
             revealLine={reveal}
+            syncRev={graphRev}
           />
         </div>
         <Tabs.Root value={tab} onValueChange={setTab} className="flex min-h-0 flex-col bg-bg">
@@ -411,7 +423,14 @@ function EditorLayout({
             )}
           </Tabs.List>
           <Tabs.Content value="journeys" className="min-h-[360px] flex-1">
-            <JourneyGraphView yaml={shownYaml} />
+            <JourneyGraphView
+              yaml={shownYaml}
+              readOnly={readOnly}
+              onChange={(y) => {
+                setYaml(y);
+                setGraphRev((r) => r + 1);
+              }}
+            />
           </Tabs.Content>
           <Tabs.Content value="plan" className="flex-1 overflow-y-auto">
             {validation.result?.valid === false && (
