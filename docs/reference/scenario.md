@@ -52,6 +52,7 @@ field.
 | `maxVUs` | open-model user cap (default 5 × peak rate, 50 to 50,000) |
 | `gracefulStop` | time in-flight iterations get at the end (default 30s) |
 | `abort` | `{errors: 50%, p95: 5s, for: 10s}`: stop early when either limit holds for `for` (default 10s) |
+| `regions` | `{mumbai: 50%, frankfurt: 30%, virginia: 20%}`: split a distributed run's load by worker region (`stampede worker --region`). Shares add up to 100%; a run is refused when a region has no connected worker. In-process runs (`stampede run` without `--cluster`) ignore it. `--region` on `stampede start` and `run --cluster` overrides it |
 
 Units: durations `500ms 2s 1m30s 4h 2d` (a bare number is seconds); rates
 `50/s 3000/m 100/h`; percentages `1%` or `0.01`.

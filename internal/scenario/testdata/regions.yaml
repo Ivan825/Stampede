@@ -1,0 +1,18 @@
+apiVersion: stampede.dev/v1
+kind: Scenario
+metadata:
+  name: checkout-worldwide
+target:
+  baseURL: https://staging.example.com
+journeys:
+  - name: browse
+    steps:
+      - get: /products
+load:
+  mode: rate
+  rate: 300/s
+  duration: 10m
+  regions:
+    mumbai: 50%
+    frankfurt: 30%
+    virginia: 20%

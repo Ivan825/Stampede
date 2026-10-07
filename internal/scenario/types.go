@@ -575,6 +575,23 @@ type Load struct {
 	Abort *Abort `yaml:"abort,omitempty" json:"abort,omitempty"`
 	// Replay sends recorded traffic (mode: replay).
 	Replay *Replay `yaml:"replay,omitempty" json:"replay,omitempty"`
+	// Regions splits a distributed run's load by worker region, such as
+	// {mumbai: 50%, frankfurt: 30%, virginia: 20%}. The shares must add
+	// up to 100%. In-process runs ignore it.
+	Regions map[string]Percent `yaml:"regions,omitempty" json:"regions,omitempty"`
+}
+
+// RegionFractions returns the region split as fractions, or nil when the
+// load is not split by region.
+func (l *Load) RegionFractions() map[string]float64 {
+	if len(l.Regions) == 0 {
+		return nil
+	}
+	out := make(map[string]float64, len(l.Regions))
+	for r, p := range l.Regions {
+		out[r] = float64(p)
+	}
+	return out
 }
 
 // Abort ends a run when errors or latency stay above a limit for a while,

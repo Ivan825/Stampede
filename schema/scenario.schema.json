@@ -406,6 +406,13 @@
         "iterations": { "type": "integer", "minimum": 1 },
         "maxVUs": { "type": "integer", "minimum": 1 },
         "gracefulStop": { "$ref": "#/$defs/duration" },
+        "regions": {
+          "type": "object",
+          "minProperties": 1,
+          "description": "Split a distributed run's load by worker region, e.g. {mumbai: 50%, frankfurt: 30%, virginia: 20%}. Shares add up to 100%; every region needs at least one connected worker. In-process runs ignore it.",
+          "propertyNames": { "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,62}$" },
+          "additionalProperties": { "$ref": "#/$defs/percent" }
+        },
         "abort": {
           "type": "object",
           "additionalProperties": false,
