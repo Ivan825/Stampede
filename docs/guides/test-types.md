@@ -18,6 +18,14 @@ the preset, except where noted.
 | `recovery` | How fast does it return to normal after overload? | normal, 3× overload for 3m, back to normal for 5m |
 | `wave` | Does it cope with repeated peaks? | `cycles` (4) of ramp to `max`, hold, ramp to `start`, hold |
 
+When a `breakpoint` step fails, three short **confirmation holds**
+bisect the gap between the last level that held and the first that
+failed (each ramps like a step and holds for half a step, at least 15
+seconds). The report gives the breakpoint as that narrowed range and lists
+each hold; with the default ten steps the range shrinks from a tenth of
+`max` to under 2% of it. On a server the holds run on the same workers,
+and stopping or killing the run also stops them.
+
 For `spike` and `recovery` the report also gives the **recovery time**:
 how long after load returned to normal the target held its pre-overload
 baseline again (p95 within 25%, or 5 ms, of the median p95 over the
