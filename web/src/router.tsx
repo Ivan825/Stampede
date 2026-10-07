@@ -226,7 +226,15 @@ const workersRoute = createRoute({
 });
 
 export type SettingsTab =
-  'account' | 'tokens' | 'users' | 'audit' | 'integrations' | 'notifications' | 'ai';
+  | 'account'
+  | 'tokens'
+  | 'users'
+  | 'audit'
+  | 'integrations'
+  | 'notifications'
+  | 'ai'
+  | 'sso'
+  | 'limits';
 
 const settingsTabs: readonly SettingsTab[] = [
   'account',
@@ -236,6 +244,8 @@ const settingsTabs: readonly SettingsTab[] = [
   'integrations',
   'notifications',
   'ai',
+  'sso',
+  'limits',
 ];
 
 const settingsRoute = createRoute({

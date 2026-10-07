@@ -19,6 +19,7 @@ import { RoleChip } from '@/components/chips';
 import { AIProvidersTab } from '@/features/settings/AIProvidersTab';
 import { IntegrationsTab } from '@/features/settings/IntegrationsTab';
 import { NotificationsTab } from '@/features/settings/NotificationsTab';
+import { LimitsTab, SSOTab } from '@/features/settings/ServerSettingsTabs';
 import { Confirm, Modal } from '@/components/dialog';
 import { CopyButton } from '@/components/misc';
 import { useToast } from '@/components/toast';
@@ -617,6 +618,7 @@ export function SettingsPage() {
     tab = 'account';
   }
   if (tab === 'ai' && !can.manageAIProviders) tab = 'account';
+  if ((tab === 'sso' || tab === 'limits') && !can.manageUsers) tab = 'account';
 
   return (
     <div className="mx-auto max-w-6xl px-6 py-6">
@@ -650,6 +652,16 @@ export function SettingsPage() {
               AI providers
             </Tabs.Trigger>
           )}
+          {can.manageUsers && (
+            <Tabs.Trigger value="sso" className={tabTrigger}>
+              SSO
+            </Tabs.Trigger>
+          )}
+          {can.manageUsers && (
+            <Tabs.Trigger value="limits" className={tabTrigger}>
+              Limits
+            </Tabs.Trigger>
+          )}
           {can.viewAudit && (
             <Tabs.Trigger value="audit" className={tabTrigger}>
               Audit log
@@ -678,6 +690,16 @@ export function SettingsPage() {
         {can.manageAIProviders && (
           <Tabs.Content value="ai">
             <AIProvidersTab />
+          </Tabs.Content>
+        )}
+        {can.manageUsers && (
+          <Tabs.Content value="sso">
+            <SSOTab />
+          </Tabs.Content>
+        )}
+        {can.manageUsers && (
+          <Tabs.Content value="limits">
+            <LimitsTab />
           </Tabs.Content>
         )}
         {can.viewAudit && (
