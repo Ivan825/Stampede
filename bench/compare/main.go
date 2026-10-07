@@ -347,7 +347,12 @@ func runWrk2(c benchCase, addr string) toolResult {
 		return t
 	}
 	t.Version = "wrk2"
-	conns := max(c.Rate/10, 16)
+	// wrk2 gives every connection its own fixed schedule (rate/conns per
+	// second), so a slow reply delays the requests queued behind it on that
+	// connection and wrk2 rightly counts the wait. With one request per
+	// second per connection, a 300 ms reply delays none, as with k6's and
+	// Stampede's pools.
+	conns := max(c.Rate, 16)
 	cmd := exec.Command(bin, "-t2", "-c"+strconv.Itoa(conns), "-d"+c.Duration, "-R"+strconv.Itoa(c.Rate), "--latency", "http://"+addr+"/echo")
 	out, err := cmd.CombinedOutput()
 	if err != nil {
