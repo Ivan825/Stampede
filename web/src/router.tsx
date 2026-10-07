@@ -147,6 +147,9 @@ const scenarioCoverageRoute = createRoute({
 const schedulesRoute = createRoute({
   getParentRoute: () => projectRoute,
   path: '/schedules',
+  /** `drift` opens one drift check's result. */
+  validateSearch: (s: Record<string, unknown>): { drift?: string } =>
+    typeof s.drift === 'string' && uuidRe.test(s.drift) ? { drift: s.drift } : {},
   component: lazyRouteComponent(() => import('@/pages/Schedules'), 'SchedulesPage'),
 });
 
@@ -160,6 +163,12 @@ const secretsRoute = createRoute({
   getParentRoute: () => projectRoute,
   path: '/secrets',
   component: lazyRouteComponent(() => import('@/pages/Secrets'), 'SecretsPage'),
+});
+
+const projectSettingsRoute = createRoute({
+  getParentRoute: () => projectRoute,
+  path: '/settings',
+  component: lazyRouteComponent(() => import('@/pages/ProjectSettings'), 'ProjectSettingsPage'),
 });
 
 const aiStudioRoute = createRoute({
@@ -272,6 +281,7 @@ const routeTree = rootRoute.addChildren([
       schedulesRoute,
       targetsRoute,
       secretsRoute,
+      projectSettingsRoute,
       aiStudioRoute,
       aiJobRoute,
       compareRoute,

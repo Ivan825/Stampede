@@ -15,6 +15,7 @@ import {
   Package,
   Server,
   Settings,
+  SlidersHorizontal,
   Sparkles,
   Target as TargetIcon,
 } from 'lucide-react';
@@ -270,6 +271,14 @@ export function Shell() {
                   indent
                 >
                   Secrets
+                </NavItem>
+                <NavItem
+                  to="/projects/$projectId/settings"
+                  params={{ projectId: project.id }}
+                  icon={<SlidersHorizontal />}
+                  indent
+                >
+                  Project settings
                 </NavItem>
               </div>
             )}

@@ -1,13 +1,14 @@
 import { clsx } from 'clsx';
-import { AlertTriangle, Info, Radio, ServerCrash, WifiOff } from 'lucide-react';
+import { Radio, WifiOff } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 import { useRunWorkers } from '@/api/queries';
 import type { Point, Run, RunEvent } from '@/api/types';
 import { isActive } from '@/api/types';
-import { Card, CardHeader, Stat } from '@/components/ui';
+import { Stat } from '@/components/ui';
 import { axisMs, axisPct, clock, count, ms, num, pct, rate } from '@/lib/format';
 import type { StreamState } from '@/lib/useRunStream';
 import { LiveChart, type LiveSeries } from './LiveChart';
+import { DryRunGatePanel, EventFeed } from './RunEvents';
 import { WorkerHealthGrid } from './WorkerHealth';
 
 const perSec = (v: number) => (v >= 1000 ? `${(v / 1000).toFixed(1)}k` : v.toFixed(0));
@@ -22,42 +23,6 @@ function useNow(active: boolean) {
     return () => clearInterval(t);
   }, [active]);
   return now;
-}
-
-const eventIcon = (type: string) => {
-  if (type.includes('lost')) return <ServerCrash className="size-3.5 text-fail" aria-hidden />;
-  if (type.includes('saturat') || type.includes('safety') || type.includes('cap'))
-    return <AlertTriangle className="size-3.5 text-warn" aria-hidden />;
-  return <Info className="size-3.5 text-info" aria-hidden />;
-};
-
-export function EventFeed({ events }: { events: RunEvent[] }) {
-  return (
-    <Card className="flex min-h-0 flex-col">
-      <CardHeader title="Events" description="Worker and safety events, newest first." />
-      {events.length === 0 ? (
-        <p className="px-4 py-6 text-[13px] text-muted">No events yet.</p>
-      ) : (
-        <ol className="max-h-80 divide-y divide-line overflow-y-auto" aria-live="polite">
-          {events.map((e, i) => (
-            <li key={`${e.at}-${i}`} className="flex gap-2.5 px-4 py-2 text-[13px]">
-              <span className="mt-0.5">{eventIcon(e.type)}</span>
-              <div className="min-w-0 flex-1">
-                <p>{e.message}</p>
-                <p className="font-mono text-[11px] text-muted">
-                  {e.type}
-                  {e.worker ? ` · ${e.worker}` : ''}
-                </p>
-              </div>
-              <time className="num shrink-0 text-[11px] text-muted" dateTime={e.at}>
-                {new Date(e.at).toLocaleTimeString('en-GB')}
-              </time>
-            </li>
-          ))}
-        </ol>
-      )}
-    </Card>
-  );
 }
 
 export function LiveView({
@@ -195,6 +160,8 @@ export function LiveView({
         />
       </div>
 
+      <DryRunGatePanel events={events} />
+
       <WorkerHealthGrid data={health.data} error={health.error} now={now} />
 
       <div className="grid items-start gap-3 xl:grid-cols-2">
@@ -207,7 +174,7 @@ export function LiveView({
         />
         <LiveChart title="Latency" xs={xs} series={latency} leftFmt={axisMs} />
         <LiveChart title="Error rate" xs={xs} series={errors} leftFmt={axisPct} height={150} />
-        <EventFeed events={events} />
+        <EventFeed events={events} live />
       </div>
     </div>
   );

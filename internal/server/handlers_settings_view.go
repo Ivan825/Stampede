@@ -7,6 +7,7 @@ import (
 	"github.com/Ivan825/Stampede/internal/api/gen"
 	"github.com/Ivan825/Stampede/internal/auth"
 	"github.com/Ivan825/Stampede/internal/safety"
+	"github.com/Ivan825/Stampede/internal/store"
 	"github.com/Ivan825/Stampede/internal/store/db"
 )
 
@@ -82,7 +83,9 @@ func tightest(cs ...safety.Caps) safety.Caps {
 }
 
 // GetLimitSettings shows the caps every run is checked against, in the
-// order checkCaps applies them, and each target's own and effective caps.
+// order checkCaps applies them: the server's, the organisation's, each
+// project's, the unverified public caps, and each target's own caps,
+// with each target's effective caps combining all that apply to it.
 func (h *handlers) GetLimitSettings(ctx context.Context, _ gen.GetLimitSettingsRequestObject) (gen.GetLimitSettingsResponseObject, error) {
 	p, err := need(ctx, auth.PermManageUsers)
 	if err != nil {
@@ -107,11 +110,29 @@ func (h *handlers) GetLimitSettings(ctx context.Context, _ gen.GetLimitSettingsR
 		}
 		out.AbortFloor = floor
 	}
+	var orgCaps safety.Caps
+	oc, err := h.st.GetOrgCaps(ctx, p.OrgID)
+	switch {
+	case err == nil:
+		orgCaps = safetyCaps(oc.MaxRate, oc.MaxVus, oc.MaxDurationS)
+	case !store.IsNotFound(err):
+		return nil, err
+	}
+	out.Organisation = limitCapsOf(orgCaps)
 	projects, err := h.st.ListProjects(ctx, p.OrgID)
 	if err != nil {
 		return nil, err
 	}
+	out.Projects = make([]gen.ProjectLimits, 0, len(projects))
 	for _, pr := range projects {
+		ps, err := h.projectSettings(ctx, pr)
+		if err != nil {
+			return nil, err
+		}
+		projCaps := safetyCaps(ps.MaxRate, ps.MaxVus, ps.MaxDurationS)
+		out.Projects = append(out.Projects, gen.ProjectLimits{
+			Id: pr.ID, Name: pr.Name, Caps: limitCapsOf(projCaps), RequireDryRun: ps.RequireDryRun,
+		})
 		targets, err := h.st.ListTargets(ctx, pr.ID)
 		if err != nil {
 			return nil, err
@@ -119,7 +140,7 @@ func (h *handlers) GetLimitSettings(ctx context.Context, _ gen.GetLimitSettingsR
 		for _, t := range targets {
 			own := targetCaps(t)
 			verified := t.Private || t.VerifiedAt != nil
-			eff := tightest(h.cfg.HardCaps, own)
+			eff := tightest(h.cfg.HardCaps, orgCaps, projCaps, own)
 			if !verified {
 				eff = tightest(eff, safety.UnverifiedPublicCaps)
 			}

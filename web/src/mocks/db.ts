@@ -5,11 +5,14 @@
 import type {
   AIProvider,
   AuditEntry,
+  Caps,
+  DriftResult,
   Integration,
   Me,
   NotificationChannel,
   NotificationDelivery,
   Project,
+  ProjectSettings,
   Report,
   Role,
   Run,
@@ -36,6 +39,7 @@ import {
 } from './sim';
 import { nextTimes, parseCron } from './cron';
 import { seedAI, type MockAIJob } from './ai';
+import { driftCheck } from './drift';
 import {
   catalogBreakpoint,
   checkoutStress,
@@ -89,6 +93,12 @@ export interface Db {
   schedules: Schedule[];
   aiProviders: AIProvider[];
   aiJobs: MockAIJob[];
+  orgCaps: Caps;
+  /** By project id; a project without an entry has no caps and no dry-run gate. */
+  projectSettings: Record<string, ProjectSettings>;
+  /** Per-project role overrides, by project id. */
+  projectRoles: Record<string, { userId: string; role: Role; createdAt: string }[]>;
+  driftResults: DriftResult[];
 }
 
 function scenarioFrom(
@@ -376,6 +386,17 @@ export function createDb(options: MockOptions): Db {
     schedules: [],
     aiProviders: [],
     aiJobs: [],
+    orgCaps: { maxVUs: 3000 },
+    projectSettings: {
+      [p1.id]: { caps: { maxDurationSeconds: 2 * HOUR }, requireDryRun: true },
+    },
+    projectRoles: {
+      [p1.id]: [
+        { userId: users[3]!.id, role: 'editor', createdAt: ago(6 * DAY) },
+        { userId: users[4]!.id, role: 'runner', createdAt: ago(2 * DAY) },
+      ],
+    },
+    driftResults: [],
   };
   {
     const ai = seedAI({
@@ -488,6 +509,15 @@ export function createDb(options: MockOptions): Db {
     };
     db.runs.push(run);
     db.sims[run.id] = sim;
+    if (run.startedAt) {
+      db.events[run.id] = [
+        {
+          type: 'worker.assigned',
+          message: `${run.workers} workers assigned in eu-west-1`,
+          at: created,
+        },
+      ];
+    }
     if (status === 'completed' || status === 'aborted') {
       const tl = simulateTimeline(
         sim,
@@ -509,6 +539,38 @@ export function createDb(options: MockOptions): Db {
       run.summary = summaryOf(rep);
     }
   });
+
+  // A run the project's dry-run gate refused: a journey failed its dry run,
+  // so no load was started.
+  {
+    const created = ago(7 * HOUR);
+    const run: Run = {
+      id: uuid(),
+      projectId: sSmoke.projectId,
+      scenarioId: sSmoke.id,
+      scenarioName: sSmoke.name,
+      scenarioVersion: sSmoke.latestVersion.version,
+      targetId: staging.id,
+      targetURL: staging.baseURL,
+      status: 'failed',
+      verdict: null,
+      stopReason: null,
+      error:
+        'the required dry run failed, so no load was started: login: step 1 (POST /api/login): status 200 expected, got 404',
+      overrides: {},
+      ...(sSmoke.latestVersion.plan ? { plan: sSmoke.latestVersion.plan } : {}),
+      workers: 2,
+      note: 'release 2026.10.3 smoke',
+      createdBy: 'github-actions',
+      createdAt: created,
+      startedAt: null,
+      endedAt: ago(7 * HOUR - 3),
+      summary: null,
+    };
+    db.runs.push(run);
+    db.sims[run.id] = simFor(sSmoke, 999);
+    db.events[run.id] = dryRunEvents(sSmoke, created, 'login').reverse();
+  }
 
   // Schedules: a nightly smoke run and a paused weekday stress run.
   const lastOf = (sc: Scenario, t: Target) =>
@@ -558,6 +620,33 @@ export function createDb(options: MockOptions): Db {
       overrides: { duration: '10m' },
     }),
   ];
+  // An hourly drift check whose latest result found a broken journey.
+  {
+    const sc = schedule('hourly-drift', sSmoke, staging, '0 * * * *', 'UTC', true, {
+      kind: 'drift',
+      specURL: 'https://staging.shop.acme.dev/openapi.yaml',
+      note: 'Find journeys an API change broke.',
+      lastRunId: null,
+      lastFiredAt: ago(40 * MIN),
+    });
+    const check = (drifted: boolean, at: number) =>
+      driftCheck({
+        id: uuid(),
+        schedule: sc,
+        scenario: sSmoke,
+        target: staging,
+        drifted,
+        at: ago(at),
+      });
+    const latest = check(true, 40 * MIN);
+    db.driftResults = [latest, check(false, 100 * MIN)];
+    Object.assign(sc, {
+      lastDriftId: latest.id,
+      lastDriftStatus: latest.status,
+      lastDriftBroken: latest.broken,
+    });
+    db.schedules.push(sc);
+  }
 
   // One run in progress, 40s in.
   const live = startRun(db, sStress, staging, { note: 'cache warm-up check', workers: 2 }, 40);
@@ -698,14 +787,69 @@ export function startRun(
   };
   db.runs.unshift(run);
   db.sims[id] = sim;
+  // Newest first, as tick() adds them.
   db.events[id] = [
     {
       type: 'worker.assigned',
       message: `${run.workers} workers assigned in eu-west-1`,
       at: run.createdAt,
     },
-  ];
+    ...(db.projectSettings[s.projectId]?.requireDryRun ? dryRunEvents(s, run.createdAt) : []),
+  ].reverse();
   return run;
+}
+
+const gateProblem = 'step 1 (POST /api/login): status 200 expected, got 404';
+
+/**
+ * The events a project's dry-run gate records before load, oldest first:
+ * each journey runs once with one user. `failing` names a journey that
+ * fails, which stops the run before any load.
+ */
+export function dryRunEvents(s: Scenario, at: string, failing?: string): RunEvent[] {
+  const t0 = Date.parse(at);
+  const t = (i: number) => new Date(t0 + (i + 1) * 400).toISOString();
+  const names = analyse(s.latestVersion.yaml).journeys.map((j) => j.name);
+  const out: RunEvent[] = [
+    {
+      type: 'dryrun.started',
+      message:
+        'this project requires a passing dry run: running each journey once with one user before load',
+      at: t(0),
+    },
+  ];
+  names.forEach((j, i) => {
+    out.push(
+      j === failing
+        ? {
+            type: 'dryrun.journey',
+            message: `journey ${j} failed its dry run: ${gateProblem}`,
+            at: t(i + 1),
+            details: { journey: j, ok: false, problem: gateProblem },
+          }
+        : {
+            type: 'dryrun.journey',
+            message: `journey ${j} passed its dry run`,
+            at: t(i + 1),
+            details: { journey: j, ok: true },
+          },
+    );
+  });
+  const failed = names.filter((j) => j === failing).length;
+  out.push(
+    failed
+      ? {
+          type: 'dryrun.failed',
+          message: `${failed} of ${names.length} journeys failed the dry run; no load was started`,
+          at: t(names.length + 1),
+        }
+      : {
+          type: 'dryrun.passed',
+          message: `all ${names.length} journeys passed the dry run; starting load`,
+          at: t(names.length + 1),
+        },
+  );
+  return out;
 }
 
 /** Elapsed load seconds for an active run. */

@@ -38,7 +38,11 @@ project caps with `PUT /api/v1/projects/{projectId}/settings` (organisation
 admins, or members with the admin role in that project). Each takes
 `maxRate` (iterations per second), `maxVUs` and `maxDurationSeconds`; an
 empty object removes them. Changes are audited. There is no CLI command for
-them yet.
+them yet. In the web UI, admins edit the organisation's caps in
+**Settings → Limits**, which also lists every project's caps and each
+target's effective caps (the tightest of all the levels that apply to it),
+and a project's caps in **Project settings** in the project's navigation;
+other members see them read-only there.
 
 Bandwidth and open-connection caps are not implemented.
 
@@ -55,6 +59,9 @@ outcome is recorded as run events (`dryrun.started`, one `dryrun.journey`
 per journey, then `dryrun.passed` or `dryrun.failed`), listed by
 `GET /api/v1/runs/{runId}/events`. Stopping or killing a run during its dry
 run ends it `aborted` before any load. The dry run is bounded to 2 minutes.
+In the web UI the gate is a checkbox in **Project settings**, and the run
+page shows the dry run's result for each journey, with the problem of each
+one that failed, and the run's events.
 
 ## Stopping
 
@@ -89,7 +96,9 @@ results uses the role in that project; `GET /projects` reports it as
 of one project. An API token never grants more than the role it was
 created with. Organisation admins can always manage a project's roles and
 settings, even when an override lowers them there; deleting a project and
-the organisation-wide kill switch need the organisation role.
+the organisation-wide kill switch need the organisation role. In the web
+UI, **Project settings** lists every member with their organisation role
+and any override; admins set or remove overrides there.
 
 ## Record
 

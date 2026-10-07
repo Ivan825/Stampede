@@ -72,8 +72,15 @@ proposed new version with a diff; nothing is saved until someone approves
 the job (`POST /api/v1/ai/jobs/{jobId}/approve`). It needs an AI provider
 and the editor role.
 
-In the web UI, drift schedules show their last check and a **Check now**
-button; creating one is done from the CLI or the API.
+In the web UI, choose **Check for drift** in the **New schedule** dialog
+and, optionally, give the spec URL; a drift schedule's kind cannot be
+changed later, but its spec URL can. Drift schedules show their last check
+and a **Check now** button, and **Drift checks** below the schedules lists
+every result. Opening one shows each journey's dry-run result with its
+redacted trace, the removed and added endpoints and the requests that match
+none. When journeys broke, editors can choose **Propose a fix**, which
+starts the repair job and opens it in the AI studio, where the proposed
+version and its diff are reviewed and approved.
 
 ## Cron expressions
 

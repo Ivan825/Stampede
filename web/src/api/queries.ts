@@ -12,7 +12,9 @@ import type {
   AIJobApprove,
   AIJobCreate,
   AIProviderPut,
+  Caps,
   CompareRequest,
+  DriftRepair,
   CoverageRequest,
   DriftRequest,
   IntegrationCreate,
@@ -20,6 +22,7 @@ import type {
   NotificationChannelCreate,
   Me,
   ProjectCreate,
+  ProjectSettings,
   Report,
   Role,
   Run,
@@ -74,6 +77,12 @@ export const keys = {
   pack: (name: string) => ['packs', name] as const,
   ssoSettings: ['settings', 'sso'] as const,
   limitSettings: ['settings', 'limits'] as const,
+  orgCaps: ['organisation', 'caps'] as const,
+  projectSettings: (projectId: string) => ['projects', projectId, 'settings'] as const,
+  projectRoles: (projectId: string) => ['projects', projectId, 'roles'] as const,
+  runEvents: (runId: string) => ['runs', runId, 'events'] as const,
+  driftResults: (projectId: string) => ['projects', projectId, 'drift-results'] as const,
+  driftResult: (id: string) => ['drift-results', id] as const,
 };
 
 // ---------------------------------------------------------------- system/auth
@@ -356,6 +365,88 @@ export function useDeleteProject() {
   });
 }
 
+/** A project's caps and dry-run gate. */
+export function useProjectSettings(projectId: string) {
+  return useQuery({
+    queryKey: keys.projectSettings(projectId),
+    queryFn: () =>
+      unwrap(api.GET('/projects/{projectId}/settings', { params: { path: { projectId } } })),
+  });
+}
+
+export function usePutProjectSettings(projectId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (body: ProjectSettings) =>
+      unwrap(api.PUT('/projects/{projectId}/settings', { params: { path: { projectId } }, body })),
+    onSuccess: (s) => {
+      qc.setQueryData(keys.projectSettings(projectId), s);
+      void qc.invalidateQueries({ queryKey: keys.limitSettings });
+    },
+  });
+}
+
+/** Members whose role in this project differs from their organisation role. */
+export function useProjectRoles(projectId: string) {
+  return useQuery({
+    queryKey: keys.projectRoles(projectId),
+    queryFn: () =>
+      unwrap(api.GET('/projects/{projectId}/roles', { params: { path: { projectId } } })),
+  });
+}
+
+export function usePutProjectRole(projectId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ userId, role }: { userId: string; role: Role }) =>
+      unwrap(
+        api.PUT('/projects/{projectId}/roles/{userId}', {
+          params: { path: { projectId, userId } },
+          body: { role },
+        }),
+      ),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: keys.projectRoles(projectId) });
+      void qc.invalidateQueries({ queryKey: keys.projects });
+    },
+  });
+}
+
+export function useDeleteProjectRole(projectId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (userId: string) =>
+      unwrap(
+        api.DELETE('/projects/{projectId}/roles/{userId}', {
+          params: { path: { projectId, userId } },
+        }),
+      ),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: keys.projectRoles(projectId) });
+      void qc.invalidateQueries({ queryKey: keys.projects });
+    },
+  });
+}
+
+/** The organisation's caps on every run. */
+export function useOrgCaps() {
+  return useQuery({
+    queryKey: keys.orgCaps,
+    queryFn: () => unwrap(api.GET('/organisation/caps')),
+  });
+}
+
+export function usePutOrgCaps() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (body: Caps) => unwrap(api.PUT('/organisation/caps', { body })),
+    onSuccess: (c) => {
+      qc.setQueryData(keys.orgCaps, c);
+      void qc.invalidateQueries({ queryKey: keys.limitSettings });
+    },
+  });
+}
+
 // ---------------------------------------------------------------- targets
 
 export function useTargets(projectId: string) {
@@ -569,6 +660,15 @@ export function useTimeline(id: string, enabled: boolean) {
   });
 }
 
+/** Events recorded for a run, oldest first; polled while `refetchInterval` is set. */
+export function useRunEvents(id: string, refetchInterval: number | false = false) {
+  return useQuery({
+    queryKey: keys.runEvents(id),
+    queryFn: () => unwrap(api.GET('/runs/{runId}/events', { params: { path: { runId: id } } })),
+    refetchInterval,
+  });
+}
+
 export function useReport(id: string, enabled: boolean) {
   return useQuery({
     queryKey: keys.report(id),
@@ -713,10 +813,57 @@ export function useRunSchedule(projectId: string) {
       unwrap(api.POST('/schedules/{scheduleId}/run', { params: { path: { scheduleId: id } } })),
     onSuccess: (res) => {
       // A drift schedule's check returns a drift result, not a run.
-      if (!('broken' in res)) qc.setQueryData(keys.run(res.id), res);
+      if ('broken' in res) {
+        qc.setQueryData(keys.driftResult(res.id), res);
+        void qc.invalidateQueries({ queryKey: keys.driftResults(projectId) });
+      } else qc.setQueryData(keys.run(res.id), res);
       void qc.invalidateQueries({ queryKey: keys.schedules(projectId) });
       void qc.invalidateQueries({ queryKey: keys.allRuns(projectId) });
       void qc.invalidateQueries({ queryKey: keys.activeRuns });
+    },
+  });
+}
+
+/** Results of a project's scheduled drift checks, newest first, without traces. */
+export function useDriftResults(projectId: string) {
+  return useQuery({
+    queryKey: keys.driftResults(projectId),
+    queryFn: () =>
+      unwrap(
+        api.GET('/projects/{projectId}/drift-results', {
+          params: { path: { projectId }, query: { limit: 50 } },
+        }),
+      ),
+    refetchInterval: 15_000,
+  });
+}
+
+/** One drift check with its redacted dry-run traces. */
+export function useDriftResult(id: string | null) {
+  return useQuery({
+    queryKey: keys.driftResult(id ?? ''),
+    queryFn: () =>
+      unwrap(api.GET('/drift-results/{driftId}', { params: { path: { driftId: id ?? '' } } })),
+    enabled: !!id,
+  });
+}
+
+/** Asks the AI generator to repair a drift check's broken journeys. */
+export function useRepairDrift(projectId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, providerId, maxRepairs }: Partial<DriftRepair> & { id: string }) =>
+      unwrap(
+        api.POST('/drift-results/{driftId}/repair', {
+          params: { path: { driftId: id } },
+          body: { maxRepairs: maxRepairs ?? 3, ...(providerId ? { providerId } : {}) },
+        }),
+      ),
+    onSuccess: (job, { id }) => {
+      qc.setQueryData(keys.aiJob(job.id), job);
+      void qc.invalidateQueries({ queryKey: keys.aiJobs(projectId) });
+      void qc.invalidateQueries({ queryKey: keys.driftResults(projectId) });
+      void qc.invalidateQueries({ queryKey: keys.driftResult(id) });
     },
   });
 }

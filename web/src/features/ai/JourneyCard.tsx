@@ -116,7 +116,7 @@ function StepTrace({ step, index }: { step: AIStepTrace; index: number }) {
   );
 }
 
-function TraceView({ trace }: { trace: AITrace }) {
+export function TraceView({ trace }: { trace: AITrace }) {
   return (
     <details className="rounded-md border border-line">
       <summary className="flex cursor-pointer items-center gap-2 px-3 py-1.5 text-[13px] hover:bg-surface-2/60">

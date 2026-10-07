@@ -90,9 +90,10 @@ How it works:
 `GET /api/v1/auth/config` (public) reports whether SSO is on and where it
 starts. Admins see the whole configuration, read-only and without the
 client ID or secret, in Settings → SSO (`GET /api/v1/settings/sso`); the
-caps runs are checked against (the hard caps above, the caps for unverified
-public targets, the abort floor and each target's own and effective caps)
-are in Settings → Limits (`GET /api/v1/settings/limits`).
+caps runs are checked against (the hard caps above, the organisation's
+caps, each project's caps and dry-run gate, the caps for unverified public
+targets, the abort floor and each target's own and effective caps) are in
+Settings → Limits (`GET /api/v1/settings/limits`).
 
 ### Tracing (OpenTelemetry)
 

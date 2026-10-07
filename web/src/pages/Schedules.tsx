@@ -1,4 +1,4 @@
-import { Link, useNavigate, useParams } from '@tanstack/react-router';
+import { Link, useNavigate, useParams, useSearch } from '@tanstack/react-router';
 import { clsx } from 'clsx';
 import { Pencil, Play, Plus, Trash2 } from 'lucide-react';
 import { useEffect, useState, type FormEvent } from 'react';
@@ -13,7 +13,7 @@ import {
   useTargets,
   useUpdateSchedule,
 } from '@/api/queries';
-import type { Schedule, ScheduleCreate, Verdict } from '@/api/types';
+import type { Schedule, ScheduleCreate, ScheduleKind, ScheduleUpdate, Verdict } from '@/api/types';
 import { isActive } from '@/api/types';
 import { Chip, StatusChip, VerdictChip } from '@/components/chips';
 import { Confirm, Modal } from '@/components/dialog';
@@ -34,6 +34,11 @@ import {
 import { CapsSummary } from '@/features/runs/NewRunDialog';
 import { EnvFields, OverridesFields } from '@/features/runs/RunFields';
 import {
+  DriftResultDialog,
+  DriftResultsCard,
+  DriftStatusChip,
+} from '@/features/schedules/DriftResults';
+import {
   envError,
   envRows,
   overrideErrors,
@@ -50,6 +55,23 @@ const presets: { label: string; cron: string }[] = [
   { label: 'Weekdays 06:30', cron: '30 6 * * MON-FRI' },
   { label: 'Mondays 03:00', cron: '0 3 * * MON' },
 ];
+
+const kinds: { kind: ScheduleKind; label: string; help: string }[] = [
+  { kind: 'run', label: 'Run a load test', help: 'Starts a run of the scenario.' },
+  {
+    kind: 'drift',
+    label: 'Check for drift',
+    help: 'Runs each journey once with one user and records the journeys that broke; no load.',
+  },
+];
+
+function hostOf(url: string): string {
+  try {
+    return new URL(url).host;
+  } catch {
+    return url;
+  }
+}
 
 /** A firing time in the schedule's own zone: "Thu 8 Oct, 02:00 BST". */
 function zoned(iso: string, timeZone: string): string {
@@ -138,7 +160,10 @@ function ScheduleDialog({
   const [workerCount, setWorkerCount] = useState(String(schedule?.workers ?? 0));
   const [note, setNote] = useState(schedule?.note ?? '');
   const [enabled, setEnabled] = useState(schedule?.enabled ?? true);
+  const [kind, setKind] = useState<ScheduleKind>(schedule?.kind ?? 'run');
+  const [specURL, setSpecURL] = useState(schedule?.specURL ?? '');
   const [touched, setTouched] = useState(false);
+  const drift = kind === 'drift';
 
   const scenarioId = scenarioChoice || scenarios.data?.[0]?.id || '';
   const targetId = targetChoice || targets.data?.[0]?.id || '';
@@ -149,11 +174,19 @@ function ScheduleDialog({
     scenario: scenarioId ? undefined : 'Pick a scenario.',
     target: targetId ? undefined : 'Pick a target.',
     cron: cron.trim() ? undefined : 'Enter a cron expression.',
-    ...overrideErrors(ov),
-    workers: !(Number.isInteger(Number(workerCount)) && Number(workerCount) >= 0)
-      ? 'A whole number, 0 or more.'
-      : undefined,
+    ...(drift
+      ? { vus: undefined, rate: undefined, duration: undefined, workers: undefined }
+      : {
+          ...overrideErrors(ov),
+          workers: !(Number.isInteger(Number(workerCount)) && Number(workerCount) >= 0)
+            ? 'A whole number, 0 or more.'
+            : undefined,
+        }),
     env: envError(env),
+    specURL:
+      drift && specURL.trim() && !/^https?:\/\/[^\s/]+/.test(specURL.trim())
+        ? 'Enter an http:// or https:// URL.'
+        : undefined,
   };
   const valid = Object.values(errors).every((e) => !e);
   const show = (k: keyof typeof errors) => (touched ? errors[k] : undefined);
@@ -162,24 +195,42 @@ function ScheduleDialog({
     e.preventDefault();
     setTouched(true);
     if (!valid) return;
-    const body: ScheduleCreate = {
+    const common = {
       name: name.trim(),
       scenarioId,
       targetId,
       cron: cron.trim(),
       timezone: timezone.trim() || 'UTC',
-      overrides: {
-        ...toOverrides(ov),
-        ...(schedule?.overrides?.regions ? { regions: schedule.overrides.regions } : {}),
-      },
       env: toEnv(env),
-      workers: Number(workerCount),
       enabled,
       note: note.trim(),
     };
+    // A drift check starts no load, so it has no overrides or workers.
+    const load = drift
+      ? {}
+      : {
+          overrides: {
+            ...toOverrides(ov),
+            ...(schedule?.overrides?.regions ? { regions: schedule.overrides.regions } : {}),
+          },
+          workers: Number(workerCount),
+        };
     const opts = { onSuccess: () => onOpenChange(false) };
-    if (schedule) update.mutate({ id: schedule.id, ...body }, opts);
-    else create.mutate(body, opts);
+    if (schedule) {
+      const body: ScheduleUpdate = {
+        ...common,
+        ...load,
+        ...(drift ? { specURL: specURL.trim() } : {}),
+      };
+      update.mutate({ id: schedule.id, ...body }, opts);
+    } else {
+      const body: ScheduleCreate = {
+        ...common,
+        ...load,
+        ...(drift ? { kind: 'drift', ...(specURL.trim() ? { specURL: specURL.trim() } : {}) } : {}),
+      };
+      create.mutate(body, opts);
+    }
   };
 
   return (
@@ -187,7 +238,11 @@ function ScheduleDialog({
       open={open}
       onOpenChange={onOpenChange}
       title={schedule ? `Edit ${schedule.name}` : 'New schedule'}
-      description="Start a run of a scenario on a cron schedule. The server checks the run now, so a schedule it accepts would start if it fired."
+      description={
+        drift
+          ? 'Check a scenario for drift on a cron schedule: each journey runs once with one user against the target, and no load is generated.'
+          : 'Start a run of a scenario on a cron schedule. The server checks the run now, so a schedule it accepts would start if it fired.'
+      }
       width="max-w-2xl"
       footer={
         <>
@@ -211,6 +266,34 @@ function ScheduleDialog({
             />
           )}
         </Field>
+        {schedule ? (
+          <p className="-mt-2 text-xs text-muted">
+            {drift ? 'Checks for drift.' : 'Starts a load test run.'} A schedule’s kind cannot be
+            changed.
+          </p>
+        ) : (
+          <fieldset>
+            <legend className="mb-1.5 text-[13px] font-medium">What it does</legend>
+            <div className="flex flex-col gap-1.5 text-[13px]">
+              {kinds.map((k) => (
+                <label key={k.kind} className="flex items-start gap-2">
+                  <input
+                    type="radio"
+                    name="schedule-kind"
+                    className="mt-0.5"
+                    value={k.kind}
+                    checked={kind === k.kind}
+                    onChange={() => setKind(k.kind)}
+                  />
+                  <span>
+                    <span className="font-medium">{k.label}</span>
+                    <span className="block text-xs text-muted">{k.help}</span>
+                  </span>
+                </label>
+              ))}
+            </div>
+          </fieldset>
+        )}
         <div className="grid grid-cols-2 gap-3">
           <Field label="Scenario" hint="Runs the latest version." error={show('scenario')}>
             {(p) => (
@@ -237,7 +320,26 @@ function ScheduleDialog({
             )}
           </Field>
         </div>
-        {target && <CapsSummary target={target} />}
+        {target && !drift && <CapsSummary target={target} />}
+        {drift && (
+          <Field
+            label="OpenAPI spec URL"
+            hint={`Optional. On ${target ? hostOf(target.baseURL) : 'the target’s host'} or one of the target's allowed hosts. Each check compares the scenario with it and lists removed endpoints and requests that match none.`}
+            error={show('specURL')}
+          >
+            {(p) => (
+              <Input
+                {...p}
+                className="font-mono"
+                placeholder={
+                  target ? `${target.baseURL.replace(/\/$/, '')}/openapi.yaml` : 'https://…'
+                }
+                value={specURL}
+                onChange={(e) => setSpecURL(e.target.value)}
+              />
+            )}
+          </Field>
+        )}
 
         <div className="grid grid-cols-[1fr_14rem] gap-3">
           <Field
@@ -283,13 +385,15 @@ function ScheduleDialog({
           <CronPreview cron={cron} timezone={timezone} />
         </div>
 
-        <OverridesFields
-          id="schedule-overrides"
-          ov={ov}
-          setOv={setOv}
-          errors={{ vus: show('vus'), rate: show('rate'), duration: show('duration') }}
-          defaultOpen={Object.keys(schedule?.overrides ?? {}).length > 0}
-        />
+        {!drift && (
+          <OverridesFields
+            id="schedule-overrides"
+            ov={ov}
+            setOv={setOv}
+            errors={{ vus: show('vus'), rate: show('rate'), duration: show('duration') }}
+            defaultOpen={Object.keys(schedule?.overrides ?? {}).length > 0}
+          />
+        )}
         <EnvFields
           env={env}
           setEnv={setEnv}
@@ -297,17 +401,19 @@ function ScheduleDialog({
           help="They are stored with the schedule and anyone in the project can read them, so use Secrets for credentials."
         />
 
-        <div className="grid grid-cols-[9rem_1fr] gap-3">
-          <Field label="Workers" hint="0 uses every connected worker." error={show('workers')}>
-            {(p) => (
-              <Input
-                {...p}
-                inputMode="numeric"
-                value={workerCount}
-                onChange={(e) => setWorkerCount(e.target.value)}
-              />
-            )}
-          </Field>
+        <div className={clsx('grid gap-3', !drift && 'grid-cols-[9rem_1fr]')}>
+          {!drift && (
+            <Field label="Workers" hint="0 uses every connected worker." error={show('workers')}>
+              {(p) => (
+                <Input
+                  {...p}
+                  inputMode="numeric"
+                  value={workerCount}
+                  onChange={(e) => setWorkerCount(e.target.value)}
+                />
+              )}
+            </Field>
+          )}
           <Field label="Note" hint="Optional. What the schedule is for.">
             {(p) => (
               <Textarea
@@ -325,7 +431,7 @@ function ScheduleDialog({
           Enabled
         </label>
         <p className="-mt-2 text-xs text-muted">
-          Runs start as you. Saving a schedule makes you its owner.
+          {drift ? 'Checks run' : 'Runs start'} as you. Saving a schedule makes you its owner.
         </p>
         <ErrorAlert error={m.error} />
       </form>
@@ -367,21 +473,29 @@ function Switch({
   );
 }
 
-function LastDrift({ s }: { s: Schedule }) {
+function LastDrift({ s, onOpen }: { s: Schedule; onOpen: (id: string) => void }) {
   if (!s.lastDriftStatus) return <span className="text-muted">Never</span>;
   const broken = s.lastDriftBroken ?? [];
+  const summary = (
+    <>
+      <DriftStatusChip status={s.lastDriftStatus} />
+      <span className="text-xs text-muted">{relativeTime(s.lastFiredAt)}</span>
+    </>
+  );
   return (
     <div className="flex flex-col gap-0.5">
-      <div className="flex items-center gap-2">
-        {s.lastDriftStatus === 'ok' ? (
-          <Chip tone="pass">NO DRIFT</Chip>
-        ) : s.lastDriftStatus === 'drifted' ? (
-          <Chip tone="fail">DRIFTED</Chip>
-        ) : (
-          <Chip tone="warn">CHECK FAILED</Chip>
-        )}
-        <span className="text-xs text-muted">{relativeTime(s.lastFiredAt)}</span>
-      </div>
+      {s.lastDriftId ? (
+        <button
+          type="button"
+          className="flex items-center gap-2 text-left hover:underline"
+          aria-label={`View the last drift check of ${s.name}`}
+          onClick={() => onOpen(s.lastDriftId!)}
+        >
+          {summary}
+        </button>
+      ) : (
+        <div className="flex items-center gap-2">{summary}</div>
+      )}
       {broken.length > 0 && (
         <span className="max-w-64 text-xs text-muted">Broken: {broken.join(', ')}</span>
       )}
@@ -389,8 +503,8 @@ function LastDrift({ s }: { s: Schedule }) {
   );
 }
 
-function LastRun({ s }: { s: Schedule }) {
-  if (s.kind === 'drift' && !s.lastSkipReason) return <LastDrift s={s} />;
+function LastRun({ s, onOpenDrift }: { s: Schedule; onOpenDrift: (id: string) => void }) {
+  if (s.kind === 'drift' && !s.lastSkipReason) return <LastDrift s={s} onOpen={onOpenDrift} />;
   if (s.lastSkipReason) {
     return (
       <div className="flex flex-col gap-0.5">
@@ -430,13 +544,20 @@ export function SchedulesPage() {
   const runNow = useRunSchedule(projectId);
   const toast = useToast();
   const navigate = useNavigate();
+  const search = useSearch({ from: '/app/projects/$projectId/schedules' });
   const [editing, setEditing] = useState<Schedule | 'new' | null>(null);
+  const openDrift = (id: string | undefined) =>
+    void navigate({
+      to: '/projects/$projectId/schedules',
+      params: { projectId },
+      search: id ? { drift: id } : {},
+    });
 
   return (
-    <div className="mx-auto max-w-6xl px-6 py-6">
+    <div className="mx-auto flex max-w-6xl flex-col gap-4 px-6 py-6">
       <PageHeader
         title="Schedules"
-        description="Start runs on a cron schedule, such as a nightly regression check. Times are UTC unless a schedule names a time zone."
+        description="Start runs on a cron schedule, such as a nightly regression check, or check a scenario for drift from the API it tests. Times are UTC unless a schedule names a time zone."
         actions={
           can.editSchedules && (
             <Button variant="primary" onClick={() => setEditing('new')}>
@@ -456,7 +577,7 @@ export function SchedulesPage() {
             02:00.
           </EmptyState>
         ) : (
-          <Table>
+          <Table aria-label="Schedules">
             <thead>
               <tr>
                 <th>Name</th>
@@ -497,7 +618,7 @@ export function SchedulesPage() {
                     )}
                   </td>
                   <td>
-                    <LastRun s={s} />
+                    <LastRun s={s} onOpenDrift={openDrift} />
                   </td>
                   <td>
                     {can.editSchedules ? (
@@ -534,9 +655,15 @@ export function SchedulesPage() {
                                   if (res.status === 'ok') toast.success(`${s.name}: no drift.`);
                                   else if (res.status === 'drifted')
                                     toast.error(
-                                      `${s.name}: broken journeys: ${res.broken.join(', ')}`,
+                                      new Error(
+                                        `${s.name}: broken journeys: ${res.broken.join(', ')}`,
+                                      ),
                                     );
-                                  else toast.error(`${s.name}: ${res.error ?? 'the check failed'}`);
+                                  else
+                                    toast.error(
+                                      new Error(`${s.name}: ${res.error ?? 'the check failed'}`),
+                                    );
+                                  openDrift(res.id);
                                   return;
                                 }
                                 void navigate({ to: '/runs/$runId', params: { runId: res.id } });
@@ -583,6 +710,15 @@ export function SchedulesPage() {
           </Table>
         )}
       </Card>
+      {schedules.data?.some((s) => s.kind === 'drift') && (
+        <DriftResultsCard projectId={projectId} onOpen={openDrift} />
+      )}
+      <DriftResultDialog
+        id={search.drift ?? null}
+        projectId={projectId}
+        canRepair={can.generateJourneys}
+        onClose={() => openDrift(undefined)}
+      />
       {editing && (
         <ScheduleDialog
           key={editing === 'new' ? 'new' : editing.id}

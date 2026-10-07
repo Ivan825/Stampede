@@ -56,7 +56,7 @@ groups:
       - { name: "AI report narratives that cite every figure", status: shipped, doc: docs/ai }
       - { name: "Coverage map and drift detection for saved scenarios, in the CLI and the web UI", status: shipped, doc: docs/guides/coverage }
       - { name: "Scheduled runs", status: shipped, doc: docs/guides/schedules }
-      - { name: "Scheduled drift checks with notifications and AI repair proposals", status: shipped, doc: docs/guides/schedules }
+      - { name: "Scheduled drift checks with notifications and AI repair proposals, in the CLI and the web UI", status: shipped, doc: docs/guides/schedules }
       - { name: "AI generation of gRPC journeys from .proto files", status: shipped, doc: docs/ai }
       - { name: "Scaffolds for new packs and plugins, checked by a dry run and the conformance suite", status: shipped, doc: docs/plugins }
       - { name: "Packaged GitHub Action (Ivan825/Stampede/action@main; @v1 after the first release)", status: shipped, doc: docs/guides/ci }
@@ -79,9 +79,9 @@ groups:
       - { name: "Requests confined to the target and allowed hosts", status: shipped, doc: safety }
       - { name: "Kill switch in the UI, CLI and API", status: shipped, doc: safety }
       - { name: "Roles, API tokens, encrypted secrets, audit log", status: shipped }
-      - { name: "Per-project role overrides", status: shipped, doc: safety }
-      - { name: "Organisation and project caps on rate, users and duration", status: shipped, doc: safety }
-      - { name: "Optional passing dry run required before load", status: shipped, doc: safety }
+      - { name: "Per-project role overrides, set in the API or the web UI", status: shipped, doc: safety }
+      - { name: "Organisation and project caps on rate, users and duration, edited in the API or the web UI", status: shipped, doc: safety }
+      - { name: "Optional passing dry run required before load, with each journey's result on the run page", status: shipped, doc: safety }
       - { name: "Runs calling payment, SMS, email or CAPTCHA services refused", status: shipped, doc: safety }
       - { name: "Single sign-on with OpenID Connect", status: shipped, doc: docs/reference/configuration }
-      - { name: "SSO configuration and load caps shown read-only to admins in the web UI", status: shipped, doc: docs/reference/configuration }
+      - { name: "SSO configuration and server load caps shown read-only to admins in the web UI", status: shipped, doc: docs/reference/configuration }

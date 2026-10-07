@@ -97,7 +97,7 @@ const diffAgainstSmoke = `--- shop-smoke (latest)
 +  duration: 2m
 `;
 
-function step(
+export function step(
   name: string,
   method: string,
   url: string,

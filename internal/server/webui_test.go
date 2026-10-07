@@ -371,8 +371,15 @@ func TestSettingsAPI(t *testing.T) {
 	c.do("POST", "/projects/"+pid+"/targets", map[string]any{"name": "local", "baseURL": "http://127.0.0.1:9", "caps": map[string]any{"maxRate": 100}}, &verified)
 	c.do("POST", "/projects/"+pid+"/targets", map[string]any{"name": "public", "baseURL": "https://example.com"}, &public)
 
+	type caps struct{ MaxRate, MaxVUs, MaxDurationSeconds *float64 }
 	var lim struct {
-		Server           struct{ MaxRate, MaxVUs, MaxDurationSeconds *float64 }
+		Server       struct{ MaxRate, MaxVUs, MaxDurationSeconds *float64 }
+		Organisation caps
+		Projects     []struct {
+			Name          string
+			Caps          caps
+			RequireDryRun bool
+		}
 		UnverifiedPublic struct{ MaxRate, MaxVUs, MaxDurationSeconds *float64 }
 		AbortFloor       *struct{ ErrorRate, ForSeconds float64 }
 		Targets          []struct {
@@ -407,6 +414,37 @@ func TestSettingsAPI(t *testing.T) {
 			if tg.Verified || tg.Caps.MaxRate != nil || *tg.Effective.MaxRate != 50 || *tg.Effective.MaxDurationSeconds != 600 {
 				t.Errorf("public: %+v", tg)
 			}
+		}
+	}
+	if lim.Organisation.MaxRate != nil || len(lim.Projects) != 1 || lim.Projects[0].Name != "p" || lim.Projects[0].Caps.MaxVUs != nil {
+		t.Errorf("no org or project caps yet: %+v %+v", lim.Organisation, lim.Projects)
+	}
+
+	// Organisation and project caps are listed and tighten every target's
+	// effective caps, as they do when a run starts.
+	if code := c.do("PUT", "/organisation/caps", map[string]any{"maxVUs": 300, "maxDurationSeconds": 900}, nil); code != 200 {
+		t.Fatalf("org caps: %d", code)
+	}
+	if code := c.do("PUT", "/projects/"+pid+"/settings", map[string]any{"caps": map[string]any{"maxRate": 40, "maxVUs": 500}, "requireDryRun": true}, nil); code != 200 {
+		t.Fatalf("project settings: %d", code)
+	}
+	c.do("GET", "/settings/limits", nil, &lim)
+	if lim.Organisation.MaxVUs == nil || *lim.Organisation.MaxVUs != 300 || *lim.Organisation.MaxDurationSeconds != 900 || lim.Organisation.MaxRate != nil {
+		t.Errorf("org caps: %+v", lim.Organisation)
+	}
+	if len(lim.Projects) != 1 || !lim.Projects[0].RequireDryRun || *lim.Projects[0].Caps.MaxRate != 40 || *lim.Projects[0].Caps.MaxVUs != 500 {
+		t.Errorf("project caps: %+v", lim.Projects)
+	}
+	for _, tg := range lim.Targets {
+		// Rate: the project's 40 is below the target's 100 and the
+		// unverified 50. VUs and duration: the organisation's 300 and 900s,
+		// except where the unverified public caps (50, 600s) are lower.
+		vus, dur := 300.0, 900.0
+		if tg.Name == "public" {
+			vus, dur = 50, 600
+		}
+		if *tg.Effective.MaxRate != 40 || *tg.Effective.MaxVUs != vus || *tg.Effective.MaxDurationSeconds != dur {
+			t.Errorf("%s effective: %v/s, %v VUs, %vs", tg.Name, *tg.Effective.MaxRate, *tg.Effective.MaxVUs, *tg.Effective.MaxDurationSeconds)
 		}
 	}
 
