@@ -20,7 +20,8 @@ export const cli = {
   targetsCreate: 'stampede targets create <name> --url <base-url>',
   targetsVerify: (target: string) => `stampede targets verify ${shellArg(target)}`,
   secretsSet: (project: string) => `stampede secrets set --project ${shellArg(project)} <NAME>`,
-  push: 'stampede push <scenario.yaml>',
+  push: (project?: string) =>
+    `stampede push${project ? ` --project ${shellArg(project)}` : ''} <scenario.yaml>`,
   start: ({
     project,
     scenario = '<scenario>',

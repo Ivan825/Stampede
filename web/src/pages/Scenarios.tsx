@@ -1,17 +1,17 @@
 import { Link, useNavigate, useParams, useSearch } from '@tanstack/react-router';
-import { Plus, X } from 'lucide-react';
-import { useMe, useScenarios } from '@/api/queries';
+import { X } from 'lucide-react';
+import { useProject, useScenarios } from '@/api/queries';
 import { Chip } from '@/components/chips';
+import { CliHint } from '@/components/cliHint';
 import { Button, Card, EmptyState, ErrorAlert, Loading, PageHeader, Table } from '@/components/ui';
+import { cli } from '@/lib/cli';
 import { dateTime, humanDuration, load, relativeTime } from '@/lib/format';
-import { permissions } from '@/lib/roles';
 
 export function ScenariosPage() {
   const { projectId } = useParams({ from: '/app/projects/$projectId/scenarios' });
   const { tag } = useSearch({ from: '/app/projects/$projectId/scenarios' });
   const navigate = useNavigate({ from: '/projects/$projectId/scenarios' });
-  const me = useMe();
-  const can = permissions(me.role);
+  const project = useProject(projectId);
   const scenarios = useScenarios(projectId, tag);
   // All tags come from the unfiltered list.
   const all = useScenarios(projectId);
@@ -23,16 +23,7 @@ export function ScenariosPage() {
         title="Scenarios"
         description="How your users behave, as versioned YAML."
         actions={
-          can.editScenarios && (
-            <Button
-              variant="primary"
-              onClick={() =>
-                void navigate({ to: '/projects/$projectId/scenarios/new', params: { projectId } })
-              }
-            >
-              <Plus className="size-4" aria-hidden /> New scenario
-            </Button>
-          )
+          <CliHint command={cli.push(project.data?.slug)}>Add or change a scenario</CliHint>
         }
       />
       {tags.length > 0 && (
@@ -67,7 +58,12 @@ export function ScenariosPage() {
           <ErrorAlert error={scenarios.error} className="m-4" />
         ) : scenarios.data.length === 0 ? (
           <EmptyState title={tag ? `No scenarios tagged ${tag}` : 'No scenarios yet'}>
-            {!tag && 'A scenario describes journeys, load and pass/fail targets.'}
+            {!tag && (
+              <>
+                A scenario describes journeys, load and pass/fail targets. Save one from its YAML
+                file with <code className="font-mono text-xs">stampede push</code>.
+              </>
+            )}
           </EmptyState>
         ) : (
           <Table>
