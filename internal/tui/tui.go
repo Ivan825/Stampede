@@ -23,7 +23,6 @@ import (
 	"github.com/Ivan825/Stampede/internal/report"
 	"github.com/Ivan825/Stampede/internal/runner"
 	"github.com/Ivan825/Stampede/internal/scenario"
-	"github.com/Ivan825/Stampede/internal/version"
 )
 
 var (
@@ -53,14 +52,6 @@ var bull = []string{
 	"   ██   ██",
 }
 
-// banner draws the bull with the name and version beside it.
-func banner() string {
-	art := lipgloss.NewStyle().Foreground(accent).Render(strings.Join(bull, "\n"))
-	text := sTitle.Render("STAMPEDE") + "\n" + sMuted.Render(version.Version) + "\n\n" +
-		sMuted.Render("Describe your users. Stampede becomes a thousand of them.")
-	return lipgloss.JoinHorizontal(lipgloss.Center, art, "   ", text) + "\n"
-}
-
 // Options connect the console to commands that live in the CLI.
 type Options struct {
 	// Init is stampede init with the confirmation already given: it
@@ -71,6 +62,15 @@ type Options struct {
 	// s and returns the host policy its requests must pass. Messages go
 	// to w. Nil leaves local runs without a host policy.
 	CheckTarget func(ctx context.Context, w io.Writer, s *scenario.Scenario, env map[string]string) (func(*url.URL) bool, error)
+	// Commands are the stampede subcommands the console runs for a /name
+	// it has no built-in form of, with how to run each; Self is the
+	// stampede executable they run as.
+	Commands map[string]Kind
+	Self     string
+	// Store keeps sessions and the input history; nil keeps nothing.
+	Store *Store
+	// Resume is a saved session to continue instead of starting a new one.
+	Resume *Session
 }
 
 // Model is the Bubble Tea model.
@@ -92,6 +92,26 @@ type Model struct {
 	live    *liveRun
 	history []string
 	histPos int
+
+	// proc stops the stampede command running inline, if any.
+	proc context.CancelFunc
+	sess *Session
+	// quitAt is when Ctrl-C was pressed on an empty line; a second press
+	// soon after exits.
+	quitAt time.Time
+
+	// Animation: frame counts ticks; intro is the bull's drawing step (-1
+	// when done), drawn into lines[bannerAt:bannerAt+bannerLen].
+	frame, intro        int
+	animating           bool
+	bannerAt, bannerLen int
+	// typed is set once anything is entered; until then the welcome stays
+	// scrolled to the top so the whole bull shows.
+	typed bool
+	// waiting counts server calls in flight; busySince is when the
+	// console last became busy.
+	waiting   int
+	busySince time.Time
 }
 
 type liveRun struct {
@@ -106,12 +126,14 @@ type liveRun struct {
 }
 
 type (
-	logMsg     string
-	headerMsg  string
-	pointMsg   gen.Point
-	statusMsg  string
-	doneMsg    struct{ text string }
-	refreshMsg struct {
+	// remoteDoneMsg ends a wait for the server.
+	remoteDoneMsg string
+	logMsg        string
+	headerMsg     string
+	pointMsg      gen.Point
+	statusMsg     string
+	doneMsg       struct{ text string }
+	refreshMsg    struct {
 		header    string
 		scenarios []string
 	}
@@ -120,28 +142,110 @@ type (
 // New builds the model. c may be nil, in which case /run works on local
 // scenario files with the in-process engine.
 func New(c *client.Client, opts Options) *Model {
+	return newModel(c, opts, nil)
+}
+
+func newModel(c *client.Client, opts Options, me *gen.Me) *Model {
 	in := textinput.New()
-	in.Placeholder = "type /help, a slash command, or what you want to test"
+	in.Placeholder = "type /help, a command, or what you want to test"
 	in.Prompt = "› "
 	in.Focus()
-	in.CharLimit = 500
-	m := &Model{c: c, opts: opts, input: in, view: viewport.New(80, 20)}
-	m.say(banner())
-	if c == nil {
-		m.say("Not signed in to a server, so runs use local files with the built-in engine:")
-		m.say("  /run smoke --file checkout.yaml      or sign in with: stampede login")
-	} else {
-		m.say("Connected to " + c.Server + ". Type /help for commands.")
+	in.CharLimit = 2000
+	m := &Model{c: c, opts: opts, input: in, view: viewport.New(80, 20), intro: -1, bannerAt: -1}
+	if opts.Store != nil {
+		m.history = opts.Store.History()
+		m.histPos = len(m.history)
 	}
+	if opts.Resume != nil {
+		m.resumeSession(opts.Resume)
+		return m
+	}
+	m.sess = NewSession()
+	m.intro, m.bannerAt = 0, 0
+	b := renderBanner(0, 0)
+	m.bannerLen = len(strings.Split(b, "\n"))
+	m.say(b)
+	m.welcome(me)
 	return m
+}
+
+// welcome says who and where you are, how to pick up the last session, and
+// what to try first.
+func (m *Model) welcome(me *gen.Me) {
+	switch {
+	case m.c == nil:
+		m.say("Not signed in to a server, so runs use local files with the built-in engine.")
+		m.say("Sign in with /login, or create the first account on a new server with /setup.")
+	case me != nil:
+		m.say(fmt.Sprintf("Welcome back, %s. Signed in as %s (%s, %s) on %s.", or(me.Name, me.Email), me.Email, me.Role, me.OrgName, m.c.Server))
+	default:
+		m.say("Connected to " + m.c.Server + ".")
+	}
+	if m.opts.Store != nil {
+		if last, err := m.opts.Store.List(1); err == nil && len(last) == 1 {
+			m.say(sMuted.Render(fmt.Sprintf("Last session %s: “%s”. /resume picks it up.", ago(last[0].Updated), last[0].Title)))
+		}
+	}
+	m.say("")
+	m.say("Try:")
+	m.say("  /init http://localhost:3000          detect your app and set up tests for it")
+	m.say("  spike test checkout at 300 rps       plain language works; you confirm first")
+	m.say("  /projects list                       every stampede command works here")
+	m.say(sMuted.Render("/help for everything · /exit to leave · your session is saved"))
+	m.say("")
+}
+
+func or(a, b string) string {
+	if a != "" {
+		return a
+	}
+	return b
+}
+
+// resumeSession continues a saved session: its transcript and project.
+func (m *Model) resumeSession(s *Session) {
+	m.intro, m.bannerAt, m.typed = -1, -1, true
+	m.sess = s
+	m.project = s.Project
+	m.lines = nil
+	m.say(strings.Join(s.Lines, "\n"))
+	m.say(sMuted.Render(fmt.Sprintf("── resumed the session started %s (last used %s) ──", ago(s.Started), ago(s.Updated))))
+}
+
+// save stores the session if anything was typed in it.
+func (m *Model) save() bool {
+	if m.opts.Store == nil || m.sess == nil || m.sess.Inputs == 0 {
+		return false
+	}
+	m.sess.Project = m.project
+	if m.c != nil {
+		m.sess.Server = m.c.Server
+	}
+	m.sess.Lines = append([]string(nil), m.lines...)
+	return m.opts.Store.Save(m.sess) == nil
 }
 
 // Run starts the program on the terminal.
 func Run(c *client.Client, opts Options) error {
-	m := New(c, opts)
+	var me *gen.Me
+	if c != nil && opts.Resume == nil {
+		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+		var x gen.Me
+		if c.Do(ctx, "GET", "/me", nil, &x) == nil {
+			me = &x
+		}
+		cancel()
+	}
+	m := newModel(c, opts, me)
 	p := tea.NewProgram(m, tea.WithAltScreen())
 	m.send = p.Send
 	_, err := p.Run()
+	if m.proc != nil {
+		m.proc()
+	}
+	if m.save() {
+		fmt.Println(sMuted.Render("Session saved. Continue it with: stampede --continue   (or stampede --resume " + m.sess.ID + ")"))
+	}
 	return err
 }
 
@@ -151,12 +255,20 @@ func (m *Model) say(s string) {
 		m.lines = m.lines[len(m.lines)-2000:]
 	}
 	m.view.SetContent(strings.Join(m.lines, "\n"))
-	m.view.GotoBottom()
+	if m.typed {
+		m.view.GotoBottom()
+	} else {
+		m.view.GotoTop()
+	}
 }
 
 // Init loads the header and scenario names.
 func (m *Model) Init() tea.Cmd {
-	return tea.Batch(textinput.Blink, m.refresh())
+	cmds := []tea.Cmd{textinput.Blink, m.refresh()}
+	if m.intro >= 0 {
+		cmds = append(cmds, m.startAnim())
+	}
+	return tea.Batch(cmds...)
 }
 
 func (m *Model) refresh() tea.Cmd {
@@ -191,24 +303,38 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.width, m.height = msg.Width, msg.Height
 		m.input.Width = msg.Width - 4
 		m.layout()
+		m.redrawBanner()
 	case tea.KeyMsg:
 		switch msg.Type {
 		case tea.KeyCtrlC:
-			if m.live != nil {
+			switch {
+			case m.live != nil:
 				m.say(sMuted.Render("Stopped following. The run continues; /stop or /kill to end it."))
 				m.live.cancel()
 				m.live = nil
 				m.layout()
-				return m, nil
+			case m.proc != nil:
+				m.proc()
+				m.say(sMuted.Render("Stopping the command…"))
+			case m.input.Value() != "":
+				m.input.SetValue("")
+			case time.Since(m.quitAt) < 2*time.Second:
+				return m, tea.Quit
+			default:
+				m.quitAt = time.Now()
+				m.say(sMuted.Render("Press Ctrl-C again to exit, or type /exit."))
 			}
-			return m, tea.Quit
+			return m, nil
 		case tea.KeyEnter:
 			line := strings.TrimSpace(m.input.Value())
 			m.input.SetValue("")
 			if line != "" {
+				m.typed = true
 				m.history = append(m.history, line)
 				m.histPos = len(m.history)
+				m.record(line)
 				cmds = append(cmds, m.handle(line))
+				m.save()
 			}
 		case tea.KeyUp:
 			if m.histPos > 0 {
@@ -227,6 +353,13 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			var c tea.Cmd
 			m.view, c = m.view.Update(msg)
 			cmds = append(cmds, c)
+		}
+	case animMsg:
+		cmds = append(cmds, m.animate())
+	case remoteDoneMsg:
+		m.waiting = max(m.waiting-1, 0)
+		if msg != "" {
+			m.say(string(msg))
 		}
 	case logMsg:
 		m.say(string(msg))
@@ -249,6 +382,15 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if m.live != nil {
 			m.live.status = string(msg)
 		}
+	case externalDoneMsg:
+		m.externalDone(msg)
+		// A command may have signed in, out or switched server.
+		if c, err := client.New(); err == nil {
+			m.c = c
+		} else {
+			m.c = nil
+		}
+		cmds = append(cmds, m.refresh())
 	case doneMsg:
 		m.live = nil
 		m.say(msg.text)
@@ -267,12 +409,50 @@ func (m *Model) layout() {
 		liveH = 9
 	}
 	m.view.Width = m.width
-	m.view.Height = max(m.height-4-liveH, 3)
+	// header, status line, input and footer
+	m.view.Height = max(m.height-5-liveH, 3)
+}
+
+// record adds a typed line to the session and the saved history, with
+// secret-looking flag values hidden.
+func (m *Model) record(line string) {
+	if m.sess != nil {
+		m.sess.Inputs++
+		if m.sess.Title == "" {
+			m.sess.Title = truncate(redact(line), 60)
+		}
+	}
+	if m.opts.Store != nil {
+		_ = m.opts.Store.AddHistory(redact(line))
+	}
+}
+
+func truncate(s string, n int) string {
+	if r := []rune(s); len(r) > n {
+		return string(r[:n-1]) + "…"
+	}
+	return s
+}
+
+// builtin reports whether the console handles /name itself; /runs and
+// /workers with arguments go to the CLI.
+func builtin(name string, hasArgs bool) bool {
+	switch name {
+	case "help", "h", "?", "quit", "q", "exit", "clear", "use", "init", "run", "scenarios", "stop", "kill", "sessions", "resume":
+		return true
+	case "runs", "workers":
+		return !hasArgs
+	}
+	return false
 }
 
 // handle runs one line of input.
 func (m *Model) handle(line string) tea.Cmd {
-	m.say(sMuted.Render("› ") + line)
+	m.say(sMuted.Render("› ") + redact(line))
+	switch strings.ToLower(line) {
+	case "exit", "quit", "bye", "q", ":q":
+		return tea.Quit
+	}
 	if m.pending != nil {
 		c := *m.pending
 		m.pending = nil
@@ -282,6 +462,32 @@ func (m *Model) handle(line string) tea.Cmd {
 		m.say("Cancelled.")
 		if l := strings.ToLower(line); l == "n" || l == "no" {
 			return nil
+		}
+	}
+	if strings.HasPrefix(line, "/") {
+		argv, err := SplitArgs(line[1:])
+		if err != nil {
+			m.say(sBad.Render(err.Error()))
+			return nil
+		}
+		if len(argv) > 0 {
+			name := strings.ToLower(argv[0])
+			if name == "stampede" {
+				argv, name = argv[1:], ""
+				if len(argv) > 0 {
+					name = strings.ToLower(argv[0])
+				}
+			} else if builtin(name, len(argv) > 1) {
+				name = ""
+			}
+			if kind, ok := m.opts.Commands[name]; ok && name != "" {
+				if m.proc != nil {
+					m.say("A command is still running; Ctrl-C stops it.")
+					return nil
+				}
+				argv[0] = name
+				return m.external(argv, kind)
+			}
 		}
 	}
 	if c, ok := ParseSlash(line); ok {
@@ -312,7 +518,18 @@ const help = `Commands
   /stop [run]  /kill [run]  stop gracefully / immediately (no run: the one you are watching)
   /kill all                 kill switch for every active run
   /use <project>            switch project
-  /clear  /quit
+  /sessions                 your saved console sessions
+  /resume [id]              go back to a saved session (the last one without an id)
+  /clear                    clear the screen
+  /exit                     leave (or type exit, or press Ctrl-C twice)
+
+Every stampede command works here as /<command>, for example
+  /projects list    /targets create shop --base-url https://shop.example.com
+  /compare --a before.json --b after.json    /report <run id> -o report.html
+/setup, /login, /password, /users, /secrets, /tokens, /ai and /keygen take over the
+terminal while they ask for input or show a secret, then bring you back; their
+output is not saved. /stampede <args> runs any command exactly as typed.
+
 Plain language works too, for example "spike test checkout at 300 rps for 5 minutes";
 it is turned into a command and shown for confirmation first.`
 
@@ -322,6 +539,11 @@ func (m *Model) exec(c Command) tea.Cmd {
 		m.say(help)
 	case "quit", "q", "exit":
 		return tea.Quit
+	case "sessions":
+		m.listSessions()
+	case "resume":
+		m.resume(c)
+		return m.refresh()
 	case "clear":
 		m.lines = nil
 		m.say("")
@@ -354,11 +576,11 @@ func (m *Model) remote(fn func(ctx context.Context) string) tea.Cmd {
 		m.say("This needs a server: run `stampede login` first.")
 		return nil
 	}
-	return func() tea.Msg {
+	return tea.Batch(m.wait(), func() tea.Msg {
 		ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 		defer cancel()
-		return logMsg(fn(ctx))
-	}
+		return remoteDoneMsg(fn(ctx))
+	})
 }
 
 func (m *Model) listRuns(ctx context.Context) string {
@@ -777,7 +999,7 @@ func (m *Model) initPack(c Command) tea.Cmd {
 	}
 	run, send := m.opts.Init, m.send
 	m.say("Looking at " + target + "...")
-	return func() tea.Msg {
+	return tea.Batch(m.wait(), func() tea.Msg {
 		ctx, cancel := context.WithTimeout(context.Background(), 15*time.Minute)
 		defer cancel()
 		w := &lineWriter{send: send}
@@ -786,11 +1008,8 @@ func (m *Model) initPack(c Command) tea.Cmd {
 		if err != nil {
 			out = strings.TrimLeft(out+"\n"+sBad.Render(err.Error()), "\n")
 		}
-		if out == "" {
-			return nil
-		}
-		return logMsg(out)
-	}
+		return remoteDoneMsg(out)
+	})
 }
 
 // lineWriter sends each complete line written to it to the console as it
@@ -831,8 +1050,16 @@ func (m *Model) View() string {
 	if m.live != nil {
 		b.WriteString(m.liveView() + "\n")
 	}
+	b.WriteString(m.busyLine() + "\n")
 	b.WriteString(m.input.View() + "\n")
-	b.WriteString(sMuted.Render("enter run · ↑↓ history · pgup/pgdn scroll · ctrl-c stop following / quit"))
+	switch {
+	case m.busy():
+		b.WriteString(sMuted.Render("working · ctrl-c stops a command"))
+	case m.live != nil:
+		b.WriteString(sMuted.Render("ctrl-c stops following the run · /stop or /kill ends it"))
+	default:
+		b.WriteString(sMuted.Render("enter send · ↑↓ history · pgup/pgdn scroll · /help · /exit to leave"))
+	}
 	return b.String()
 }
 

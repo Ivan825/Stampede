@@ -23,15 +23,15 @@ import (
 // do handles a line and runs the command it returns to completion, as
 // Bubble Tea would, feeding the result back into the model.
 func do(m *Model, line string) tea.Msg {
-	cmd := m.handle(line)
-	if cmd == nil {
-		return nil
-	}
-	msg := cmd()
-	if msg != nil {
+	var last tea.Msg
+	for _, msg := range runCmd(m.handle(line)) {
+		if _, tick := msg.(animMsg); tick {
+			continue
+		}
 		m.Update(msg)
+		last = msg
 	}
-	return msg
+	return last
 }
 
 func last(m *Model) string { return strings.Join(m.lines, "\n") }
