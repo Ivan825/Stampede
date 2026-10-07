@@ -22,26 +22,54 @@ runs many of them at once and tells you where your product breaks.
 > **Status: in development towards v1.0.** This README lists what works in
 > the repository today. Everything else in the plan is marked **planned**.
 
-## Two commands
+## Get started
+
+**Just the CLI.** One binary, no server, no database: write or generate a
+scenario, run it, get a report.
+
+```sh
+# Linux and macOS
+curl -fsSL https://raw.githubusercontent.com/Ivan825/Stampede/main/install.sh | sh
+```
+
+```powershell
+# Windows (PowerShell)
+irm https://raw.githubusercontent.com/Ivan825/Stampede/main/install.ps1 | iex
+```
+
+The installers download the latest release for your OS and CPU and check
+its SHA-256 checksum. Until v1.0 is tagged there is no release to download,
+so they build from source instead, which needs [Go](https://go.dev/dl/)
+1.27 or later. Then:
+
+```sh
+stampede init --target http://localhost:3000   # detect the product type, install a pack, dry-run its journeys
+stampede run stampede/<pack>/journeys/<file>.yaml -e TARGET_URL=http://localhost:3000 -o report.html
+stampede                                        # or the interactive console: /init, /run spike, ...
+```
+
+**The full stack with the web UI.** Server, web UI, two workers and the
+database, with Docker:
+
+```sh
+stampede up            # released images of the installed version; open http://localhost:8080
+```
+
+or, from a clone, the same stack plus **ShopLab**
+(<http://localhost:8090>), a demo shop with six real performance problems
+planted on purpose:
 
 ```sh
 git clone https://github.com/Ivan825/Stampede && cd Stampede
 docker compose up -d --build
 ```
 
-Open <http://localhost:8080> for the web UI. The stack includes two workers
-and **ShopLab** (<http://localhost:8090>), a demo shop with six real
-performance problems planted on purpose. The [quick start](docs/quickstart.md)
-takes you from there to a breakpoint, a fix and a comparison in about five
-minutes.
+The [quick start](docs/quickstart.md) takes you from there to a breakpoint,
+a fix and a comparison in about five minutes.
 
-Just want the CLI?
-
-```sh
-go install github.com/Ivan825/Stampede/cmd/stampede@latest
-stampede init --target http://localhost:8090      # detect the product type, install a pack, dry-run it
-stampede run stampede/ecommerce/journeys/shop-mix.yaml -e TARGET_URL=http://localhost:8090 -o report.html
-```
+**No internet access.** Each release attaches an offline bundle (images,
+binary, Helm chart) for networks without internet access; see
+[air-gapped installs](docs/deploy/airgap.md).
 
 ## What works today
 

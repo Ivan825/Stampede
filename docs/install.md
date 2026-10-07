@@ -2,15 +2,52 @@
 
 | Option | Use it for | Guide |
 |---|---|---|
-| `go install github.com/Ivan825/Stampede/cmd/stampede@latest` | the CLI: `stampede run`, `init`, `compare` | below |
-| Release archives and images | the same binary without Go | the GitHub releases page once v1.0 is tagged |
-| `docker compose up` | everything on one machine | [deploy/compose.md](deploy/compose.md) |
+| One-line installer | the CLI: `stampede run`, `init`, `compare`, the console | below |
+| `stampede up` | the full stack (server, web UI, workers, database) from released images, no clone | below |
+| `docker compose up` in a clone | the full stack plus the ShopLab demo | [deploy/compose.md](deploy/compose.md) |
+| Release archives, Homebrew, Scoop | the same binary by hand or with a package manager | the GitHub releases page once v1.0 is tagged |
+| Offline bundle | networks without internet access | [deploy/airgap.md](deploy/airgap.md) |
 | Helm chart | Kubernetes | [deploy/helm.md](deploy/helm.md) |
 | Operator | GitOps-style declared runs (alpha) | [deploy/operator.md](deploy/operator.md) |
 | Terraform examples | workers in several cloud regions | [deploy/terraform.md](deploy/terraform.md) |
 
 There is one binary. It is the CLI, the server (`stampede server`), a worker
 (`stampede worker`) and the terminal console (`stampede` on its own).
+
+## The CLI in one line
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/Ivan825/Stampede/main/install.sh | sh        # Linux, macOS
+irm https://raw.githubusercontent.com/Ivan825/Stampede/main/install.ps1 | iex             # Windows PowerShell
+```
+
+The script finds the latest release, downloads the archive for your OS and
+CPU (amd64 or arm64), checks it against the release's SHA-256 checksums
+and installs `stampede` into `~/.local/bin` (Windows:
+`%LOCALAPPDATA%\stampede\bin`, added to your PATH). Read it first if you
+prefer: it is short. Set `STAMPEDE_VERSION=v1.0.0` for a particular
+release, `STAMPEDE_INSTALL_DIR` for another folder, or
+`STAMPEDE_DOWNLOAD_BASE` to download from an internal mirror of the
+release files. With no release published yet, it runs `go install`
+instead, which needs Go 1.27 or later.
+
+CI checks both scripts on Linux, macOS and Windows against a release built
+from every commit, including that a tampered archive is refused.
+
+## The full stack without a clone
+
+```sh
+stampede up      # needs Docker; open http://localhost:8080
+stampede down    # stop it (add --volumes to delete its data)
+```
+
+Outside a clone, `stampede up` writes a Compose file to your config
+directory (`~/.config/stampede/stack` on Linux, `~/Library/Application
+Support/stampede/stack` on macOS) and starts the released images of the
+installed version: the server and web UI, two workers and TimescaleDB. Runs
+reach an app on your own machine as `http://host.docker.internal:<port>`.
+Inside a clone it uses the repository's `docker-compose.yml`, which also
+starts ShopLab.
 
 ## From source
 

@@ -187,10 +187,16 @@ const stats = [
   <section class="block" id="start">
     <div class="wrap">
       <span class="num">05</span>
-      <h2>Two commands</h2>
-      <Term title="get started"><span class="p">$</span> git clone https://github.com/Ivan825/Stampede &amp;&amp; cd Stampede
-<span class="p">$</span> docker compose up -d --build
-<span class="m"># web UI on localhost:8080 · two workers · ShopLab demo on localhost:8090</span></Term>
+      <h2>Get started</h2>
+      <p class="lede">One line installs the CLI. A second starts the full stack with the web UI.</p>
+      <Term title="the CLI · Linux, macOS"><span class="p">$</span> curl -fsSL https://raw.githubusercontent.com/Ivan825/Stampede/main/install.sh | sh
+<span class="p">$</span> stampede init --target http://localhost:3000
+<span class="m"># detects your product type, installs a pack, dry-runs every journey</span></Term>
+      <div style="margin-top:12px"><Term title="the CLI · Windows PowerShell"><span class="p">$</span> irm https://raw.githubusercontent.com/Ivan825/Stampede/main/install.ps1 | iex</Term></div>
+      <div style="margin-top:12px"><Term title="the full stack · Docker"><span class="p">$</span> stampede up
+<span class="m"># web UI on localhost:8080 · two workers · TimescaleDB</span>
+<span class="m"># or, with the ShopLab demo: git clone the repo, then docker compose up -d --build</span></Term></div>
+      <p class="muted" style="margin-top:12px">Until v1.0 is tagged the installers build from source, which needs Go 1.27 or later.</p>
       <div class="table-wrap" style="margin-top:20px"><table>
         <thead><tr><th>Command</th><th>Does</th></tr></thead>
         <tbody>
