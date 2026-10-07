@@ -28,11 +28,12 @@ import {
   Loading,
   Notice,
   PageHeader,
-  Select,
   Stat,
   Table,
   Textarea,
 } from '@/components/ui';
+import { CliHint } from '@/components/cliHint';
+import { cli } from '@/lib/cli';
 import { permissions } from '@/lib/roles';
 
 export type CoverageTab = 'coverage' | 'drift';
@@ -408,16 +409,13 @@ function DriftForm({
   scenarioId,
   targets,
   canFetch,
-  canDryRun,
 }: {
   scenarioId: string;
   targets: Target[];
   canFetch: boolean;
-  canDryRun: boolean;
 }) {
   const [cur, setCur] = useState<SpecValue>(emptySpec);
   const [prev, setPrev] = useState<SpecValue>(emptySpec);
-  const [targetId, setTargetId] = useState('');
   const drift = useScenarioDrift(scenarioId);
   const submit = (e: FormEvent) => {
     e.preventDefault();
@@ -426,7 +424,6 @@ function DriftForm({
       ...specBody(cur),
       ...(p.openapi ? { previousOpenapi: p.openapi } : {}),
       ...(p.specURL ? { previousSpecURL: p.specURL } : {}),
-      ...(targetId ? { targetId } : {}),
     });
   };
   return (
@@ -434,9 +431,8 @@ function DriftForm({
       <Card className="px-4 py-3">
         <form className="flex flex-col gap-4" onSubmit={submit} aria-label="Check drift">
           <p className="text-[13px] text-muted">
-            Find journeys an API change broke: endpoints removed since the previous version,
-            requests the current API no longer serves and, with a target, journeys that now fail a
-            dry run.
+            Find journeys an API change broke: endpoints removed since the previous version and
+            requests the current API no longer serves. No requests are sent to the target.
           </p>
           <SpecInput
             label="Current API"
@@ -453,27 +449,13 @@ function DriftForm({
             canFetch={canFetch}
             optional
           />
-          {canDryRun && (
-            <Field
-              label="Dry run against"
-              hint="Runs every journey once with one user. This sends real requests to the target."
-            >
-              {(p) => (
-                <Select {...p} value={targetId} onChange={(e) => setTargetId(e.target.value)}>
-                  <option value="">No dry run</option>
-                  {targets.map((t) => (
-                    <option key={t.id} value={t.id}>
-                      {t.name} ({t.baseURL})
-                    </option>
-                  ))}
-                </Select>
-              )}
-            </Field>
-          )}
-          <div>
+          <div className="flex flex-wrap items-center gap-3">
             <Button type="submit" variant="primary" loading={drift.isPending}>
               Check drift
             </Button>
+            <CliHint command={cli.driftDryRun}>
+              A dry run sends real requests, so it runs from the terminal
+            </CliHint>
           </div>
           <ErrorAlert error={drift.error} />
         </form>
@@ -544,12 +526,7 @@ export function ScenarioCoveragePage() {
           <CoverageForm scenarioId={scenarioId} targets={list} canFetch={can.editScenarios} />
         </Tabs.Content>
         <Tabs.Content value="drift">
-          <DriftForm
-            scenarioId={scenarioId}
-            targets={list}
-            canFetch={can.editScenarios}
-            canDryRun={can.startRuns}
-          />
+          <DriftForm scenarioId={scenarioId} targets={list} canFetch={can.editScenarios} />
         </Tabs.Content>
       </Tabs.Root>
     </div>
