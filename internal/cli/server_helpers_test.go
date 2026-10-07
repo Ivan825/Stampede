@@ -105,12 +105,21 @@ func mustCLI(t *testing.T, args ...string) string {
 	return out
 }
 
-// cliJSON runs the CLI with --json and decodes its output into v.
+// cliJSON runs the CLI with --json and decodes its stdout into v.
 func cliJSON(t *testing.T, v any, args ...string) {
 	t.Helper()
-	out := mustCLI(t, append(args, "--json")...)
-	if err := json.Unmarshal([]byte(out), v); err != nil {
-		t.Fatalf("stampede %s --json: %v\n%s", strings.Join(args, " "), err, out)
+	args = append(args, "--json")
+	root := NewRoot()
+	var out, errOut bytes.Buffer
+	root.SetIn(strings.NewReader(""))
+	root.SetOut(&out)
+	root.SetErr(&errOut)
+	root.SetArgs(args)
+	if err := root.Execute(); err != nil {
+		t.Fatalf("stampede %s: %v\n%s%s", strings.Join(args, " "), err, out.String(), errOut.String())
+	}
+	if err := json.Unmarshal(out.Bytes(), v); err != nil {
+		t.Fatalf("stampede %s: %v\n%s", strings.Join(args, " "), err, out.String())
 	}
 }
 
