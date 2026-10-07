@@ -43,3 +43,56 @@ export function statusOf(prefix: string): 'shipped' | 'planned' {
 }
 
 export const GITHUB = 'https://github.com/Ivan825/Stampede';
+
+const escape = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+
+/** Inline Markdown: `code`, **bold** and [links]; repository paths link to GitHub. */
+function inline(s: string): string {
+  return escape(s)
+    .replace(/`([^`]+)`/g, '<code>$1</code>')
+    .replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>')
+    .replace(/\[([^\]]+)\]\(([^)\s]+)\)/g, (_, text: string, href: string) => {
+      const url = /^(https?:|mailto:|#|\/)/.test(href) ? href : `${GITHUB}/blob/main/${href.replace(/^\.\//, '')}`;
+      return `<a href="${url}">${text}</a>`;
+    });
+}
+
+/**
+ * CHANGELOG.md as HTML, without its title, or '' when there is none. It
+ * understands the subset the changelog uses: ## and ### headings,
+ * paragraphs and "- " lists whose items may wrap onto indented lines.
+ */
+export function changelogHTML(): string {
+  const p = path.join(repo, 'CHANGELOG.md');
+  if (!fs.existsSync(p)) return '';
+  const out: string[] = [];
+  let para: string[] = [];
+  let items: string[] | null = null;
+  const flush = () => {
+    if (para.length) out.push(`<p>${inline(para.join(' '))}</p>`);
+    if (items) out.push(`<ul>${items.map((i) => `<li>${inline(i)}</li>`).join('')}</ul>`);
+    para = [];
+    items = null;
+  };
+  for (const raw of fs.readFileSync(p, 'utf8').split('\n')) {
+    const line = raw.trimEnd();
+    const h = line.match(/^(#{1,6}) (.+)$/);
+    if (h) {
+      flush();
+      // The page has its own title; the file's # heading is dropped.
+      if (h[1].length > 1) out.push(`<h${h[1].length}>${inline(h[2])}</h${h[1].length}>`);
+    } else if (line.startsWith('- ')) {
+      if (para.length) flush();
+      (items ??= []).push(line.slice(2));
+    } else if (items && /^\s+\S/.test(line)) {
+      items[items.length - 1] += ' ' + line.trim();
+    } else if (line === '') {
+      flush();
+    } else {
+      if (items) flush();
+      para.push(line);
+    }
+  }
+  flush();
+  return out.join('\n');
+}
