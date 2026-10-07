@@ -83,7 +83,7 @@ func (s *Store) RefreshRollups(ctx context.Context, from, to time.Time) error {
 		return err
 	}
 	for _, v := range []string{"run_metrics_10s", "run_metrics_1m"} {
-		if _, err := s.Pool.Exec(ctx, `CALL refresh_continuous_aggregate($1, $2::timestamptz, $3::timestamptz)`, v, from, to); err != nil {
+		if _, err := s.Pool.Exec(ctx, `CALL refresh_continuous_aggregate('`+v+`', $1::timestamptz, $2::timestamptz)`, from, to); err != nil {
 			return err
 		}
 	}
