@@ -59,7 +59,10 @@ One Go binary in several roles.
 6. At the end the server builds the report from the merged snapshots,
    adds target metrics from Prometheus and trace links when the scenario
    asks for them (through the organisation's integrations), stores it with
-   the verdict and notifies the organisation's channels.
+   the verdict and notifies the organisation's channels. If the database
+   is unreachable then, the report (built in memory) and the final status
+   are retried for up to two minutes; per-second metrics written during
+   an outage are lost from the stored timeline but not from the report.
 
 Server replicas are active-passive by default (`--ha standby`): one holds
 a Postgres advisory lock and serves, the others wait and take over if it

@@ -44,6 +44,10 @@ type Config struct {
 	UI fs.FS
 	// SecureCookies sets the Secure flag (enable behind HTTPS).
 	SecureCookies bool
+	// DBRetryFor is how long writes at the end of a run (its report and
+	// final status) are retried while the database is unreachable
+	// (default two minutes).
+	DBRetryFor time.Duration
 	// TLS, when set, serves the API and web UI over HTTPS.
 	TLS *tls.Config
 	// RedirectAddr, with TLS, also listens for plain HTTP there and

@@ -298,7 +298,11 @@ func (m *runManager) execute(r *activeRun, spec ExecSpec, prog *scenario.Program
 		fail(err)
 		return
 	}
-	if err := m.s.st.SaveReport(ctx, db.SaveReportParams{RunID: r.id, Report: repJSON}); err != nil {
+	// The load is over and the report exists only in memory: ride out a
+	// database outage rather than lose it.
+	if err := m.retryDB(ctx, r, "save report", func() error {
+		return m.s.st.SaveReport(ctx, db.SaveReportParams{RunID: r.id, Report: repJSON})
+	}); err != nil {
 		fail(fmt.Errorf("save report: %w", err))
 		return
 	}
@@ -314,7 +318,9 @@ func (m *runManager) execute(r *activeRun, spec ExecSpec, prog *scenario.Program
 		P95: ptr(rep.Overall.Latency.P95), P99: ptr(rep.Overall.Latency.P99),
 	})
 	verdict, reason := rep.Verdict, res.StopReason
-	if err := m.s.st.FinishRun(ctx, db.FinishRunParams{ID: r.id, Status: status, Verdict: &verdict, StopReason: &reason, Summary: summary}); err != nil {
+	if err := m.retryDB(ctx, r, "finish run", func() error {
+		return m.s.st.FinishRun(ctx, db.FinishRunParams{ID: r.id, Status: status, Verdict: &verdict, StopReason: &reason, Summary: summary})
+	}); err != nil {
 		m.s.log.Error("finish run", "run", r.id, "error", err)
 	}
 	m.finished.WithLabelValues(status).Inc()
@@ -520,4 +526,29 @@ func (m *runManager) confirm(ctx context.Context, r *activeRun, spec ExecSpec, p
 	}
 	out := tr.Result()
 	return !out.Found, out.FailedOn, nil
+}
+
+// retryDB runs a database write until it succeeds, backing off from half
+// a second to five, for up to the configured DBRetryFor (two minutes by
+// default), so a short database outage does not lose a finished run.
+func (m *runManager) retryDB(ctx context.Context, r *activeRun, what string, fn func() error) error {
+	limit := m.s.cfg.DBRetryFor
+	if limit <= 0 {
+		limit = 2 * time.Minute
+	}
+	deadline := time.Now().Add(limit)
+	wait := 500 * time.Millisecond
+	for {
+		err := fn()
+		if err == nil || time.Now().After(deadline) || ctx.Err() != nil {
+			return err
+		}
+		m.s.log.Warn("database write failed; retrying", "run", r.id, "write", what, "in", wait, "error", err)
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-time.After(wait):
+		}
+		wait = min(wait*2, 5*time.Second)
+	}
 }
