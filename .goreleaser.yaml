@@ -190,7 +190,7 @@ homebrew_casks:
     description: Self-hosted distributed load testing
     license: Apache-2.0
     commit_author:
-      name: stampede-release-bot
+      name: IvanB
       email: ivan.bhargava@iiitb.ac.in
     commit_msg_template: "stampede {{ .Tag }}"
     skip_upload: '{{ if index .Env "HOMEBREW_TAP_GITHUB_TOKEN" }}false{{ else }}true{{ end }}'
@@ -217,7 +217,7 @@ scoops:
     description: Self-hosted distributed load testing
     license: Apache-2.0
     commit_author:
-      name: stampede-release-bot
+      name: IvanB
       email: ivan.bhargava@iiitb.ac.in
     commit_msg_template: "stampede {{ .Tag }}"
     skip_upload: '{{ if index .Env "SCOOP_BUCKET_GITHUB_TOKEN" }}false{{ else }}true{{ end }}'
