@@ -8,6 +8,7 @@ type Overrides struct {
 	Shape      string
 	Mode       string
 	VUs        int
+	MaxVUs     int
 	Rate       string
 	Duration   string
 	Start      string
@@ -46,6 +47,9 @@ func (o Overrides) Apply(s *Scenario) error {
 		if o.Rate == "" && o.Mode == "" {
 			l.Mode = ModeVUs
 		}
+	}
+	if o.MaxVUs > 0 {
+		l.MaxVUs = o.MaxVUs
 	}
 	if o.Duration != "" {
 		d, err := ParseDuration(o.Duration)

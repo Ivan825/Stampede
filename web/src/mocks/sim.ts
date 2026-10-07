@@ -436,7 +436,7 @@ export function buildReport(args: {
   if (args.stopReason !== 'completed') notes.push(`Run ended early: ${args.stopReason}.`);
   if (dropped > 0)
     notes.push(
-      'Some iterations were dropped because no virtual user was free. Raise maxVUs or reduce the rate; dropped iterations show the generator could not keep the schedule.',
+      'Some iterations were dropped because no virtual user was free. Raise load.maxVUs (or run with --max-vus) or reduce the rate; dropped iterations show the generator could not keep the schedule.',
     );
 
   const peakPlanned = Math.max(...tl.map((p) => p.planned), 0);

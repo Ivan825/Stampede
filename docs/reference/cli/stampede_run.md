@@ -46,6 +46,7 @@ stampede run <scenario.yaml> [flags]
       --iterations int        run a fixed number of iterations instead
       --json string           write a JSON report to this file (- for stdout)
       --junit string          write JUnit XML (one test per target) to this file
+      --max-vus int           cap on virtual users in rate mode (default: five times the peak rate); raise it for long journeys
       --md string             write a Markdown summary to this file (- for stdout)
       --model string          model for --narrative (default claude-sonnet-5-5 for anthropic)
       --narrative             add an AI-written summary; every claim cites the report's figures (needs a provider key)

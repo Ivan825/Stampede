@@ -477,7 +477,7 @@ func Build(in Input) *Report {
 		r.Notes = append(r.Notes, "Run ended early: "+in.StopReason+".")
 	}
 	if total.Dropped > 0 {
-		r.Notes = append(r.Notes, "Some iterations were dropped because no virtual user was free. Raise maxVUs or reduce the rate; dropped iterations show the generator could not keep the schedule.")
+		r.Notes = append(r.Notes, "Some iterations were dropped because no virtual user was free. Raise load.maxVUs (or run with --max-vus) or reduce the rate; dropped iterations show the generator could not keep the schedule.")
 	}
 	return r
 }
