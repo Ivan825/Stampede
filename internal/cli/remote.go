@@ -294,51 +294,6 @@ func newPushCmd() *cobra.Command {
 	return cmd
 }
 
-func newRunsCmd() *cobra.Command {
-	var project string
-	var limit int
-	cmd := &cobra.Command{
-		Use:   "runs",
-		Short: "List recent runs on the server",
-		RunE: func(cmd *cobra.Command, _ []string) error {
-			c, err := client.New()
-			if err != nil {
-				return err
-			}
-			p, err := c.FindProject(cmd.Context(), project)
-			if err != nil {
-				return err
-			}
-			var runs []gen.Run
-			if err := c.Do(cmd.Context(), "GET", fmt.Sprintf("/projects/%s/runs?limit=%d", p.Id, limit), nil, &runs); err != nil {
-				return err
-			}
-			tw := tabwriter.NewWriter(cmd.OutOrStdout(), 0, 4, 2, ' ', 0)
-			fmt.Fprintln(tw, "RUN\tSCENARIO\tSTATUS\tVERDICT\tREQUESTS\tP95\tERRORS\tSTARTED")
-			for _, r := range runs {
-				verdict, reqs, p95, errs := "-", "-", "-", "-"
-				if r.Verdict != nil {
-					verdict = string(*r.Verdict)
-				}
-				if s := r.Summary; s != nil && s.Requests != nil {
-					reqs = fmt.Sprint(*s.Requests)
-					p95 = report.Ms(deref(s.P95))
-					errs = report.Pct(deref(s.ErrorRate))
-				}
-				name := ""
-				if r.ScenarioName != nil {
-					name = fmt.Sprintf("%s v%d", *r.ScenarioName, r.ScenarioVersion)
-				}
-				fmt.Fprintf(tw, "%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n", r.Id.String()[:8], name, r.Status, verdict, reqs, p95, errs, r.CreatedAt.Local().Format("Jan 2 15:04"))
-			}
-			return tw.Flush()
-		},
-	}
-	cmd.Flags().StringVar(&project, "project", "", "project name, slug or id")
-	cmd.Flags().IntVar(&limit, "limit", 20, "how many runs")
-	return cmd
-}
-
 func deref(f *float64) float64 {
 	if f == nil {
 		return 0
@@ -424,9 +379,11 @@ func newStopCmd(kill bool) *cobra.Command {
 }
 
 func newWorkersCmd() *cobra.Command {
-	return &cobra.Command{
+	var asJSON bool
+	cmd := &cobra.Command{
 		Use:   "workers",
 		Short: "List workers connected to the server",
+		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			c, err := client.New()
 			if err != nil {
@@ -435,6 +392,9 @@ func newWorkersCmd() *cobra.Command {
 			var ws []gen.Worker
 			if err := c.Do(cmd.Context(), "GET", "/workers", nil, &ws); err != nil {
 				return err
+			}
+			if asJSON {
+				return writeJSON(cmd.OutOrStdout(), ws)
 			}
 			if len(ws) == 0 {
 				fmt.Fprintln(cmd.OutOrStdout(), "No workers connected; runs execute inside the server.")
@@ -456,4 +416,6 @@ func newWorkersCmd() *cobra.Command {
 			return tw.Flush()
 		},
 	}
+	jsonFlag(cmd, &asJSON)
+	return cmd
 }
