@@ -70,7 +70,8 @@ paths:
 test('checks a scenario’s API coverage and drift', async ({ page }) => {
   await open(page, '/');
   await nav(page, 'Scenarios');
-  await page.getByRole('link', { name: 'checkout-stress' }).click();
+  // Scenario links only: the page before may still list runs of it.
+  await page.locator('a[href*="/scenarios/"]', { hasText: 'checkout-stress' }).first().click();
   await page.getByRole('link', { name: /API coverage/ }).click();
   await expect(page.getByRole('heading', { name: 'API coverage and drift' })).toBeVisible();
   const coverage = page.getByRole('form', { name: 'Check coverage' });
@@ -103,7 +104,8 @@ test('admins see SSO and limits settings', async ({ page }) => {
 test('the journey graph and the YAML editor edit the same scenario', async ({ page }) => {
   await open(page, '/');
   await nav(page, 'Scenarios');
-  await page.getByRole('link', { name: 'checkout-stress' }).click();
+  // Scenario links only: the page before may still list runs of it.
+  await page.locator('a[href*="/scenarios/"]', { hasText: 'checkout-stress' }).first().click();
   const graph = page.getByRole('group', { name: 'Journey graph' });
   const editor = page.locator('.monaco-editor .view-lines');
   await expect(editor).toContainText('name: home');
