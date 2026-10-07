@@ -21,7 +21,7 @@ func TestBrowserFailureArtifacts(t *testing.T) {
 		fmt.Fprint(w, `<!doctype html><title>Shop</title><h1>Shop</h1>
 <script>console.error("cart service down, token tok_SECRET99"); fetch("/api/cart");</script>`)
 	})
-	mux.HandleFunc("GET /api/cart", func(w http.ResponseWriter, r *http.Request) { http.Error(w, "down", 503) })
+	mux.HandleFunc("GET /api/cart", func(w http.ResponseWriter, r *http.Request) { http.Error(w, "down", http.StatusServiceUnavailable) })
 	srv := httptest.NewServer(mux)
 	defer srv.Close()
 	out := run(t, fmt.Sprintf(`
