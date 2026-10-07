@@ -19,9 +19,12 @@ type WorkerRow struct {
 	// generator rather than the target.
 	Saturated         []Span   `json:"saturated,omitempty"`
 	SaturationReasons []string `json:"saturationReasons,omitempty"`
-	// Lost is the window from the worker's loss to the end of the run,
-	// during which its share of the load was not generated.
+	// Lost is the window from the worker's loss to the end of the run, or
+	// until another worker took over its share: its share of the load was
+	// not generated in that window.
 	Lost *Span `json:"lost,omitempty"`
+	// Replaces names the lost worker whose share this one took over.
+	Replaces string `json:"replaces,omitempty"`
 	// ClockOffset is the worker's measured clock offset in seconds.
 	ClockOffset float64 `json:"clockOffset"`
 }

@@ -146,11 +146,18 @@ func Annotate(rep *report.Report, res *coordinator.Result) {
 		return report.Span{From: float64(w.From) * secs, To: float64(w.To+1) * secs}
 	}
 	saturated := false
+	takenOver := map[string]*coordinator.WorkerSummary{}
+	for i := range res.Workers {
+		if ws := &res.Workers[i]; ws.Replaces != "" && ws.State == coordinator.WorkerFinished {
+			takenOver[ws.Replaces] = ws
+		}
+	}
 	for _, ws := range res.Workers {
 		row := report.WorkerRow{
 			ID: ws.ID, Name: ws.Name, Region: ws.Region, ShareLo: ws.ShareLo, ShareHi: ws.ShareHi,
 			State: ws.State, StopReason: ws.StopReason, Error: ws.Error, PeakVUs: ws.PeakVUs,
 			Requests: ws.Requests, SaturationReasons: ws.SaturationReasons, ClockOffset: ws.ClockOffset.Seconds(),
+			Replaces: ws.Replaces,
 		}
 		for _, w := range ws.Saturated {
 			row.Saturated = append(row.Saturated, span(w))
@@ -166,12 +173,17 @@ func Annotate(rep *report.Report, res *coordinator.Result) {
 		if ws.Region != "" {
 			who += " (" + ws.Region + ")"
 		}
-		switch ws.State {
-		case coordinator.WorkerLost:
+		taken := takenOver[ws.Name]
+		switch {
+		case ws.State == coordinator.WorkerLost && taken != nil:
+			rep.Notes = append(rep.Notes, fmt.Sprintf(
+				"Worker %s was lost at %s; %s took over its %.1f%% share of the load from %s, so the run generated about %.1f%% less load than planned in between. Data from both is included.",
+				who, fmtSecs(row.Lost.From), taken.Name, share, fmtSecs(row.Lost.To), share))
+		case ws.State == coordinator.WorkerLost:
 			rep.Notes = append(rep.Notes, fmt.Sprintf(
 				"Worker %s was lost at %s; its %.1f%% share of the load was not reassigned, so from then on the run generated about %.1f%% less load than planned. Its data up to the loss is included.",
 				who, fmtSecs(row.Lost.From), share, share))
-		case coordinator.WorkerFailed:
+		case ws.State == coordinator.WorkerFailed:
 			rep.Notes = append(rep.Notes, fmt.Sprintf("Worker %s failed (%s); its %.1f%% share of the load stopped there.", who, ws.Error, share))
 		}
 		if len(ws.Saturated) > 0 {
