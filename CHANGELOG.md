@@ -69,6 +69,16 @@ release. Features still being built are listed as planned in
 - A coverage map and drift detection for saved scenarios.
 - Scheduled runs.
 - Product packs for eleven kinds of product, detected by `stampede init`.
+- `stampede pack create` and `stampede plugin create` scaffold a new pack
+  folder and a plugin module with a conformance test.
+- `stampede validate --dry-run` runs each journey once with one user
+  against the target.
+- `stampede run --cluster` runs a scenario file on the server's workers
+  with `run`'s flags and outputs; `stampede report` and `stampede compare`
+  take server run ids as well as files.
+- In the terminal console, `/init <url>`, `/run soak 4h` and
+  `/run replay <file>`.
+- `stampede gen` is short for `stampede generate`.
 
 ### Integrations
 
@@ -83,6 +93,8 @@ release. Features still being built are listed as planned in
 - A Docker Compose stack with the ShopLab demo app, and `stampede up`
   without a clone.
 - One-line installers for Linux, macOS and Windows.
+- `stampede backup` and `stampede restore`, around `pg_dump` and
+  `pg_restore`.
 - A Helm chart.
 - A Kubernetes operator (alpha).
 - Terraform examples for workers in several regions.
