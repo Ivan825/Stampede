@@ -63,34 +63,15 @@ describe('Limits settings', () => {
 });
 
 describe('Organisation and project caps', () => {
-  it('lets admins edit the organisation caps', async () => {
-    const db = installMockApi();
-    const user = userEvent.setup();
+  it('shows the organisation caps read-only, with the command that changes them', async () => {
+    installMockApi();
     renderApp('/settings?tab=limits');
-    const form = within(await screen.findByRole('form', { name: 'Organisation caps' }));
-    expect(form.getByText('Caps on every run in Acme Retail')).toBeInTheDocument();
-    const vus = form.getByLabelText('Max VUs');
-    expect(vus).toHaveValue('3000');
-
-    const rate = form.getByLabelText('Max rate (/s)');
-    await user.type(rate, '-5');
-    await user.click(form.getByRole('button', { name: 'Save caps' }));
-    expect(form.getByText('A positive number.')).toBeInTheDocument();
-    expect(db.orgCaps).toEqual({ maxVUs: 3000 });
-
-    await user.clear(rate);
-    await user.type(rate, '800');
-    await user.clear(vus);
-    await user.type(form.getByLabelText('Max duration (s)'), '1800');
-    await user.click(form.getByRole('button', { name: 'Save caps' }));
-    expect(await screen.findByText('Organisation caps saved.')).toBeInTheDocument();
-    expect(db.orgCaps).toEqual({ maxRate: 800, maxDurationSeconds: 1800 });
-
-    // The targets' effective caps now include the organisation's.
-    const targets = within(screen.getByRole('table', { name: 'Target caps' }));
-    const staging = targets.getByText('https://staging.shop.acme.dev').closest('tr')!;
-    expect(await within(staging).findByText('800/s')).toBeInTheDocument();
-    expect(within(staging).getByText('30m')).toBeInTheDocument();
+    const org = within(await screen.findByRole('table', { name: 'Organisation caps' }));
+    const row = org.getByText('Every run in the organisation').closest('tr')!;
+    expect(within(row).getByText('3,000')).toBeInTheDocument();
+    expect(screen.queryByRole('form', { name: 'Organisation caps' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Save caps' })).not.toBeInTheDocument();
+    expect(screen.getByText('stampede caps set')).toBeInTheDocument();
   });
 
   it('lists each project’s caps and dry-run gate', async () => {
