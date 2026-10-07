@@ -2,6 +2,7 @@
 package cli
 
 import (
+	"fmt"
 	"os"
 
 	"github.com/spf13/cobra"
@@ -48,7 +49,7 @@ func newVersionCmd() *cobra.Command {
 		Short: "Print version information",
 		Args:  cobra.NoArgs,
 		Run: func(cmd *cobra.Command, _ []string) {
-			cmd.Println(version.String())
+			fmt.Fprintln(cmd.OutOrStdout(), version.String())
 		},
 	}
 }

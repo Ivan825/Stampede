@@ -1,65 +1,101 @@
 package cli
 
 import (
+	"bytes"
 	"context"
+	_ "embed"
 	"errors"
 	"fmt"
 	"net/http"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/spf13/cobra"
 
 	"github.com/Ivan825/Stampede/internal/api/gen"
 	"github.com/Ivan825/Stampede/internal/client"
+	"github.com/Ivan825/Stampede/internal/version"
 )
 
-// findCompose looks for docker-compose.yml in the current directory and
-// its parents, so `stampede up` works anywhere inside a clone.
-func findCompose() (string, error) {
+// standaloneStack is the stack `stampede up` runs outside a clone: the
+// released images of this version, without the ShopLab demo.
+//
+//go:embed stack.yml
+var standaloneStack []byte
+
+// findCompose looks for the repository's docker-compose.yml in the current
+// directory and its parents, so `stampede up` inside a clone runs the full
+// stack with ShopLab. Elsewhere it writes the standalone stack to the
+// user's config directory; clone reports which one it chose.
+func findCompose() (file string, clone bool, err error) {
 	dir, err := os.Getwd()
 	if err != nil {
-		return "", err
+		return "", false, err
 	}
 	for {
 		p := filepath.Join(dir, "docker-compose.yml")
-		if _, err := os.Stat(p); err == nil {
-			return p, nil
+		if b, err := os.ReadFile(p); err == nil && bytes.Contains(b, []byte("ghcr.io/ivan825/stampede")) { //nolint:gosec // a file the user's clone holds
+			return p, true, nil
 		}
 		parent := filepath.Dir(dir)
 		if parent == dir {
-			return "", errors.New("no docker-compose.yml found here or above; run this inside a clone of github.com/Ivan825/Stampede")
+			break
 		}
 		dir = parent
 	}
+	if !version.Released() {
+		return "", false, fmt.Errorf("stampede %s is not a release, so it has no published images; run `stampede up --build` inside a clone of github.com/Ivan825/Stampede", version.Version)
+	}
+	cfg, err := os.UserConfigDir()
+	if err != nil {
+		return "", false, err
+	}
+	p := filepath.Join(cfg, "stampede", "stack", "docker-compose.yml")
+	if err := os.MkdirAll(filepath.Dir(p), 0o700); err != nil {
+		return "", false, err
+	}
+	return p, false, os.WriteFile(p, standaloneStack, 0o600)
 }
 
-func compose(cmd *cobra.Command, args ...string) error {
-	file, err := findCompose()
+func compose(cmd *cobra.Command, args ...string) (clone bool, err error) {
+	file, clone, err := findCompose()
 	if err != nil {
-		return err
+		return false, err
 	}
 	c := exec.CommandContext(cmd.Context(), "docker", append([]string{"compose", "-f", file}, args...)...) //nolint:gosec // fixed program, user-chosen subcommand
 	c.Stdout, c.Stderr, c.Stdin = cmd.OutOrStdout(), cmd.ErrOrStderr(), os.Stdin
-	return c.Run()
+	if !clone {
+		c.Env = append(os.Environ(), "STAMPEDE_VERSION="+strings.TrimPrefix(version.Version, "v"))
+	}
+	return clone, c.Run()
 }
 
 func newUpCmd() *cobra.Command {
 	var build bool
 	cmd := &cobra.Command{
 		Use:   "up",
-		Short: "Start the full local stack with Docker Compose (server, workers, database, ShopLab)",
+		Short: "Start the full stack with Docker Compose: server and web UI, workers, database",
+		Long: `Start the full stack with Docker Compose. Inside a clone of the repository
+it runs the repository's docker-compose.yml, including the ShopLab demo
+app. Anywhere else it runs the released images of this version (server and
+web UI on :8080, two workers, TimescaleDB), with no clone needed.`,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			args := []string{"up", "-d", "--wait"}
 			if build {
 				args = append(args, "--build")
 			}
-			if err := compose(cmd, args...); err != nil {
+			clone, err := compose(cmd, args...)
+			if err != nil {
 				return err
 			}
-			fmt.Fprintln(cmd.OutOrStdout(), "\nStampede is running: open http://localhost:8080 (ShopLab demo target: http://localhost:8090)")
+			if clone {
+				fmt.Fprintln(cmd.OutOrStdout(), "\nStampede is running: open http://localhost:8080 (ShopLab demo target: http://localhost:8090)")
+			} else {
+				fmt.Fprintln(cmd.OutOrStdout(), "\nStampede is running: open http://localhost:8080\nAn app on this machine is reachable from runs as http://host.docker.internal:<port>.")
+			}
 			return nil
 		},
 	}
@@ -77,7 +113,8 @@ func newDownCmd() *cobra.Command {
 			if volumes {
 				args = append(args, "--volumes")
 			}
-			return compose(cmd, args...)
+			_, err := compose(cmd, args...)
+			return err
 		},
 	}
 	cmd.Flags().BoolVar(&volumes, "volumes", false, "also delete the database and master key (all runs are lost)")

@@ -43,7 +43,7 @@ stampede [flags]
 * [stampede start](stampede_start.md)	 - Start a run on a Stampede server and follow it live
 * [stampede stop](stampede_stop.md)	 - Stop a run gracefully (in-flight iterations may finish)
 * [stampede target](stampede_target.md)	 - Manage load test targets
-* [stampede up](stampede_up.md)	 - Start the full local stack with Docker Compose (server, workers, database, ShopLab)
+* [stampede up](stampede_up.md)	 - Start the full stack with Docker Compose: server and web UI, workers, database
 * [stampede validate](stampede_validate.md)	 - Check scenario files without running them
 * [stampede version](stampede_version.md)	 - Print version information
 * [stampede worker](stampede_worker.md)	 - Run a load-generating worker for a Stampede server

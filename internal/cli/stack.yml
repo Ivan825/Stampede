@@ -1,0 +1,68 @@
+# The Stampede stack started by `stampede up` outside a clone of the
+# repository: the server and web UI on :8080, two workers and TimescaleDB,
+# from the released images matching this binary. Point it at your own app;
+# the ShopLab demo needs a clone (see the README).
+name: stampede
+
+services:
+  db:
+    image: timescale/timescaledb:2.22.1-pg17
+    environment:
+      POSTGRES_USER: stampede
+      POSTGRES_PASSWORD: ${STAMPEDE_DB_PASSWORD:-stampede}
+      POSTGRES_DB: stampede
+    volumes:
+      - stampede-db:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U stampede -d stampede"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+    restart: unless-stopped
+
+  server:
+    image: ghcr.io/ivan825/stampede:${STAMPEDE_VERSION:?}
+    command: ["server"]
+    ports:
+      - "${STAMPEDE_PORT:-8080}:8080"
+    environment:
+      STAMPEDE_DATABASE_URL: postgres://stampede:${STAMPEDE_DB_PASSWORD:-stampede}@db:5432/stampede?sslmode=disable
+      STAMPEDE_JOIN_TOKEN: ${STAMPEDE_JOIN_TOKEN:-local-compose-join-token}
+      STAMPEDE_MASTER_KEY_FILE: /data/master.key
+      STAMPEDE_MASTER_KEY_AUTOGEN: "true"
+      STAMPEDE_WORKER_MTLS: "true"
+      STAMPEDE_LOG_FORMAT: text
+    volumes:
+      - stampede-data:/data
+    extra_hosts:
+      # Lets runs reach an app on your machine as http://host.docker.internal:<port>.
+      - "host.docker.internal:host-gateway"
+    depends_on:
+      db:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "/usr/local/bin/stampede", "healthcheck", "http://localhost:8080/readyz"]
+      interval: 3s
+      timeout: 4s
+      retries: 20
+    restart: unless-stopped
+
+  worker-1: &worker
+    image: ghcr.io/ivan825/stampede:${STAMPEDE_VERSION:?}
+    command: ["worker", "--server", "server:8081", "--mtls", "--name", "worker-1", "--region", "local"]
+    environment:
+      STAMPEDE_JOIN_TOKEN: ${STAMPEDE_JOIN_TOKEN:-local-compose-join-token}
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    depends_on:
+      server:
+        condition: service_healthy
+    restart: unless-stopped
+
+  worker-2:
+    <<: *worker
+    command: ["worker", "--server", "server:8081", "--mtls", "--name", "worker-2", "--region", "local"]
+
+volumes:
+  stampede-db:
+  stampede-data:
