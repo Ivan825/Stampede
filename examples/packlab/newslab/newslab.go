@@ -279,9 +279,7 @@ func (s *server) cached(kind string, render renderFunc) http.HandlerFunc {
 		}
 		s.cmu.Unlock()
 		if ne == nil {
-			w.Header().Set("Content-Type", ctype)
-			w.WriteHeader(status)
-			w.Write(body)
+			labkit.Error(w, status, "not_found", "no such page")
 			return
 		}
 		s.write(w, r, ne, "MISS")

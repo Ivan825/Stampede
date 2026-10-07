@@ -246,8 +246,6 @@ func (s *server) seed() {
 
 // --- sessions -------------------------------------------------------------
 
-type custKey struct{}
-
 func (s *server) login(w http.ResponseWriter, r *http.Request) {
 	var in struct {
 		CustomerID string `json:"customerId"`

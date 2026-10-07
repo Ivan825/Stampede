@@ -232,16 +232,18 @@ func (s *server) sign(resource string, exp int64) string {
 	return strconv.FormatInt(exp, 10) + "." + hex.EncodeToString(m.Sum(nil))[:32]
 }
 
-// verify checks a playback token for a resource ("vod/v001", "live/live1").
-func (s *server) verify(w http.ResponseWriter, r *http.Request, resource string) bool {
+// verify checks a playback token for a resource ("vod/v001", "live/live1")
+// and returns it as the server signs it, for the URIs in playlists.
+func (s *server) verify(w http.ResponseWriter, r *http.Request, resource string) (string, bool) {
 	tok := r.URL.Query().Get("token")
 	exp, _, ok := strings.Cut(tok, ".")
 	e, err := strconv.ParseInt(exp, 10, 64)
-	if !ok || err != nil || time.Now().Unix() > e || !hmac.Equal([]byte(tok), []byte(s.sign(resource, e))) {
+	signed := s.sign(resource, e)
+	if !ok || err != nil || time.Now().Unix() > e || !hmac.Equal([]byte(tok), []byte(signed)) {
 		labkit.Error(w, 403, "bad_token", "missing, expired or wrong playback token")
-		return false
+		return "", false
 	}
-	return true
+	return signed, true
 }
 
 // startupChecks are the calls playback makes before it can start.
@@ -340,11 +342,12 @@ func (s *server) vodMaster(w http.ResponseWriter, r *http.Request) {
 		labkit.Error(w, 404, "not_found", "no such video")
 		return
 	}
-	if !s.verify(w, r, "vod/"+id) {
+	tok, ok := s.verify(w, r, "vod/"+id)
+	if !ok {
 		return
 	}
 	playlistHeaders(w, 3600)
-	w.Write([]byte(master("/vod/"+id, r.URL.Query().Get("token"))))
+	w.Write([]byte(master("/vod/"+id, tok)))
 }
 
 func segName(n int) string { return fmt.Sprintf("seg%05d.ts", n) }
@@ -355,10 +358,10 @@ func (s *server) vodMedia(w http.ResponseWriter, r *http.Request) {
 		labkit.Error(w, 404, "not_found", "no such video or rendition")
 		return
 	}
-	if !s.verify(w, r, "vod/"+id) {
+	tok, ok := s.verify(w, r, "vod/"+id)
+	if !ok {
 		return
 	}
-	tok := r.URL.Query().Get("token")
 	var b strings.Builder
 	dur := s.segDur.Seconds()
 	fmt.Fprintf(&b, "#EXTM3U\n#EXT-X-VERSION:3\n#EXT-X-TARGETDURATION:%d\n#EXT-X-MEDIA-SEQUENCE:0\n#EXT-X-PLAYLIST-TYPE:VOD\n", int(dur+0.999))
@@ -376,11 +379,12 @@ func (s *server) liveMaster(w http.ResponseWriter, r *http.Request) {
 		labkit.Error(w, 404, "not_found", "no such channel")
 		return
 	}
-	if !s.verify(w, r, "live/"+c) {
+	tok, ok := s.verify(w, r, "live/"+c)
+	if !ok {
 		return
 	}
 	playlistHeaders(w, 60)
-	w.Write([]byte(master("/live/"+c, r.URL.Query().Get("token"))))
+	w.Write([]byte(master("/live/"+c, tok)))
 }
 
 // liveWindow renders the live media playlist's segment lines (without the
@@ -418,7 +422,8 @@ func (s *server) liveMedia(w http.ResponseWriter, r *http.Request) {
 		labkit.Error(w, 404, "not_found", "no such channel or rendition")
 		return
 	}
-	if !s.verify(w, r, "live/"+c) {
+	tok, ok := s.verify(w, r, "live/"+c)
+	if !ok {
 		return
 	}
 	seq := s.live()
@@ -437,7 +442,7 @@ func (s *server) liveMedia(w http.ResponseWriter, r *http.Request) {
 		body = s.liveWindow(c, rd, seq)
 	}
 	playlistHeaders(w, 1)
-	w.Write([]byte(strings.ReplaceAll(body, "\x00", "?token="+r.URL.Query().Get("token"))))
+	w.Write([]byte(strings.ReplaceAll(body, "\x00", "?token="+tok)))
 }
 
 // --- segments -----------------------------------------------------------
@@ -457,7 +462,7 @@ func (s *server) vodSegment(w http.ResponseWriter, r *http.Request) {
 		labkit.Error(w, 404, "not_found", "no such segment")
 		return
 	}
-	if !s.verify(w, r, "vod/"+id) {
+	if _, ok := s.verify(w, r, "vod/"+id); !ok {
 		return
 	}
 	s.serveSegment(w, "vod/"+id, rd, n, "public, max-age=86400, immutable")
@@ -470,7 +475,7 @@ func (s *server) liveSegment(w http.ResponseWriter, r *http.Request) {
 		labkit.Error(w, 404, "not_found", "no such segment")
 		return
 	}
-	if !s.verify(w, r, "live/"+c) {
+	if _, ok := s.verify(w, r, "live/"+c); !ok {
 		return
 	}
 	if seq := s.live(); n > seq || n < seq-60 {
@@ -491,7 +496,7 @@ func (s *server) serveSegment(w http.ResponseWriter, resource string, rd *rendit
 	w.Header().Set("Content-Type", "video/mp2t")
 	w.Header().Set("Cache-Control", cc)
 	w.Header().Set("Content-Length", strconv.Itoa(len(b)))
-	w.Write(b)
+	w.Write(b) //nolint:gosec // MPEG-TS bytes from a validated segment key, served as video/mp2t, not HTML
 }
 
 func (s *server) cachedSegment(key string, rd *rendition) []byte {

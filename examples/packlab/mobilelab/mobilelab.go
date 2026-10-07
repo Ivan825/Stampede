@@ -608,8 +608,8 @@ func itemMap(it *item) map[string]any {
 
 // root resolves a top-level field; the caller holds a.mu.
 func (s *server) root(a *account, op ast.Operation, f *ast.Field, vars map[string]any) (any, error) {
-	arg := func(name string) string {
-		if x := f.Arguments.ForName(name); x != nil {
+	id := func() string {
+		if x := f.Arguments.ForName("id"); x != nil {
 			if v, err := x.Value.Value(vars); err == nil && v != nil {
 				return fmt.Sprint(v)
 			}
@@ -620,9 +620,9 @@ func (s *server) root(a *account, op ast.Operation, f *ast.Field, vars map[strin
 		if f.Name != "toggleItem" {
 			return nil, fmt.Errorf("unknown mutation %s", f.Name)
 		}
-		it := a.byID[arg("id")]
+		it := a.byID[id()]
 		if it == nil || it.Deleted {
-			return nil, fmt.Errorf("item %s not found", arg("id"))
+			return nil, fmt.Errorf("item %s not found", id())
 		}
 		it.Done = !it.Done
 		it.Version = s.version.Add(1)
@@ -650,10 +650,10 @@ func (s *server) root(a *account, op ast.Operation, f *ast.Field, vars map[strin
 			"suggestions": []any{map[string]any{"id": "sg_1", "title": "Go to bed by 23:00"}, map[string]any{"id": "sg_2", "title": "Two glasses of water before lunch"}},
 		}, nil
 	case "item":
-		if it := a.byID[arg("id")]; it != nil && !it.Deleted {
+		if it := a.byID[id()]; it != nil && !it.Deleted {
 			return itemMap(it), nil
 		}
-		return nil, fmt.Errorf("item %s not found", arg("id"))
+		return nil, fmt.Errorf("item %s not found", id())
 	case "__typename":
 		return "Query", nil
 	}
