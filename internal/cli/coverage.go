@@ -62,6 +62,7 @@ func (f *specFlags) understand() (*ai.Understanding, error) {
 
 func newCoverageCmd() *cobra.Command {
 	var f specFlags
+	var sf serverSpecFlags
 	var asJSON bool
 	cmd := &cobra.Command{
 		Use:   "coverage <scenario.yaml>",
@@ -70,11 +71,23 @@ func newCoverageCmd() *cobra.Command {
 GraphQL schema, or the endpoints seen in a HAR recording or access log. The
 result lists every endpoint with the journeys that call it, the endpoints
 no journey touches, and requests that match no endpoint (often a typo or an
-endpoint that was renamed). No model and no network access are needed.`,
+endpoint that was renamed). No model and no network access are needed.
+
+With --scenario, the scenario saved on the server is checked by the
+server, against an OpenAPI document given with --from-openapi or fetched
+by the server from --spec-url (a URL on the host of one of the project's
+targets).`,
 		Example: `  stampede coverage shop.yaml --from-openapi openapi.yaml
-  stampede coverage shop.yaml --from-log access.log --json`,
-		Args: cobra.ExactArgs(1),
+  stampede coverage shop.yaml --from-log access.log --json
+  stampede coverage --scenario checkout --spec-url https://staging.example.com/openapi.json`,
+		Args: cobra.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
+			if err := sf.check(cmd, args, []string{"from-graphql", "graphql-path", "from-har", "from-log"}); err != nil {
+				return err
+			}
+			if sf.scenarioRef != "" {
+				return serverCoverage(cmd, &sf, f.openapi, asJSON)
+			}
 			s, err := scenario.LoadFile(args[0])
 			if err != nil {
 				return err
@@ -97,6 +110,7 @@ endpoint that was renamed). No model and no network access are needed.`,
 		},
 	}
 	f.register(cmd, "the API")
+	sf.register(cmd, false)
 	cmd.Flags().BoolVar(&asJSON, "json", false, "print JSON")
 	return cmd
 }
@@ -124,6 +138,7 @@ func writeCoverage(w io.Writer, c *ai.Coverage) {
 
 func newDriftCmd() *cobra.Command {
 	var f, prev specFlags
+	var sf serverSpecFlags
 	var (
 		target     string
 		envs       []string
@@ -145,11 +160,31 @@ broke after an API change are found before the next load test:
 
 Exit code 4 when something drifted. To repair, regenerate with the scenario
 as the starting point: stampede generate --from-openapi new.yaml
---diff-against scenario.yaml --target URL -o scenario.yaml.`,
+--diff-against scenario.yaml --target URL -o scenario.yaml.
+
+With --scenario, the scenario saved on the server is checked by the
+server: the API comes from --from-openapi or --spec-url (and
+--previous-openapi or --previous-spec-url), and --target names one of the
+project's targets for the dry run.
+
+The subcommands read the checks that drift schedules run on the server
+(stampede schedules create --kind drift): drift results lists them, drift
+show prints one, and drift repair asks the AI generator to fix the broken
+journeys. A scenario file named like a subcommand needs a path, such as
+./results.`,
 		Example: `  stampede drift shop.yaml --from-openapi v2.yaml --previous-openapi v1.yaml
-  stampede drift shop.yaml --from-openapi openapi.yaml --target http://staging:8080`,
-		Args: cobra.ExactArgs(1),
+  stampede drift shop.yaml --from-openapi openapi.yaml --target http://staging:8080
+  stampede drift --scenario checkout --spec-url https://staging.example.com/openapi.json --target staging
+  stampede drift results --project shop
+  stampede drift repair 7c1e0a2b`,
+		Args: cobra.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
+			if err := sf.check(cmd, args, []string{"from-graphql", "graphql-path", "from-har", "from-log", "previous-graphql", "previous-har", "previous-log", "env", "allow-host", "no-dry-run"}); err != nil {
+				return err
+			}
+			if sf.scenarioRef != "" {
+				return serverDrift(cmd, &sf, f.openapi, prev.openapi, target, asJSON)
+			}
 			out := cmd.OutOrStdout()
 			s, err := scenario.LoadFile(args[0])
 			if err != nil {
@@ -233,11 +268,13 @@ as the starting point: stampede generate --from-openapi new.yaml
 	fl.StringVar(&prev.har, "previous-har", "", "a HAR recording of the previous version")
 	fl.StringVar(&prev.log, "previous-log", "", "an access log of the previous version")
 	prev.graphqlPath = "/graphql"
-	fl.StringVar(&target, "target", "", "dry-run every journey once against this URL (sends real requests)")
+	fl.StringVar(&target, "target", "", "dry-run every journey once against this URL (sends real requests); with --scenario, a target of the project (name, base URL or id)")
 	fl.StringArrayVarP(&envs, "env", "e", nil, "set ${env.KEY} for the dry run (KEY=VALUE, repeatable)")
 	fl.StringSliceVar(&allowHosts, "allow-host", nil, "extra public hosts the dry run may reach")
 	fl.BoolVar(&noDryRun, "no-dry-run", false, "skip the dry run even with --target")
 	fl.BoolVar(&asJSON, "json", false, "print JSON")
+	sf.register(cmd, true)
+	cmd.AddCommand(newDriftResultsCmds()...)
 	return cmd
 }
 
