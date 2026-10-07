@@ -4,15 +4,7 @@ import type { NotificationChannel, NotificationDelivery, NotificationKind } from
 import { Chip } from '@/components/chips';
 import { CliHint } from '@/components/cliHint';
 import { Modal } from '@/components/dialog';
-import {
-  Button,
-  Card,
-  CardHeader,
-  EmptyState,
-  ErrorAlert,
-  Loading,
-  Table,
-} from '@/components/ui';
+import { Button, Card, CardHeader, EmptyState, ErrorAlert, Loading, Table } from '@/components/ui';
 import { cli } from '@/lib/cli';
 import { dateTime, relativeTime } from '@/lib/format';
 

@@ -164,9 +164,7 @@ export function SchedulesPage() {
                     <td>
                       <LastRun s={s} onOpenDrift={openDrift} />
                     </td>
-                    <td>
-                      {s.enabled ? <Chip tone="pass">ON</Chip> : <Chip>OFF</Chip>}
-                    </td>
+                    <td>{s.enabled ? <Chip tone="pass">ON</Chip> : <Chip>OFF</Chip>}</td>
                   </tr>
                 ))}
               </tbody>

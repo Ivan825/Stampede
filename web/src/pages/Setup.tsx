@@ -23,7 +23,7 @@ export function SetupPage() {
     setChecking(true);
     try {
       qc.removeQueries({ queryKey: versionQuery.queryKey });
-      const v = await qc.fetchQuery(versionQuery);
+      const v = await qc.query(versionQuery);
       if (v.setupRequired) setStill(true);
       else await navigate({ to: '/login' });
     } finally {
@@ -53,8 +53,8 @@ export function SetupPage() {
         </Button>
         {still && (
           <p role="status" className="text-center text-xs text-muted">
-            The server still needs setting up. Run{' '}
-            <code className="font-mono">stampede setup</code> first.
+            The server still needs setting up. Run <code className="font-mono">stampede setup</code>{' '}
+            first.
           </p>
         )}
       </div>

@@ -3,15 +3,7 @@ import { useAIJobs, useAIProviders } from '@/api/queries';
 import type { AIProvider } from '@/api/types';
 import { AIJobStatusChip } from '@/components/chips';
 import { CliHint } from '@/components/cliHint';
-import {
-  Card,
-  EmptyState,
-  ErrorAlert,
-  Loading,
-  Notice,
-  PageHeader,
-  Table,
-} from '@/components/ui';
+import { Card, EmptyState, ErrorAlert, Loading, Notice, PageHeader, Table } from '@/components/ui';
 import { stageLabels } from '@/features/ai/stages';
 import { cli } from '@/lib/cli';
 import { count, dateTime, relativeTime } from '@/lib/format';

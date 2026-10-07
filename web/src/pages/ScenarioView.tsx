@@ -3,12 +3,7 @@ import { Link, useNavigate, useParams, useSearch } from '@tanstack/react-router'
 import { clsx } from 'clsx';
 import { AlertTriangle, CheckCircle2, History, ListChecks } from 'lucide-react';
 import { useState } from 'react';
-import {
-  useProject,
-  useScenario,
-  useScenarioVersion,
-  useScenarioVersions,
-} from '@/api/queries';
+import { useProject, useScenario, useScenarioVersion, useScenarioVersions } from '@/api/queries';
 import type { PlanSummary, Scenario } from '@/api/types';
 import { Chip } from '@/components/chips';
 import { CliHint } from '@/components/cliHint';
@@ -23,7 +18,8 @@ const tabTrigger =
   'flex h-9 items-center gap-1.5 border-b-2 border-transparent px-1 text-[13px] text-muted hover:text-fg data-[state=active]:border-accent data-[state=active]:font-medium data-[state=active]:text-fg';
 
 function PlanView({ plan }: { plan: PlanSummary | undefined }) {
-  if (!plan) return <p className="p-4 text-[13px] text-muted">No plan: the scenario has problems.</p>;
+  if (!plan)
+    return <p className="p-4 text-[13px] text-muted">No plan: the scenario has problems.</p>;
   const rows: [string, string][] = [
     ['Executor', plan.executor],
     ['Mode', plan.mode === 'rate' ? 'rate (open model)' : 'vus (closed model)'],
@@ -177,9 +173,7 @@ function ScenarioLayout({
           >
             <ListChecks className="size-3.5" aria-hidden /> API coverage
           </Link>
-          <CliHint
-            command={cli.start({ project: project.data?.slug, scenario: scenario.name })}
-          >
+          <CliHint command={cli.start({ project: project.data?.slug, scenario: scenario.name })}>
             Run it
           </CliHint>
         </div>

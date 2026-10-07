@@ -22,9 +22,7 @@ export function ScenariosPage() {
       <PageHeader
         title="Scenarios"
         description="How your users behave, as versioned YAML."
-        actions={
-          <CliHint command={cli.push(project.data?.slug)}>Add or change a scenario</CliHint>
-        }
+        actions={<CliHint command={cli.push(project.data?.slug)}>Add or change a scenario</CliHint>}
       />
       {tags.length > 0 && (
         <div

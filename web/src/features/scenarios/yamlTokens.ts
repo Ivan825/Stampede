@@ -6,14 +6,7 @@
  */
 
 export type TokenKind =
-  | 'plain'
-  | 'key'
-  | 'string'
-  | 'number'
-  | 'keyword'
-  | 'comment'
-  | 'punct'
-  | 'interp';
+  'plain' | 'key' | 'string' | 'number' | 'keyword' | 'comment' | 'punct' | 'interp';
 
 export interface Token {
   kind: TokenKind;

@@ -24,7 +24,9 @@ export function ProjectOverviewPage() {
       <PageHeader
         title={p.name}
         description={p.description || undefined}
-        actions={<CliHint command={cli.start({ project: p.slug })}>Start a run from the terminal</CliHint>}
+        actions={
+          <CliHint command={cli.start({ project: p.slug })}>Start a run from the terminal</CliHint>
+        }
       />
 
       <Card>

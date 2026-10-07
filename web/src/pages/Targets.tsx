@@ -86,9 +86,7 @@ export function TargetsPage() {
       <PageHeader
         title="Targets"
         description="Where load goes. Each run is limited to its target's host and caps."
-        actions={
-          <CliHint command={cli.targetsCreate}>Add a target</CliHint>
-        }
+        actions={<CliHint command={cli.targetsCreate}>Add a target</CliHint>}
       />
       {targets.isPending ? (
         <Loading />

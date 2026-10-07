@@ -1,11 +1,5 @@
 import { useParams } from '@tanstack/react-router';
-import {
-  useMe,
-  useProject,
-  useProjectRoles,
-  useProjectSettings,
-  useUsers,
-} from '@/api/queries';
+import { useMe, useProject, useProjectRoles, useProjectSettings, useUsers } from '@/api/queries';
 import { Chip, RoleChip } from '@/components/chips';
 import { CliHint } from '@/components/cliHint';
 import { Card, CardHeader, ErrorAlert, Loading, PageHeader, Table } from '@/components/ui';
