@@ -1,7 +1,11 @@
 # syntax=docker/dockerfile:1
 # Stampede: one binary for server, worker and CLI.
 #   docker build -t ghcr.io/ivan825/stampede .
-FROM golang:1.27-alpine AS build
+# The build stage runs on the builder's own platform and Go cross-compiles
+# for the target, so an arm64 image is not compiled under emulation.
+FROM --platform=$BUILDPLATFORM golang:1.27-alpine AS build
+ARG TARGETOS
+ARG TARGETARCH
 WORKDIR /src
 COPY go.mod go.sum ./
 RUN --mount=type=cache,target=/go/pkg/mod go mod download
@@ -10,7 +14,7 @@ ARG VERSION=dev
 ARG COMMIT=none
 ARG DATE=unknown
 RUN --mount=type=cache,target=/go/pkg/mod --mount=type=cache,target=/root/.cache/go-build \
-    CGO_ENABLED=0 go build -trimpath \
+    CGO_ENABLED=0 GOOS=${TARGETOS} GOARCH=${TARGETARCH} go build -trimpath \
       -ldflags "-s -w -X github.com/Ivan825/Stampede/internal/version.Version=${VERSION} -X github.com/Ivan825/Stampede/internal/version.Commit=${COMMIT} -X github.com/Ivan825/Stampede/internal/version.Date=${DATE}" \
       -o /out/stampede ./cmd/stampede && mkdir -p /out/data
 
