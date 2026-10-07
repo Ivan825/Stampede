@@ -53,7 +53,7 @@ the name it describes itself with.
 plugin on every worker that will run scenarios using it (or set
 `STAMPEDE_PLUGIN_DIR` for the worker process). Workers advertise their
 plugins as `plugin:<name>` in the capacity they report to the server
-when they connect (not yet shown by `stampede workers`). A worker that
+when they connect, and `stampede workers` and the Workers page list them. A worker that
 lacks a plugin a run needs refuses the run before any load starts, and the
 run fails with the worker's name and the missing plugin. The Docker image
 does not include plugins.

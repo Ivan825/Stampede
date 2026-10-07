@@ -416,13 +416,17 @@ func newWorkersCmd() *cobra.Command {
 				return nil
 			}
 			tw := tabwriter.NewWriter(cmd.OutOrStdout(), 0, 4, 2, ' ', 0)
-			fmt.Fprintln(tw, "NAME\tREGION\tSTATUS\tCPUS\tLAST SEEN")
+			fmt.Fprintln(tw, "NAME\tREGION\tSTATUS\tCPUS\tPLUGINS\tLAST SEEN")
 			for _, w := range ws {
 				cpus := 0
 				if w.Cpus != nil {
 					cpus = *w.Cpus
 				}
-				fmt.Fprintf(tw, "%s\t%s\t%s\t%d\t%s ago\n", w.Name, w.Region, w.Status, cpus, time.Since(w.LastSeenAt).Round(time.Second))
+				plugins := "-"
+				if w.Plugins != nil && len(*w.Plugins) > 0 {
+					plugins = strings.Join(*w.Plugins, ",")
+				}
+				fmt.Fprintf(tw, "%s\t%s\t%s\t%d\t%s\t%s ago\n", w.Name, w.Region, w.Status, cpus, plugins, time.Since(w.LastSeenAt).Round(time.Second))
 			}
 			return tw.Flush()
 		},
