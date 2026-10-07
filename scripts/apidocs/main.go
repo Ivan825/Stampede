@@ -284,10 +284,10 @@ func render(w io.Writer, src []byte, path string) error {
 	for _, k := range doc.Components.SecuritySchemes.keys {
 		s := doc.Components.SecuritySchemes.vals[k]
 		details := s.Description
-		switch {
-		case s.Type == "http":
+		switch s.Type {
+		case "http":
 			details = strings.TrimSpace(fmt.Sprintf("`Authorization: %s ...` %s", titleCase(s.Scheme), s.Description))
-		case s.Type == "apiKey":
+		case "apiKey":
 			details = strings.TrimSpace(fmt.Sprintf("%s `%s` %s", s.In, s.Name, s.Description))
 		}
 		r.printf("| `%s` | %s | %s |\n", k, s.Type, cell(details))
