@@ -1,9 +1,9 @@
 import { screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { http, HttpResponse } from 'msw';
 import { describe, expect, it } from 'vitest';
 import { renderApp } from '@/test/render';
-import { installMockApi, server } from '@/test/server';
+import { createDb } from '@/mocks/db';
+import { installMockApi } from '@/test/server';
 
 describe('first-run setup', () => {
   it('redirects to setup while the server has no users', async () => {
@@ -13,57 +13,29 @@ describe('first-run setup', () => {
     expect(router.state.location.pathname).toBe('/setup');
   });
 
-  it('validates the form, then creates the owner and signs in', async () => {
+  it('explains how to set up the server from the terminal, without a form', async () => {
     installMockApi({ setupRequired: true, signedIn: false });
-    const user = userEvent.setup();
-    const { router } = renderApp('/setup');
-    await screen.findByRole('heading', { name: 'Set up Stampede' });
-
-    await user.type(screen.getByLabelText('Organisation'), 'Initech');
-    await user.type(screen.getByLabelText('Your name'), 'Peter Gibbons');
-    await user.type(screen.getByLabelText('Email'), 'peter@initech.test');
-    await user.type(screen.getByLabelText('Password'), 'short');
-    await user.click(screen.getByRole('button', { name: 'Create owner account' }));
-    expect(screen.getByText('Use at least 10 characters.')).toBeInTheDocument();
-
-    await user.clear(screen.getByLabelText('Password'));
-    await user.type(screen.getByLabelText('Password'), 'a-long-enough-password');
-    await user.click(screen.getByRole('button', { name: 'Create owner account' }));
-
-    await waitFor(() => expect(router.state.location.pathname).toBe('/projects'));
-    expect(
-      await screen.findByRole('button', { name: /Account menu for Peter Gibbons/ }),
-    ).toBeInTheDocument();
-  });
-
-  it('shows the server error message and details', async () => {
-    installMockApi({ setupRequired: true, signedIn: false });
-    server.use(
-      http.post('*/api/v1/setup', () =>
-        HttpResponse.json(
-          {
-            error: {
-              code: 'invalid',
-              message: 'The setup details are not valid.',
-              details: ['email: domain does not accept mail'],
-            },
-          },
-          { status: 422 },
-        ),
-      ),
-    );
-    const user = userEvent.setup();
     renderApp('/setup');
     await screen.findByRole('heading', { name: 'Set up Stampede' });
-    await user.type(screen.getByLabelText('Organisation'), 'Initech');
-    await user.type(screen.getByLabelText('Your name'), 'Peter');
-    await user.type(screen.getByLabelText('Email'), 'peter@initech.test');
-    await user.type(screen.getByLabelText('Password'), 'a-long-enough-password');
-    await user.click(screen.getByRole('button', { name: 'Create owner account' }));
+    expect(screen.getByText('stampede setup')).toBeInTheDocument();
+    expect(screen.queryByRole('textbox')).not.toBeInTheDocument();
+    expect(screen.queryByLabelText('Password')).not.toBeInTheDocument();
+  });
 
-    const alert = await screen.findByRole('alert');
-    expect(alert).toHaveTextContent('The setup details are not valid.');
-    expect(alert).toHaveTextContent('email: domain does not accept mail');
+  it('checks again and moves on to sign in once the server is set up', async () => {
+    const db = installMockApi({ setupRequired: true, signedIn: false });
+    const user = userEvent.setup();
+    const { router } = renderApp('/setup');
+    const go = await screen.findByRole('button', { name: /I have run it, continue/ });
+    await user.click(go);
+    expect(await screen.findByText(/still needs setting up/)).toBeInTheDocument();
+    expect(router.state.location.pathname).toBe('/setup');
+
+    // stampede setup creates the owner.
+    db.users.push(createDb({ setupRequired: false, signedIn: false }).users[0]!);
+    await user.click(go);
+    await waitFor(() => expect(router.state.location.pathname).toBe('/login'));
+    expect(await screen.findByRole('heading', { name: 'Sign in' })).toBeInTheDocument();
   });
 });
 
