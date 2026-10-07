@@ -10,8 +10,13 @@ result lists every endpoint with the journeys that call it, the endpoints
 no journey touches, and requests that match no endpoint (often a typo or an
 endpoint that was renamed). No model and no network access are needed.
 
+With --scenario, the scenario saved on the server is checked by the
+server, against an OpenAPI document given with --from-openapi or fetched
+by the server from --spec-url (a URL on the host of one of the project's
+targets).
+
 ```
-stampede coverage <scenario.yaml> [flags]
+stampede coverage [scenario.yaml] [flags]
 ```
 
 ### Examples
@@ -19,6 +24,7 @@ stampede coverage <scenario.yaml> [flags]
 ```
   stampede coverage shop.yaml --from-openapi openapi.yaml
   stampede coverage shop.yaml --from-log access.log --json
+  stampede coverage --scenario checkout --spec-url https://staging.example.com/openapi.json
 ```
 
 ### Options
@@ -31,6 +37,10 @@ stampede coverage <scenario.yaml> [flags]
       --graphql-path string   path of the GraphQL API (default "/graphql")
   -h, --help                  help for coverage
       --json                  print JSON
+      --project string        with --scenario: project name, slug or id (default: the default or only project)
+      --scenario string       check a scenario saved on the server (name or id) instead of a file
+      --spec-url string       with --scenario: have the server fetch the OpenAPI document from this URL on a target's host
+      --version int           with --scenario: the scenario version to check (default the latest)
 ```
 
 ### SEE ALSO

@@ -1,15 +1,15 @@
-## stampede workers
+## stampede whoami
 
-List workers connected to the server
+Show who you are signed in as, and where
 
 ```
-stampede workers [flags]
+stampede whoami [flags]
 ```
 
 ### Options
 
 ```
-  -h, --help   help for workers
+  -h, --help   help for whoami
       --json   print JSON for scripting
 ```
 

@@ -1,15 +1,15 @@
-## stampede schedules list
+## stampede schedules show
 
-List a project's schedules
+Show a schedule in full
 
 ```
-stampede schedules list [flags]
+stampede schedules show <schedule> [flags]
 ```
 
 ### Options
 
 ```
-  -h, --help   help for list
+  -h, --help   help for show
       --json   print JSON for scripting
 ```
 
