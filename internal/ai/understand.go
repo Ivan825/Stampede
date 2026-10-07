@@ -101,7 +101,7 @@ type Understanding struct {
 	BasePath string `json:"basePath,omitempty"`
 	// GRPCMethods are the methods of the .proto inputs; ProtoFiles their
 	// compiled descriptors, which the dry run uses.
-	GRPCMethods []GRPCMethod          `json:"grpcMethods,omitempty"`
+	GRPCMethods []GRPCMethod         `json:"grpcMethods,omitempty"`
 	ProtoFiles  *protoregistry.Files `json:"-"`
 	// Context is the redacted text the model sees.
 	Context string `json:"-"`
