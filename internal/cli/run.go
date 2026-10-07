@@ -159,25 +159,9 @@ func runScenario(ctx context.Context, stdout, stderr io.Writer, path string, f *
 		return err
 	}
 
-	env := map[string]string{}
-	for _, kv := range os.Environ() {
-		k, v, _ := strings.Cut(kv, "=")
-		env[k] = v
-	}
-	for _, kv := range f.env {
-		k, v, ok := strings.Cut(kv, "=")
-		if !ok {
-			return fmt.Errorf("--env %q: use KEY=VALUE", kv)
-		}
-		env[k] = v
-	}
-	secrets := map[string]string{}
-	for k, v := range env {
-		if name, ok := strings.CutPrefix(k, "STAMPEDE_SECRET_"); ok {
-			secrets[name] = v
-		} else {
-			secrets[k] = v
-		}
+	env, secrets, err := runEnv(f.env)
+	if err != nil {
+		return err
 	}
 
 	level := slog.LevelError
@@ -264,6 +248,36 @@ func runScenario(ctx context.Context, stdout, stderr io.Writer, path string, f *
 		return &exitError{code: ExitTargetsFailed, msg: "one or more targets failed"}
 	}
 	return nil
+}
+
+// runEnv is what a local run's ${env.X} and ${secret.X} read: the process
+// environment, then KEY=VALUE pairs from -e. A secret is X itself or
+// STAMPEDE_SECRET_X, which wins.
+func runEnv(kvs []string) (env, secrets map[string]string, err error) {
+	env = map[string]string{}
+	for _, kv := range os.Environ() {
+		k, v, _ := strings.Cut(kv, "=")
+		env[k] = v
+	}
+	for _, kv := range kvs {
+		k, v, ok := strings.Cut(kv, "=")
+		if !ok {
+			return nil, nil, fmt.Errorf("--env %q: use KEY=VALUE", kv)
+		}
+		env[k] = v
+	}
+	secrets = map[string]string{}
+	for k, v := range env {
+		if !strings.HasPrefix(k, "STAMPEDE_SECRET_") {
+			secrets[k] = v
+		}
+	}
+	for k, v := range env {
+		if name, ok := strings.CutPrefix(k, "STAMPEDE_SECRET_"); ok {
+			secrets[name] = v
+		}
+	}
+	return env, secrets, nil
 }
 
 func applyOverrides(s *scenario.Scenario, f *runFlags) error {
