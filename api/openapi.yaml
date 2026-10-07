@@ -1620,8 +1620,8 @@ paths:
     get:
       tags: [settings]
       operationId: getLimitSettings
-      summary: The server's load caps and every target's caps (admin)
-      description: Read-only. A run must fit the server's caps, the caps for unverified public targets when they apply, and its target's own caps.
+      summary: The caps every run is checked against (admin)
+      description: Read-only. A run must fit the server's caps, the organisation's caps, its project's caps, the caps for unverified public targets when they apply, and its target's own caps.
       responses:
         "200":
           description: Limits
@@ -2957,9 +2957,14 @@ components:
 
     LimitSettings:
       type: object
-      required: [server, unverifiedPublic, targets]
+      required: [server, organisation, projects, unverifiedPublic, targets]
       properties:
         server: { $ref: "#/components/schemas/LimitCaps" }
+        organisation: { $ref: "#/components/schemas/LimitCaps" }
+        projects:
+          type: array
+          description: Every project's caps and dry-run gate, by name
+          items: { $ref: "#/components/schemas/ProjectLimits" }
         unverifiedPublic: { $ref: "#/components/schemas/LimitCaps" }
         abortFloor:
           type: object
@@ -2974,8 +2979,18 @@ components:
           type: array
           items: { $ref: "#/components/schemas/TargetLimits" }
 
+    ProjectLimits:
+      type: object
+      required: [id, name, caps, requireDryRun]
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string }
+        caps: { $ref: "#/components/schemas/LimitCaps" }
+        requireDryRun: { type: boolean }
+
     TargetLimits:
       type: object
+      description: A target's own caps, and its effective caps, the tightest of the server's, the organisation's, its project's and its own, and the unverified public caps when they apply.
       required: [id, name, projectId, projectName, baseURL, private, verified, caps, effective]
       properties:
         id: { type: string, format: uuid }

@@ -1458,9 +1458,9 @@ Operation `getSSOSettings`.
 
 ### GET /settings/limits
 
-The server's load caps and every target's caps (admin).
+The caps every run is checked against (admin).
 
-Read-only. A run must fit the server's caps, the caps for unverified public targets when they apply, and its target's own caps.
+Read-only. A run must fit the server's caps, the organisation's caps, its project's caps, the caps for unverified public targets when they apply, and its target's own caps.
 
 Operation `getLimitSettings`.
 
@@ -2475,6 +2475,8 @@ string: `run.finished`, `run.target_failed`, `run.killed`, `drift.detected`
 | Field | Type | Required | Description |
 |---|---|---|---|
 | `server` | [LimitCaps](#limitcaps) | yes |  |
+| `organisation` | [LimitCaps](#limitcaps) | yes |  |
+| `projects` | array of [ProjectLimits](#projectlimits) | yes | Every project's caps and dry-run gate, by name |
 | `unverifiedPublic` | [LimitCaps](#limitcaps) | yes |  |
 | `abortFloor` | object, nullable | no | Stops any run whose target is clearly failing, even when its scenario sets no abort limits. |
 | `abortFloor.errorRate` | number (double) | no |  |
@@ -2482,7 +2484,18 @@ string: `run.finished`, `run.target_failed`, `run.killed`, `drift.detected`
 | `abortFloor.forSeconds` | number (double) | yes |  |
 | `targets` | array of [TargetLimits](#targetlimits) | yes |  |
 
+### ProjectLimits
+
+| Field | Type | Required | Description |
+|---|---|---|---|
+| `id` | string (uuid) | yes |  |
+| `name` | string | yes |  |
+| `caps` | [LimitCaps](#limitcaps) | yes |  |
+| `requireDryRun` | boolean | yes |  |
+
 ### TargetLimits
+
+A target's own caps, and its effective caps, the tightest of the server's, the organisation's, its project's and its own, and the unverified public caps when they apply.
 
 | Field | Type | Required | Description |
 |---|---|---|---|
