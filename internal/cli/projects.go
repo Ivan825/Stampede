@@ -92,7 +92,7 @@ func newProjectsCreateCmd() *cobra.Command {
 				return err
 			}
 			if use {
-				if _, err := setDefaultProject(p.Slug); err != nil {
+				if err := setDefaultProject(p.Slug); err != nil {
 					return err
 				}
 			}
@@ -212,7 +212,7 @@ func newProjectsUpdateCmd() *cobra.Command {
 			}
 			if wasDefault {
 				// A new name gives a new slug.
-				if _, err := setDefaultProject(p.Slug); err != nil {
+				if err := setDefaultProject(p.Slug); err != nil {
 					return err
 				}
 			}
@@ -253,7 +253,7 @@ schedules and secrets. This cannot be undone, so it needs --yes.`,
 			}
 			fmt.Fprintf(cmd.OutOrStdout(), "Deleted project %s.\n", p.Name)
 			if isDefault(c, p) {
-				if _, err := setDefaultProject(""); err != nil {
+				if err := setDefaultProject(""); err != nil {
 					return err
 				}
 			}
@@ -275,7 +275,7 @@ takes --project when the flag is left out. STAMPEDE_PROJECT overrides it.
 		Args: cobra.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if clear {
-				if _, err := setDefaultProject(""); err != nil {
+				if err := setDefaultProject(""); err != nil {
 					return err
 				}
 				fmt.Fprintln(cmd.OutOrStdout(), "No default project.")
@@ -293,7 +293,7 @@ takes --project when the flag is left out. STAMPEDE_PROJECT overrides it.
 			if err != nil {
 				return err
 			}
-			if _, err := setDefaultProject(p.Slug); err != nil {
+			if err := setDefaultProject(p.Slug); err != nil {
 				return err
 			}
 			fmt.Fprintf(cmd.OutOrStdout(), "Default project: %s (slug %s).\n", p.Name, p.Slug)
@@ -309,13 +309,14 @@ func isDefault(c *client.Client, p gen.Project) bool {
 	return c.Project != "" && (c.Project == p.Slug || c.Project == p.Id.String() || strings.EqualFold(c.Project, p.Name))
 }
 
-func setDefaultProject(slug string) (string, error) {
+func setDefaultProject(slug string) error {
 	cfg, err := client.ReadConfigFile()
 	if err != nil {
-		return "", err
+		return err
 	}
 	cfg.Project = slug
-	return client.SaveConfig(cfg)
+	_, err = client.SaveConfig(cfg)
+	return err
 }
 
 // capsFlags set run caps; 0 removes a cap.
