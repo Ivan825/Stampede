@@ -29,6 +29,19 @@ func scheduleOf(r db.GetScheduleRow) gen.Schedule {
 		st := gen.RunStatus(*r.LastRunStatus)
 		out.LastRunStatus = &st
 	}
+	kind := gen.ScheduleKind(r.Kind)
+	out.Kind = &kind
+	if r.SpecUrl != "" {
+		out.SpecURL = &r.SpecUrl
+	}
+	out.LastDriftId, out.LastDriftStatus = r.LastDriftID, r.LastDriftStatus
+	if r.LastDriftStatus != nil {
+		broken := r.LastDriftBroken
+		if broken == nil {
+			broken = []string{}
+		}
+		out.LastDriftBroken = &broken
+	}
 	var ov gen.RunOverrides
 	if json.Unmarshal(r.Overrides, &ov) == nil {
 		out.Overrides = &ov
@@ -43,11 +56,13 @@ func scheduleOf(r db.GetScheduleRow) gen.Schedule {
 // scheduleSpec is a schedule's editable fields, validated.
 type scheduleSpec struct {
 	name, cron, timezone, note string
-	scenarioID, targetID       uuid.UUID
-	overrides                  gen.RunOverrides
-	env                        map[string]string
-	workers                    int
-	enabled                    bool
+	// kind is run or drift; specURL is a drift schedule's OpenAPI document.
+	kind, specURL        string
+	scenarioID, targetID uuid.UUID
+	overrides            gen.RunOverrides
+	env                  map[string]string
+	workers              int
+	enabled              bool
 }
 
 func (sp scheduleSpec) runInput() runInput {
@@ -100,8 +115,25 @@ func (h *handlers) checkSchedule(ctx context.Context, org uuid.UUID, pr db.Proje
 		return time.Time{}, err
 	}
 	sp.cron = strings.TrimSpace(sp.cron)
+	sp.specURL = strings.TrimSpace(sp.specURL)
+	switch sp.kind {
+	case "", scheduleKindRun:
+		sp.kind = scheduleKindRun
+		if sp.specURL != "" {
+			return time.Time{}, errInvalid("specURL applies only to drift schedules")
+		}
+	case scheduleKindDrift:
+	default:
+		return time.Time{}, errInvalid("kind must be run or drift")
+	}
 	if full {
-		if _, err := h.prepareRun(ctx, org, pr, sp.runInput()); err != nil {
+		var err error
+		if sp.kind == scheduleKindDrift {
+			_, err = h.prepareDrift(ctx, org, pr, *sp)
+		} else {
+			_, err = h.prepareRun(ctx, org, pr, sp.runInput())
+		}
+		if err != nil {
 			return time.Time{}, err
 		}
 	}
@@ -173,6 +205,12 @@ func (h *handlers) CreateSchedule(ctx context.Context, req gen.CreateScheduleReq
 	if b.Note != nil {
 		sp.note = *b.Note
 	}
+	if b.Kind != nil {
+		sp.kind = string(*b.Kind)
+	}
+	if b.SpecURL != nil {
+		sp.specURL = *b.SpecURL
+	}
 	next, err := h.checkSchedule(ctx, p.OrgID, pr, &sp, true)
 	if err != nil {
 		return nil, err
@@ -186,7 +224,7 @@ func (h *handlers) CreateSchedule(ctx context.Context, req gen.CreateScheduleReq
 	err = h.st.CreateSchedule(ctx, db.CreateScheduleParams{
 		ID: id, ProjectID: pr.ID, Name: sp.name, ScenarioID: sp.scenarioID, TargetID: sp.targetID, Cron: sp.cron,
 		Timezone: sp.timezone, Overrides: ovJSON, Env: envJSON, Workers: int32(sp.workers), Enabled: sp.enabled, //nolint:gosec // small
-		Note: sp.note, OwnerID: &uid, NextRunAt: nextAt,
+		Note: sp.note, OwnerID: &uid, NextRunAt: nextAt, Kind: sp.kind, SpecUrl: sp.specURL,
 	})
 	if err != nil {
 		if store.IsUniqueViolation(err) {
@@ -194,7 +232,7 @@ func (h *handlers) CreateSchedule(ctx context.Context, req gen.CreateScheduleReq
 		}
 		return nil, err
 	}
-	h.audit(ctx, "schedule.create", sp.name, map[string]any{"schedule": id, "cron": sp.cron, "timezone": sp.timezone, "enabled": sp.enabled})
+	h.audit(ctx, "schedule.create", sp.name, map[string]any{"schedule": id, "kind": sp.kind, "cron": sp.cron, "timezone": sp.timezone, "enabled": sp.enabled})
 	row, err := h.st.GetSchedule(ctx, db.GetScheduleParams{ID: id, OrgID: p.OrgID})
 	if err != nil {
 		return nil, err
@@ -223,7 +261,7 @@ func (h *handlers) UpdateSchedule(ctx context.Context, req gen.UpdateScheduleReq
 	sp := specOf(row)
 	b := req.Body
 	onlyToggle := b.Enabled != nil && b.Name == nil && b.Cron == nil && b.Timezone == nil && b.Note == nil &&
-		b.ScenarioId == nil && b.TargetId == nil && b.Overrides == nil && b.Env == nil && b.Workers == nil
+		b.ScenarioId == nil && b.TargetId == nil && b.Overrides == nil && b.Env == nil && b.Workers == nil && b.SpecURL == nil
 	if b.Name != nil {
 		sp.name = *b.Name
 	}
@@ -254,6 +292,9 @@ func (h *handlers) UpdateSchedule(ctx context.Context, req gen.UpdateScheduleReq
 	if b.Enabled != nil {
 		sp.enabled = *b.Enabled
 	}
+	if b.SpecURL != nil {
+		sp.specURL = *b.SpecURL
+	}
 	// Disabling a schedule is always allowed, even one whose run would no
 	// longer be accepted; anything else is checked in full.
 	full := !onlyToggle || sp.enabled
@@ -273,7 +314,7 @@ func (h *handlers) UpdateSchedule(ctx context.Context, req gen.UpdateScheduleReq
 	err = h.st.UpdateSchedule(ctx, db.UpdateScheduleParams{
 		ID: row.ID, Name: sp.name, ScenarioID: sp.scenarioID, TargetID: sp.targetID, Cron: sp.cron, Timezone: sp.timezone,
 		Overrides: ovJSON, Env: envJSON, Workers: int32(sp.workers), Enabled: sp.enabled, Note: sp.note, //nolint:gosec // small
-		OwnerID: &uid, NextRunAt: nextAt,
+		OwnerID: &uid, NextRunAt: nextAt, SpecUrl: sp.specURL,
 	})
 	if err != nil {
 		if store.IsUniqueViolation(err) {
@@ -312,6 +353,19 @@ func (h *handlers) RunSchedule(ctx context.Context, req gen.RunScheduleRequestOb
 	if err != nil {
 		return nil, err
 	}
+	if row.Kind == scheduleKindDrift {
+		pr, err := h.st.GetProject(ctx, db.GetProjectParams{ID: row.ProjectID, OrgID: p.OrgID})
+		if err != nil {
+			return nil, err
+		}
+		uid := p.UserID
+		res, err := h.runDrift(ctx, p.OrgID, pr, row, &uid)
+		if err != nil {
+			return nil, err
+		}
+		h.audit(ctx, "schedule.drift", row.Name, map[string]any{"schedule": row.ID, "drift": res.ID, "status": res.Status})
+		return gen.RunSchedule200JSONResponse(driftResultOf(res, true)), nil
+	}
 	if active(row.LastRunStatus) {
 		return nil, errConflict("the schedule's previous run is still active")
 	}
@@ -336,7 +390,7 @@ func (h *handlers) RunSchedule(ctx context.Context, req gen.RunScheduleRequestOb
 func specOf(row db.GetScheduleRow) scheduleSpec {
 	s := scheduleOf(row)
 	return scheduleSpec{
-		name: row.Name, cron: row.Cron, timezone: row.Timezone, note: row.Note, scenarioID: row.ScenarioID,
+		name: row.Name, cron: row.Cron, timezone: row.Timezone, note: row.Note, scenarioID: row.ScenarioID, kind: row.Kind, specURL: row.SpecUrl,
 		targetID: row.TargetID, overrides: *s.Overrides, env: *s.Env, workers: int(row.Workers), enabled: row.Enabled,
 	}
 }

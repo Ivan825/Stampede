@@ -41,8 +41,8 @@ func (q *Queries) ClaimSchedule(ctx context.Context, arg ClaimScheduleParams) (u
 }
 
 const createSchedule = `-- name: CreateSchedule :exec
-INSERT INTO schedules (id, project_id, name, scenario_id, target_id, cron, timezone, overrides, env, workers, enabled, note, owner_id, next_run_at)
-VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
+INSERT INTO schedules (id, project_id, name, scenario_id, target_id, cron, timezone, overrides, env, workers, enabled, note, owner_id, next_run_at, kind, spec_url)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)
 `
 
 type CreateScheduleParams struct {
@@ -60,6 +60,8 @@ type CreateScheduleParams struct {
 	Note       string
 	OwnerID    *uuid.UUID
 	NextRunAt  *time.Time
+	Kind       string
+	SpecUrl    string
 }
 
 func (q *Queries) CreateSchedule(ctx context.Context, arg CreateScheduleParams) error {
@@ -78,6 +80,8 @@ func (q *Queries) CreateSchedule(ctx context.Context, arg CreateScheduleParams) 
 		arg.Note,
 		arg.OwnerID,
 		arg.NextRunAt,
+		arg.Kind,
+		arg.SpecUrl,
 	)
 	return err
 }
@@ -95,14 +99,16 @@ func (q *Queries) DeleteSchedule(ctx context.Context, id uuid.UUID) (int64, erro
 }
 
 const getSchedule = `-- name: GetSchedule :one
-SELECT sc.id, sc.project_id, sc.name, sc.scenario_id, sc.target_id, sc.cron, sc.timezone, sc.overrides, sc.env, sc.workers, sc.enabled, sc.note, sc.owner_id, sc.created_at, sc.updated_at, sc.next_run_at, sc.last_fired_at, sc.last_run_id, sc.last_skip_reason, p.org_id, s.name AS scenario_name, t.name AS target_name,
-       u.email AS owner_email, r.status AS last_run_status, r.verdict AS last_run_verdict, r.created_at AS last_run_at
+SELECT sc.id, sc.project_id, sc.name, sc.scenario_id, sc.target_id, sc.cron, sc.timezone, sc.overrides, sc.env, sc.workers, sc.enabled, sc.note, sc.owner_id, sc.created_at, sc.updated_at, sc.next_run_at, sc.last_fired_at, sc.last_run_id, sc.last_skip_reason, sc.kind, sc.spec_url, sc.last_drift_id, p.org_id, s.name AS scenario_name, t.name AS target_name,
+       u.email AS owner_email, r.status AS last_run_status, r.verdict AS last_run_verdict, r.created_at AS last_run_at,
+       d.status AS last_drift_status, d.broken AS last_drift_broken
 FROM schedules sc
 JOIN projects p ON p.id = sc.project_id
 JOIN scenarios s ON s.id = sc.scenario_id
 JOIN targets t ON t.id = sc.target_id
 LEFT JOIN users u ON u.id = sc.owner_id
 LEFT JOIN runs r ON r.id = sc.last_run_id
+LEFT JOIN drift_results d ON d.id = sc.last_drift_id
 WHERE sc.id = $1 AND p.org_id = $2
 `
 
@@ -112,32 +118,37 @@ type GetScheduleParams struct {
 }
 
 type GetScheduleRow struct {
-	ID             uuid.UUID
-	ProjectID      uuid.UUID
-	Name           string
-	ScenarioID     uuid.UUID
-	TargetID       uuid.UUID
-	Cron           string
-	Timezone       string
-	Overrides      json.RawMessage
-	Env            json.RawMessage
-	Workers        int32
-	Enabled        bool
-	Note           string
-	OwnerID        *uuid.UUID
-	CreatedAt      time.Time
-	UpdatedAt      time.Time
-	NextRunAt      *time.Time
-	LastFiredAt    *time.Time
-	LastRunID      *uuid.UUID
-	LastSkipReason string
-	OrgID          uuid.UUID
-	ScenarioName   string
-	TargetName     string
-	OwnerEmail     *string
-	LastRunStatus  *string
-	LastRunVerdict *string
-	LastRunAt      *time.Time
+	ID              uuid.UUID
+	ProjectID       uuid.UUID
+	Name            string
+	ScenarioID      uuid.UUID
+	TargetID        uuid.UUID
+	Cron            string
+	Timezone        string
+	Overrides       json.RawMessage
+	Env             json.RawMessage
+	Workers         int32
+	Enabled         bool
+	Note            string
+	OwnerID         *uuid.UUID
+	CreatedAt       time.Time
+	UpdatedAt       time.Time
+	NextRunAt       *time.Time
+	LastFiredAt     *time.Time
+	LastRunID       *uuid.UUID
+	LastSkipReason  string
+	Kind            string
+	SpecUrl         string
+	LastDriftID     *uuid.UUID
+	OrgID           uuid.UUID
+	ScenarioName    string
+	TargetName      string
+	OwnerEmail      *string
+	LastRunStatus   *string
+	LastRunVerdict  *string
+	LastRunAt       *time.Time
+	LastDriftStatus *string
+	LastDriftBroken []string
 }
 
 func (q *Queries) GetSchedule(ctx context.Context, arg GetScheduleParams) (GetScheduleRow, error) {
@@ -163,6 +174,9 @@ func (q *Queries) GetSchedule(ctx context.Context, arg GetScheduleParams) (GetSc
 		&i.LastFiredAt,
 		&i.LastRunID,
 		&i.LastSkipReason,
+		&i.Kind,
+		&i.SpecUrl,
+		&i.LastDriftID,
 		&i.OrgID,
 		&i.ScenarioName,
 		&i.TargetName,
@@ -170,6 +184,8 @@ func (q *Queries) GetSchedule(ctx context.Context, arg GetScheduleParams) (GetSc
 		&i.LastRunStatus,
 		&i.LastRunVerdict,
 		&i.LastRunAt,
+		&i.LastDriftStatus,
+		&i.LastDriftBroken,
 	)
 	return i, err
 }
@@ -217,45 +233,52 @@ func (q *Queries) ListDueSchedules(ctx context.Context, now time.Time) ([]ListDu
 }
 
 const listSchedules = `-- name: ListSchedules :many
-SELECT sc.id, sc.project_id, sc.name, sc.scenario_id, sc.target_id, sc.cron, sc.timezone, sc.overrides, sc.env, sc.workers, sc.enabled, sc.note, sc.owner_id, sc.created_at, sc.updated_at, sc.next_run_at, sc.last_fired_at, sc.last_run_id, sc.last_skip_reason, p.org_id, s.name AS scenario_name, t.name AS target_name,
-       u.email AS owner_email, r.status AS last_run_status, r.verdict AS last_run_verdict, r.created_at AS last_run_at
+SELECT sc.id, sc.project_id, sc.name, sc.scenario_id, sc.target_id, sc.cron, sc.timezone, sc.overrides, sc.env, sc.workers, sc.enabled, sc.note, sc.owner_id, sc.created_at, sc.updated_at, sc.next_run_at, sc.last_fired_at, sc.last_run_id, sc.last_skip_reason, sc.kind, sc.spec_url, sc.last_drift_id, p.org_id, s.name AS scenario_name, t.name AS target_name,
+       u.email AS owner_email, r.status AS last_run_status, r.verdict AS last_run_verdict, r.created_at AS last_run_at,
+       d.status AS last_drift_status, d.broken AS last_drift_broken
 FROM schedules sc
 JOIN projects p ON p.id = sc.project_id
 JOIN scenarios s ON s.id = sc.scenario_id
 JOIN targets t ON t.id = sc.target_id
 LEFT JOIN users u ON u.id = sc.owner_id
 LEFT JOIN runs r ON r.id = sc.last_run_id
+LEFT JOIN drift_results d ON d.id = sc.last_drift_id
 WHERE sc.project_id = $1
 ORDER BY sc.name
 `
 
 type ListSchedulesRow struct {
-	ID             uuid.UUID
-	ProjectID      uuid.UUID
-	Name           string
-	ScenarioID     uuid.UUID
-	TargetID       uuid.UUID
-	Cron           string
-	Timezone       string
-	Overrides      json.RawMessage
-	Env            json.RawMessage
-	Workers        int32
-	Enabled        bool
-	Note           string
-	OwnerID        *uuid.UUID
-	CreatedAt      time.Time
-	UpdatedAt      time.Time
-	NextRunAt      *time.Time
-	LastFiredAt    *time.Time
-	LastRunID      *uuid.UUID
-	LastSkipReason string
-	OrgID          uuid.UUID
-	ScenarioName   string
-	TargetName     string
-	OwnerEmail     *string
-	LastRunStatus  *string
-	LastRunVerdict *string
-	LastRunAt      *time.Time
+	ID              uuid.UUID
+	ProjectID       uuid.UUID
+	Name            string
+	ScenarioID      uuid.UUID
+	TargetID        uuid.UUID
+	Cron            string
+	Timezone        string
+	Overrides       json.RawMessage
+	Env             json.RawMessage
+	Workers         int32
+	Enabled         bool
+	Note            string
+	OwnerID         *uuid.UUID
+	CreatedAt       time.Time
+	UpdatedAt       time.Time
+	NextRunAt       *time.Time
+	LastFiredAt     *time.Time
+	LastRunID       *uuid.UUID
+	LastSkipReason  string
+	Kind            string
+	SpecUrl         string
+	LastDriftID     *uuid.UUID
+	OrgID           uuid.UUID
+	ScenarioName    string
+	TargetName      string
+	OwnerEmail      *string
+	LastRunStatus   *string
+	LastRunVerdict  *string
+	LastRunAt       *time.Time
+	LastDriftStatus *string
+	LastDriftBroken []string
 }
 
 func (q *Queries) ListSchedules(ctx context.Context, projectID uuid.UUID) ([]ListSchedulesRow, error) {
@@ -287,6 +310,9 @@ func (q *Queries) ListSchedules(ctx context.Context, projectID uuid.UUID) ([]Lis
 			&i.LastFiredAt,
 			&i.LastRunID,
 			&i.LastSkipReason,
+			&i.Kind,
+			&i.SpecUrl,
+			&i.LastDriftID,
 			&i.OrgID,
 			&i.ScenarioName,
 			&i.TargetName,
@@ -294,6 +320,8 @@ func (q *Queries) ListSchedules(ctx context.Context, projectID uuid.UUID) ([]Lis
 			&i.LastRunStatus,
 			&i.LastRunVerdict,
 			&i.LastRunAt,
+			&i.LastDriftStatus,
+			&i.LastDriftBroken,
 		); err != nil {
 			return nil, err
 		}
@@ -303,6 +331,21 @@ func (q *Queries) ListSchedules(ctx context.Context, projectID uuid.UUID) ([]Lis
 		return nil, err
 	}
 	return items, nil
+}
+
+const recordScheduleDrift = `-- name: RecordScheduleDrift :exec
+UPDATE schedules SET last_drift_id = $2, last_fired_at = $3, last_skip_reason = '' WHERE id = $1
+`
+
+type RecordScheduleDriftParams struct {
+	ID          uuid.UUID
+	LastDriftID *uuid.UUID
+	LastFiredAt *time.Time
+}
+
+func (q *Queries) RecordScheduleDrift(ctx context.Context, arg RecordScheduleDriftParams) error {
+	_, err := q.db.Exec(ctx, recordScheduleDrift, arg.ID, arg.LastDriftID, arg.LastFiredAt)
+	return err
 }
 
 const recordScheduleRun = `-- name: RecordScheduleRun :exec
@@ -337,7 +380,7 @@ func (q *Queries) RecordScheduleSkip(ctx context.Context, arg RecordScheduleSkip
 const updateSchedule = `-- name: UpdateSchedule :exec
 UPDATE schedules
 SET name = $2, scenario_id = $3, target_id = $4, cron = $5, timezone = $6, overrides = $7, env = $8,
-    workers = $9, enabled = $10, note = $11, owner_id = $12, next_run_at = $13, updated_at = now()
+    workers = $9, enabled = $10, note = $11, owner_id = $12, next_run_at = $13, spec_url = $14, updated_at = now()
 WHERE id = $1
 `
 
@@ -355,6 +398,7 @@ type UpdateScheduleParams struct {
 	Note       string
 	OwnerID    *uuid.UUID
 	NextRunAt  *time.Time
+	SpecUrl    string
 }
 
 func (q *Queries) UpdateSchedule(ctx context.Context, arg UpdateScheduleParams) error {
@@ -372,6 +416,7 @@ func (q *Queries) UpdateSchedule(ctx context.Context, arg UpdateScheduleParams) 
 		arg.Note,
 		arg.OwnerID,
 		arg.NextRunAt,
+		arg.SpecUrl,
 	)
 	return err
 }

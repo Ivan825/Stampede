@@ -154,7 +154,7 @@ func TestIntegrationsAndNotifications(t *testing.T) {
 	if code := c.do("POST", "/notifications/channels", map[string]any{"name": "ops", "kind": "webhook", "url": hooks.URL + "/hook?token=abc", "allowPrivate": true}, &created); code != 201 {
 		t.Fatalf("create channel: %d", code)
 	}
-	if !strings.HasPrefix(created.Secret, "whsec_") || created.Channel["urlHint"] != hooks.URL || created.Channel["hasSecret"] != true || len(created.Channel["events"].([]any)) != 3 {
+	if !strings.HasPrefix(created.Secret, "whsec_") || created.Channel["urlHint"] != hooks.URL || created.Channel["hasSecret"] != true || len(created.Channel["events"].([]any)) != 4 {
 		t.Errorf("channel %+v", created)
 	}
 	hook.mu.Lock()

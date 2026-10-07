@@ -106,7 +106,7 @@ func (s *Server) fireSchedule(ctx context.Context, id, org uuid.UUID, now time.T
 		s.log.Error("load schedule", "schedule", id, "error", err)
 		return
 	}
-	if active(row.LastRunStatus) {
+	if row.Kind != scheduleKindDrift && active(row.LastRunStatus) {
 		s.skipSchedule(ctx, id, org, row.Name, fmt.Sprintf("the previous run (%s) was still active", row.LastRunID), false)
 		return
 	}
@@ -124,6 +124,10 @@ func (s *Server) fireSchedule(ctx context.Context, id, org uuid.UUID, now time.T
 	pr, err := s.st.GetProject(ctx, db.GetProjectParams{ID: row.ProjectID, OrgID: org})
 	if err != nil {
 		s.log.Error("load schedule project", "schedule", id, "error", err)
+		return
+	}
+	if row.Kind == scheduleKindDrift {
+		s.fireDrift(ctx, h, org, pr, row, p.UserID)
 		return
 	}
 	prep, err := h.prepareRun(ctx, org, pr, specOf(row).runInput())

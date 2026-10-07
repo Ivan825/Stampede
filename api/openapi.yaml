@@ -1008,7 +1008,14 @@ paths:
       description: |
         Starts a run as the caller without changing when the schedule next
         fires. Refused while the schedule's previous run is still active.
+        For a drift schedule, runs its drift check now instead and returns
+        the result (200).
       responses:
+        "200":
+          description: Drift schedules only, the check's result
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/DriftResult" }
         "201":
           description: Run accepted and scheduled
           content:
@@ -1018,6 +1025,80 @@ paths:
         "404": { $ref: "#/components/responses/NotFound" }
         "409": { $ref: "#/components/responses/Conflict" }
         "422": { $ref: "#/components/responses/Invalid" }
+
+  /projects/{projectId}/drift-results:
+    parameters:
+      - $ref: "#/components/parameters/projectId"
+    get:
+      tags: [schedules]
+      operationId: listDriftResults
+      summary: Results of scheduled drift checks, newest first
+      parameters:
+        - name: scheduleId
+          in: query
+          schema: { type: string, format: uuid }
+        - name: limit
+          in: query
+          schema: { type: integer, minimum: 1, maximum: 200, default: 50 }
+      responses:
+        "200":
+          description: Results without traces
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/DriftResult" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /drift-results/{driftId}:
+    parameters:
+      - $ref: "#/components/parameters/driftId"
+    get:
+      tags: [schedules]
+      operationId: getDriftResult
+      summary: One drift check with its redacted dry-run traces and spec diff
+      responses:
+        "200":
+          description: The result
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/DriftResult" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /drift-results/{driftId}/repair:
+    parameters:
+      - $ref: "#/components/parameters/driftId"
+    post:
+      tags: [ai]
+      operationId: repairDrift
+      summary: Ask the AI generator to repair the broken journeys (asynchronous)
+      description: |
+        Starts an AI generation job with the scenario as the starting point,
+        the broken journeys and their dry-run evidence (redacted) as the
+        task, and the spec the check fetched, if any. The job dry-runs and
+        repairs as usual; its result is a proposed new version with a diff
+        against the current one. Nothing is saved until the job is approved
+        with POST /ai/jobs/{jobId}/approve. Needs the editor role.
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/DriftRepair" }
+      responses:
+        "202":
+          description: Repair job accepted
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AIJob" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "422": { $ref: "#/components/responses/Invalid" }
+        "429":
+          description: Monthly AI token cap reached, or too many jobs queued
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
 
   /workers:
     get:
@@ -1405,6 +1486,11 @@ components:
       name: stampede_session
 
   parameters:
+    driftId:
+      name: driftId
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
     userId:
       name: userId
       in: path
@@ -1614,6 +1700,64 @@ components:
         maxRate: { type: number, format: double, description: Iterations per second }
         maxVUs: { type: integer }
         maxDurationSeconds: { type: integer }
+
+    DriftResult:
+      type: object
+      required: [id, projectId, scenarioId, scenarioVersion, targetId, status, broken, createdAt]
+      properties:
+        id: { type: string, format: uuid }
+        projectId: { type: string, format: uuid }
+        scheduleId: { type: string, format: uuid, nullable: true }
+        scheduleName: { type: string }
+        scenarioId: { type: string, format: uuid }
+        scenarioName: { type: string }
+        scenarioVersion: { type: integer }
+        targetId: { type: string, format: uuid }
+        targetURL: { type: string }
+        status:
+          type: string
+          enum: [ok, drifted, error]
+          x-enum-varnames: [DriftOK, DriftDrifted, DriftError]
+          description: drifted when a journey failed its dry run or calls an endpoint the API no longer has; error when the check could not run
+        error: { type: string }
+        broken:
+          type: array
+          items: { type: string }
+          description: Names of the broken journeys
+        journeys:
+          type: array
+          description: Dry-run outcome per journey (with redacted traces on GET /drift-results/{driftId})
+          items: { $ref: "#/components/schemas/DriftJourney" }
+        removedEndpoints:
+          type: array
+          description: Endpoints in the previous check's spec that the current spec no longer has
+          items: { type: string, example: GET /api/v1/orders }
+        addedEndpoints:
+          type: array
+          items: { type: string }
+        unmatched:
+          type: array
+          description: Requests that match no endpoint of the current spec
+          items: { type: string, example: "checkout: POST /api/cart" }
+        repairJobId: { type: string, format: uuid, nullable: true }
+        createdAt: { type: string, format: date-time }
+
+    DriftJourney:
+      type: object
+      required: [journey, ok]
+      properties:
+        journey: { type: string }
+        ok: { type: boolean }
+        problem: { type: string }
+        traces:
+          type: array
+          items: { $ref: "#/components/schemas/AITrace" }
+
+    DriftRepair:
+      type: object
+      properties:
+        providerId: { type: string, format: uuid, description: Defaults to the organisation's only provider, or the one named "default". }
+        maxRepairs: { type: integer, minimum: 0, maximum: 3, default: 3 }
 
     RunEvent:
       type: object
@@ -1854,6 +1998,14 @@ components:
         lastRunStatus: { $ref: "#/components/schemas/RunStatus" }
         lastRunVerdict: { type: string, nullable: true, description: "pass, fail, generator-limited or no-targets, once the last run has finished" }
         lastSkipReason: { type: string, description: Why the last firing started no run; empty when it did }
+        kind: { $ref: "#/components/schemas/ScheduleKind" }
+        specURL: { type: string, description: "Drift schedules: OpenAPI document fetched on each check (on the target's host or an allowed host)" }
+        lastDriftId: { type: string, format: uuid, nullable: true }
+        lastDriftStatus: { type: string, nullable: true, description: "Drift schedules: ok, drifted or error" }
+        lastDriftBroken:
+          type: array
+          items: { type: string }
+          description: Drift schedules, the journeys the last check found broken
 
     ScheduleCreate:
       type: object
@@ -1871,6 +2023,19 @@ components:
         workers: { type: integer, minimum: 0, description: 0 uses every connected worker }
         enabled: { type: boolean, default: true }
         note: { type: string, maxLength: 500 }
+        kind: { $ref: "#/components/schemas/ScheduleKind" }
+        specURL: { type: string, description: "Drift schedules only: an OpenAPI document to compare the scenario with on each check" }
+
+    ScheduleKind:
+      type: string
+      enum: [run, drift]
+      default: run
+      x-enum-varnames: [ScheduleKindRun, ScheduleKindDrift]
+      description: |
+        run starts a load test on the cron. drift starts no load: it dry-runs
+        each journey once with one user against the target (and compares the
+        scenario with specURL when set), records a drift result and notifies
+        drift.detected subscribers when journeys broke.
 
     ScheduleUpdate:
       type: object
@@ -1887,6 +2052,7 @@ components:
         workers: { type: integer, minimum: 0 }
         enabled: { type: boolean }
         note: { type: string, maxLength: 500 }
+        specURL: { type: string }
 
     SchedulePreview:
       type: object
@@ -2348,8 +2514,8 @@ components:
 
     NotificationEvent:
       type: string
-      enum: [run.finished, run.target_failed, run.killed]
-      x-enum-varnames: [EventRunFinished, EventRunTargetFailed, EventRunKilled]
+      enum: [run.finished, run.target_failed, run.killed, drift.detected]
+      x-enum-varnames: [EventRunFinished, EventRunTargetFailed, EventRunKilled, EventDriftDetected]
 
     NotificationChannel:
       type: object

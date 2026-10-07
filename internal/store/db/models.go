@@ -94,6 +94,23 @@ type AuditLog struct {
 	Ip      string
 }
 
+type DriftResult struct {
+	ID              uuid.UUID
+	ProjectID       uuid.UUID
+	ScheduleID      *uuid.UUID
+	ScenarioID      uuid.UUID
+	ScenarioVersion int32
+	TargetID        uuid.UUID
+	Status          string
+	Error           string
+	Broken          []string
+	Result          json.RawMessage
+	Spec            json.RawMessage
+	RepairJobID     *uuid.UUID
+	CreatedBy       *uuid.UUID
+	CreatedAt       time.Time
+}
+
 type Integration struct {
 	ID         uuid.UUID
 	OrgID      uuid.UUID
@@ -294,6 +311,9 @@ type Schedule struct {
 	LastFiredAt    *time.Time
 	LastRunID      *uuid.UUID
 	LastSkipReason string
+	Kind           string
+	SpecUrl        string
+	LastDriftID    *uuid.UUID
 }
 
 type Secret struct {
