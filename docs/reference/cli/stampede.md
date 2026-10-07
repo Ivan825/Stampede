@@ -21,6 +21,7 @@ stampede [flags]
 ### SEE ALSO
 
 * [stampede agent](stampede_agent.md)	 - Inject faults into dependencies during a load test
+* [stampede backup](stampede_backup.md)	 - Write a logical backup of the server's database with pg_dump
 * [stampede compare](stampede_compare.md)	 - Compare two versions using repeated runs of each
 * [stampede completion](stampede_completion.md)	 - Generate the autocompletion script for the specified shell
 * [stampede coverage](stampede_coverage.md)	 - Show which API endpoints a scenario's journeys exercise and which none does
@@ -36,6 +37,7 @@ stampede [flags]
 * [stampede plugin](stampede_plugin.md)	 - List, install, remove and create protocol plugins
 * [stampede push](stampede_push.md)	 - Save local scenario files to the server as new versions
 * [stampede report](stampede_report.md)	 - Render a saved JSON report as HTML, PDF, CSV, JUnit, Markdown or a summary
+* [stampede restore](stampede_restore.md)	 - Restore a backup from stampede backup into an empty database with pg_restore
 * [stampede run](stampede_run.md)	 - Run a scenario in-process and write a report (no server needed)
 * [stampede runs](stampede_runs.md)	 - List recent runs on the server
 * [stampede schedules](stampede_schedules.md)	 - List and manage scheduled runs on the server

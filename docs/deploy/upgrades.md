@@ -90,6 +90,23 @@ Back up two things, together:
 | Helm, bundled DB | `kubectl -n stampede exec stampede-timescaledb-0 -- pg_dump -U stampede -Fc stampede > stampede.dump` | `kubectl -n stampede get secret stampede -o jsonpath='{.data.master-key}' \| base64 -d > master.key` |
 | Helm or operator, external DB | your database's backup tooling, or `pg_dump -Fc "$DATABASE_URL"` | the Secret named by `masterKey.existingSecret` / `<cluster>-stampede-keys` |
 
+### With the CLI
+
+On a machine with the PostgreSQL client tools and network access to the
+database, `stampede backup` and `stampede restore` wrap `pg_dump` and
+`pg_restore` (they say so and stop when the tools are not on `PATH`):
+
+```sh
+export STAMPEDE_DATABASE_URL=postgres://stampede:...@db.internal:5432/stampede
+stampede backup stampede-$(date +%F).dump        # pg_dump -Fc --no-owner
+```
+
+`pg_dump` must be at the database server's major version or newer (17 for
+the bundled TimescaleDB image). The password is passed to the tools in
+`PGPASSWORD`, not on their command line. In the Compose stack the database
+is not published on the host, so use the `docker compose exec` commands
+in the table below instead.
+
 Store the master key separately from the dump (a password manager or secret
 store), since together they unlock every stored secret.
 
@@ -112,6 +129,22 @@ docker compose exec -T db psql -U stampede -d stampede -c 'SELECT timescaledb_po
 docker compose cp ./master.key server:/data/master.key   # the key that matches this dump
 docker compose up -d
 ```
+
+With the CLI, create an empty database (or drop and recreate the old one),
+stop the server and workers, then:
+
+```sh
+stampede restore stampede-2026-10-01.dump --database-url postgres://stampede:...@db.internal:5432/stampede
+```
+
+`restore` refuses a database that already has tables. When the backup is
+of a TimescaleDB database (its table of contents lists the `timescaledb`
+extension) it creates the extension and runs `timescaledb_pre_restore()`
+before `pg_restore --no-owner` and `timescaledb_post_restore()` after, the
+same steps as above. Put the matching master key in place and start the
+server. The CLI's backup and restore have a round-trip test against plain
+PostgreSQL, which runs only where `pg_dump` is at the test database's
+version or newer; the TimescaleDB steps have not been rehearsed yet.
 
 For Helm with the bundled database, the same commands run through
 `kubectl -n stampede exec -i stampede-timescaledb-0 -- ...` after scaling
