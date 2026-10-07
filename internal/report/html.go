@@ -7,6 +7,7 @@ import (
 	"io"
 	"math"
 	"strconv"
+	"strings"
 	"time"
 )
 
@@ -32,7 +33,21 @@ var htmlTmpl = template.Must(template.New("report").Funcs(template.FuncMap{
 		return Ms(ps.Mean) + " / " + Ms(ps.P95)
 	},
 	"offset": fmtOffset,
+	"spans":  fmtSpans,
+	"share":  func(w WorkerRow) string { return strconv.FormatFloat(w.SharePct(), 'f', 1, 64) + "%" },
+	"clock": func(s float64) string {
+		return strconv.FormatFloat(s*1000, 'f', 1, 64) + "ms"
+	},
 }).Parse(htmlTemplate))
+
+// fmtSpans lists time windows as "12s–20s, 31s–35s".
+func fmtSpans(ss []Span) string {
+	parts := make([]string, len(ss))
+	for i, s := range ss {
+		parts[i] = fmtSecs(s.From) + "–" + fmtSecs(s.To)
+	}
+	return strings.Join(parts, ", ")
+}
 
 type htmlData struct {
 	*Report
@@ -86,7 +101,7 @@ func (r *Report) WriteHTML(w io.Writer) error {
 	}
 	load = append(load, series{Name: "active virtual users", Class: "s2", Ys: vus, Fmt: countFmt, Right: true})
 
-	bands := r.faultBands()
+	bands := r.timeBands()
 	d := htmlData{
 		Report:          r,
 		Unit:            Unit(r.Load.Mode),

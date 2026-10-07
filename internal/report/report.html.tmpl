@@ -82,7 +82,11 @@ td code { font: 12.5px var(--mono); }
 .narrative .ref { font: 12px var(--mono); color: var(--muted); border-bottom: 1px dotted var(--muted); cursor: help; margin-left: 4px; }
 .narrative .by { color: var(--muted); font-size: 12.5px; margin: 6px 0 0; }
 svg .band { fill: var(--warn); opacity: .14; }
-.swatch.band { background: var(--warn); opacity: .45; }
+svg .band.saturated { fill: var(--s3); }
+svg .band.lost { fill: var(--fail); }
+.swatch.band { background: var(--warn); opacity: .45; height: 8px; }
+.swatch.band.saturated { background: var(--s3); }
+.swatch.band.lost { background: var(--fail); }
 footer { color: var(--muted); font-size: 12.5px; margin-top: 48px; border-top: 1px solid var(--line); padding-top: 16px; }
 footer a, td a { color: var(--accent); }
 .sub { color: var(--muted); font-weight: 400; font-size: 12.5px; }
@@ -173,6 +177,25 @@ footer a, td a { color: var(--accent); }
 <thead><tr><th>Fault</th><th class="l">Kind</th><th class="l">Target</th><th>From</th><th>To</th><th class="l">Result</th></tr></thead>
 <tbody>{{range .}}<tr><td>{{.Label}}</td><td class="l">{{.Kind}}</td><td class="l"><code>{{.Target}}</code></td><td>{{secs .Start}}</td><td>{{secs .End}}</td><td class="l{{if .Error}} bad{{end}}">{{if .Error}}{{.Error}}{{else}}applied, then reverted{{end}}</td></tr>{{end}}</tbody>
 </table></div>
+{{end}}
+
+{{with .Workers}}
+<h2>Workers</h2>
+<div class="table-wrap"><table>
+<thead><tr><th>Worker</th><th class="l">Region</th><th>Share</th><th class="l">State</th><th>Peak VUs</th><th>Requests</th><th class="l">Saturated</th><th class="l">Lost</th><th>Clock offset</th></tr></thead>
+<tbody>{{range .}}<tr>
+<td>{{.Name}}{{if .Replaces}} <span class="sub">replaces {{.Replaces}}</span>{{end}}</td>
+<td class="l">{{if .Region}}{{.Region}}{{else}}<span class="sub">–</span>{{end}}</td>
+<td>{{share .}}</td>
+<td class="l{{if or (eq .State "lost") (eq .State "failed")}} bad{{end}}">{{.State}}{{if .Error}} <span class="sub">{{.Error}}</span>{{else if .StopReason}} <span class="sub">{{.StopReason}}</span>{{end}}</td>
+<td>{{.PeakVUs}}</td>
+<td>{{.Requests}}</td>
+<td class="l">{{if .Saturated}}{{spans .Saturated}}{{with .SaturationReasons}} <span class="sub">({{range $i, $r := .}}{{if $i}}, {{end}}{{$r}}{{end}})</span>{{end}}{{else}}<span class="sub">no</span>{{end}}</td>
+<td class="l">{{with .Lost}}{{secs .From}}–{{secs .To}}{{else}}<span class="sub">no</span>{{end}}</td>
+<td>{{clock .ClockOffset}}</td>
+</tr>{{end}}</tbody>
+</table></div>
+<p class="sub">Saturated windows are shaded on the charts above: latency measured there may reflect the load generator rather than the target. While a lost worker's share was not generated, the run produced less load than planned.</p>
 {{end}}
 
 {{if .MetricCharts}}

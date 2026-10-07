@@ -1,5 +1,19 @@
 package report
 
+import "strings"
+
+// saturatedLabel describes the worker's saturated windows for a chart.
+func (w WorkerRow) saturatedLabel() string {
+	s := w.Name + " saturated"
+	if len(w.SaturationReasons) > 0 {
+		s += " (" + strings.Join(w.SaturationReasons, ", ") + ")"
+	}
+	return s
+}
+
+// SharePct is the worker's share of the load in percent.
+func (w WorkerRow) SharePct() float64 { return 100 * (w.ShareHi - w.ShareLo) }
+
 // WorkerRow is one worker's part in a distributed run. Times are seconds
 // since the run started, like the timeline.
 type WorkerRow struct {

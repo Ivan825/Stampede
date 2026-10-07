@@ -18,10 +18,36 @@ type series struct {
 	Right bool
 }
 
-// band shades a stretch of the x axis, such as an injected fault.
+// band shades a stretch of the x axis: an injected fault, a window in
+// which a worker was saturated, or one in which a lost worker's share of
+// the load was not generated.
 type band struct {
 	From, To float64
 	Label    string
+	// Kind is bandFault, bandSaturated or bandLost; it sets the colour and
+	// the legend entry. Empty means bandFault.
+	Kind string
+}
+
+// Band kinds.
+const (
+	bandFault     = "fault"
+	bandSaturated = "saturated"
+	bandLost      = "lost"
+)
+
+// bandLegend labels each kind of band in a chart legend, in order.
+var bandLegend = []struct{ kind, label string }{
+	{bandFault, "injected fault"},
+	{bandSaturated, "worker saturated"},
+	{bandLost, "worker lost"},
+}
+
+func (b band) kind() string {
+	if b.Kind == "" {
+		return bandFault
+	}
+	return b.Kind
 }
 
 // lineChartX renders a line chart with a custom x axis label format.
@@ -93,8 +119,8 @@ func lineChartBands(title string, xs []float64, xFmt func(float64) string, ss []
 		if x1 <= x0 {
 			continue
 		}
-		fmt.Fprintf(&b, `<rect class="band" x="%.1f" y="%.1f" width="%.1f" height="%.1f"><title>%s</title></rect>`,
-			x0, padT, x1-x0, plotH, html.EscapeString(bd.Label))
+		fmt.Fprintf(&b, `<rect class="band %s" x="%.1f" y="%.1f" width="%.1f" height="%.1f"><title>%s</title></rect>`,
+			bd.kind(), x0, padT, x1-x0, plotH, html.EscapeString(bd.Label))
 	}
 	for _, s := range ss {
 		top := lMax
@@ -116,8 +142,13 @@ func lineChartBands(title string, xs []float64, xFmt func(float64) string, ss []
 		fmt.Fprintf(&b, `<polyline class="line %s" points="%s"/>`, s.Class, strings.Join(pts, " "))
 	}
 	b.WriteString(`</svg><div class="legend">`)
-	if len(bands) > 0 {
-		b.WriteString(`<span><i class="swatch band"></i>injected fault</span>`)
+	for _, l := range bandLegend {
+		for _, bd := range bands {
+			if bd.kind() == l.kind {
+				fmt.Fprintf(&b, `<span><i class="swatch band %s"></i>%s</span>`, l.kind, l.label)
+				break
+			}
+		}
 	}
 	for _, s := range ss {
 		side := ""
