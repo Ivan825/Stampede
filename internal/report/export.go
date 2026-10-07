@@ -118,6 +118,16 @@ func (r *Report) WriteText(w io.Writer) {
 		}
 	}
 
+	if rc := r.Recovery; rc != nil {
+		if rc.Recovered {
+			fmt.Fprintf(w, "\n  recovery     back to normal %s after load returned to normal (baseline p95 %s, errors %s)\n",
+				fmtSecs(rc.Seconds), Ms(rc.BaselineP95), Pct(rc.BaselineErrorRate))
+		} else {
+			fmt.Fprintf(w, "\n  recovery     not back to normal by the end of the run (baseline p95 %s, errors %s)\n",
+				Ms(rc.BaselineP95), Pct(rc.BaselineErrorRate))
+		}
+	}
+
 	fmt.Fprintf(w, "\n  %-44s %8s %8s %9s %9s %9s\n", "step", "reqs", "errors", "p50", "p95", "p99")
 	for _, j := range r.Journeys {
 		for _, s := range j.Steps {
@@ -350,6 +360,13 @@ func (r *Report) WriteMarkdown(w io.Writer) {
 			}
 		}
 		fmt.Fprint(w, "\n\n")
+	}
+	if rc := r.Recovery; rc != nil {
+		if rc.Recovered {
+			fmt.Fprintf(w, "**Recovery:** back to normal %s after load returned to normal (baseline p95 %s).\n\n", fmtSecs(rc.Seconds), Ms(rc.BaselineP95))
+		} else {
+			fmt.Fprintf(w, "**Recovery:** not back to normal by the end of the run (baseline p95 %s).\n\n", Ms(rc.BaselineP95))
+		}
 	}
 	fmt.Fprintf(w, "<details><summary>Per step</summary>\n\n| Journey | Step | Requests | Errors | p95 | p99 |\n|---|---|---:|---:|---:|---:|\n")
 	for _, j := range r.Journeys {

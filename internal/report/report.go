@@ -42,6 +42,8 @@ type Report struct {
 	// Curve and Knee are set for runs whose load changed over time.
 	Curve []CurvePoint `json:"curve,omitempty"`
 	Knee  *Knee        `json:"knee,omitempty"`
+	// Recovery is set for spike and recovery shapes.
+	Recovery *Recovery `json:"recovery,omitempty"`
 	Notes []string     `json:"notes,omitempty"`
 	// Workers describes each worker of a distributed run; an in-process
 	// run lists its machine only when it was saturated.
@@ -431,6 +433,7 @@ func Build(in Input) *Report {
 	if len(in.Plan.Stages) > 0 {
 		r.Curve = buildCurve(snaps, secs, planned)
 		r.Knee = findKnee(r.Curve, in.Plan.Mode)
+		r.Recovery = findRecovery(in.Plan, r.Timeline)
 	}
 
 	// Targets.

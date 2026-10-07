@@ -147,6 +147,14 @@ footer a, td a { color: var(--accent); }
 </div>
 {{end}}
 
+{{with .Recovery}}
+<h2>Recovery</h2>
+<div class="card">
+  {{if .Recovered}}<p>Back to normal <b>{{secs .Seconds}}</b> after load returned to normal at {{secs .NormalAt}}: p95 within 25% of the baseline {{ms .BaselineP95}} and errors within a point of {{pct .BaselineErrorRate}}, for three seconds in a row.</p>
+  {{else}}<p><b>Not back to normal</b> by the end of the run. Before the overload, p95 was {{ms .BaselineP95}} and errors {{pct .BaselineErrorRate}}.</p>{{end}}
+</div>
+{{end}}
+
 <h2>Over time</h2>
 <div class="card"><h3>Throughput and users</h3>{{.ThroughputChart}}</div>
 <div class="card"><h3>Latency (from scheduled send)</h3>{{.LatencyChart}}</div>

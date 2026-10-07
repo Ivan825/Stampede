@@ -18,6 +18,12 @@ the preset, except where noted.
 | `recovery` | How fast does it return to normal after overload? | normal, 3× overload for 3m, back to normal for 5m |
 | `wave` | Does it cope with repeated peaks? | `cycles` (4) of ramp to `max`, hold, ramp to `start`, hold |
 
+For `spike` and `recovery` the report also gives the **recovery time**:
+how long after load returned to normal the target held its pre-overload
+baseline again (p95 within 25%, or 5 ms, of the median p95 over the
+first normal hold, and the error rate within one point of it, for three
+seconds in a row), or that it had not recovered by the end of the run.
+
 Any scenario's journeys work with any shape:
 
 ```sh
