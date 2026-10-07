@@ -44,5 +44,12 @@ Layout:
 3. CI must be green: gofmt, vet, golangci-lint, tests on Linux and macOS,
    cross-compilation, quick accuracy run and govulncheck.
 
+## Dependencies
+
+Dependencies are updated by hand, not by a bot: `make update` updates the Go
+modules in every module of the repository and runs govulncheck; bump
+GitHub Actions versions in `.github/workflows` and `action/action.yml` at
+the same time. CI then checks everything as usual.
+
 By contributing you agree that your contributions are licensed under the
 Apache License 2.0.

@@ -8,7 +8,7 @@ LDFLAGS   := -s -w \
 	-X $(PKG)/internal/version.Commit=$(COMMIT) \
 	-X $(PKG)/internal/version.Date=$(DATE)
 
-.PHONY: build test race lint fmt tidy clean generate web docs cli-docs api-docs
+.PHONY: build test race lint fmt tidy update clean generate web docs cli-docs api-docs
 
 build:
 	$(GO) build -trimpath -ldflags "$(LDFLAGS)" -o bin/stampede ./cmd/stampede
@@ -30,6 +30,14 @@ fmt:
 tidy:
 	$(GO) mod tidy
 	for m in plugins/*/ examples/shoplab deploy/operator; do (cd $$m && $(GO) mod tidy) || exit 1; done
+
+## update: update Go dependencies to their latest minor and patch versions
+## in every module, then check for known vulnerabilities
+update:
+	$(GO) get -u -t ./...
+	for m in plugins/*/ examples/shoplab deploy/operator; do (cd $$m && $(GO) get -u -t ./...) || exit 1; done
+	$(MAKE) tidy
+	$(GO) run golang.org/x/vuln/cmd/govulncheck@latest ./...
 
 clean:
 	rm -rf bin dist
