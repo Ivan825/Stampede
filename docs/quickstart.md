@@ -18,7 +18,8 @@ planted on purpose (see [examples/shoplab](../examples/shoplab/README.md)).
 ## 2. Create your account
 
 Open <http://localhost:8080>. The first visit asks for an organisation name
-and an owner account.
+and an owner account. From the terminal, `stampede setup` does the same
+and signs the CLI in ([using Stampede from the CLI](guides/cli.md)).
 
 ## 3. Run something from the command line
 

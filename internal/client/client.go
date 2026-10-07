@@ -15,6 +15,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"time"
 
@@ -27,7 +28,10 @@ import (
 type Client struct {
 	Server string
 	Token  string
-	HTTP   *http.Client
+	// Project is the default project for commands given no --project
+	// (stampede projects use, or STAMPEDE_PROJECT).
+	Project string
+	HTTP    *http.Client
 }
 
 // Config is what `stampede login` stores.
@@ -46,9 +50,8 @@ func ConfigPath() (string, error) {
 	return filepath.Join(dir, "stampede", "config.yaml"), nil
 }
 
-// LoadConfig reads the stored config; env vars STAMPEDE_SERVER and
-// STAMPEDE_TOKEN override it.
-func LoadConfig() (Config, error) {
+// ReadConfigFile reads the stored config without environment overrides.
+func ReadConfigFile() (Config, error) {
 	var c Config
 	if p, err := ConfigPath(); err == nil {
 		if b, err := os.ReadFile(p); err == nil {
@@ -57,11 +60,24 @@ func LoadConfig() (Config, error) {
 			}
 		}
 	}
+	return c, nil
+}
+
+// LoadConfig reads the stored config; env vars STAMPEDE_SERVER,
+// STAMPEDE_TOKEN and STAMPEDE_PROJECT override it.
+func LoadConfig() (Config, error) {
+	c, err := ReadConfigFile()
+	if err != nil {
+		return c, err
+	}
 	if v := os.Getenv("STAMPEDE_SERVER"); v != "" {
 		c.Server = v
 	}
 	if v := os.Getenv("STAMPEDE_TOKEN"); v != "" {
 		c.Token = v
+	}
+	if v := os.Getenv("STAMPEDE_PROJECT"); v != "" {
+		c.Project = v
 	}
 	return c, nil
 }
@@ -91,7 +107,7 @@ func New() (*Client, error) {
 	if c.Server == "" || c.Token == "" {
 		return nil, errors.New("not signed in: run `stampede login --server http://localhost:8080` or set STAMPEDE_SERVER and STAMPEDE_TOKEN")
 	}
-	return &Client{Server: strings.TrimRight(c.Server, "/"), Token: c.Token, HTTP: &http.Client{Timeout: 60 * time.Second}}, nil
+	return &Client{Server: strings.TrimRight(c.Server, "/"), Token: c.Token, Project: c.Project, HTTP: &http.Client{Timeout: 60 * time.Second}}, nil
 }
 
 // APIError is an error response from the server.
@@ -158,6 +174,12 @@ func (c *Client) Do(ctx context.Context, method, path string, body, out any) err
 			*s = b
 			return nil
 		}
+		// Decode into a zero value: unmarshalling into a struct or map
+		// that holds the request's data would keep fields and keys the
+		// response leaves out.
+		if v := reflect.ValueOf(out); v.Kind() == reflect.Pointer && !v.IsNil() {
+			v.Elem().SetZero()
+		}
 		return json.Unmarshal(b, out)
 	}
 	return nil
@@ -165,10 +187,33 @@ func (c *Client) Do(ctx context.Context, method, path string, body, out any) err
 
 // Login signs in with a password and creates an API token for this CLI.
 func Login(ctx context.Context, server, email, password, tokenName string) (string, gen.Me, error) {
-	jar, _ := cookiejar.New(nil)
-	c := &Client{Server: strings.TrimRight(server, "/"), HTTP: &http.Client{Timeout: 30 * time.Second, Jar: jar}}
+	tok, me, err := PasswordToken(ctx, server, email, password, map[string]any{"name": tokenName})
+	return tok.Secret, me, err
+}
+
+// PasswordToken signs in with a password and creates an API token from
+// body (a TokenCreate). API tokens cannot create tokens, so this is how
+// the CLI makes them.
+func PasswordToken(ctx context.Context, server, email, password string, body map[string]any) (gen.TokenCreated, gen.Me, error) {
+	c := sessionClient(server)
 	var sess gen.Session
 	if err := c.Do(ctx, "POST", "/auth/login", map[string]string{"email": email, "password": password}, &sess); err != nil {
+		return gen.TokenCreated{}, gen.Me{}, err
+	}
+	var tok gen.TokenCreated
+	if err := c.Do(ctx, "POST", "/tokens", body, &tok); err != nil {
+		return gen.TokenCreated{}, gen.Me{}, err
+	}
+	return tok, sess.User, nil
+}
+
+// Setup creates the first organisation and owner account on a new
+// server, then an API token for this CLI.
+func Setup(ctx context.Context, server, organisation, name, email, password, tokenName string) (string, gen.Me, error) {
+	c := sessionClient(server)
+	var sess gen.Session
+	body := map[string]string{"organisation": organisation, "name": name, "email": email, "password": password}
+	if err := c.Do(ctx, "POST", "/setup", body, &sess); err != nil {
 		return "", gen.Me{}, err
 	}
 	var tok gen.TokenCreated
@@ -176,6 +221,12 @@ func Login(ctx context.Context, server, email, password, tokenName string) (stri
 		return "", gen.Me{}, err
 	}
 	return tok.Secret, sess.User, nil
+}
+
+// sessionClient keeps the session cookie between requests.
+func sessionClient(server string) *Client {
+	jar, _ := cookiejar.New(nil)
+	return &Client{Server: strings.TrimRight(server, "/"), HTTP: &http.Client{Timeout: 30 * time.Second, Jar: jar}}
 }
 
 // Projects lists projects.
@@ -190,6 +241,9 @@ func (c *Client) FindProject(ctx context.Context, ref string) (gen.Project, erro
 	if err != nil {
 		return gen.Project{}, err
 	}
+	if ref == "" {
+		ref = c.Project
+	}
 	if ref == "" && len(ps) == 1 {
 		return ps[0], nil
 	}
@@ -198,8 +252,11 @@ func (c *Client) FindProject(ctx context.Context, ref string) (gen.Project, erro
 			return p, nil
 		}
 	}
+	if ref == "" && len(ps) == 0 {
+		return gen.Project{}, errors.New("no projects yet; create one with stampede projects create")
+	}
 	if ref == "" {
-		return gen.Project{}, errors.New("several projects exist; choose one with --project")
+		return gen.Project{}, errors.New("several projects exist; choose one with --project or stampede projects use")
 	}
 	return gen.Project{}, fmt.Errorf("project %q not found", ref)
 }

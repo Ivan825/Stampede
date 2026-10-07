@@ -12,6 +12,7 @@ import (
 	"github.com/spf13/cobra"
 	"golang.org/x/term"
 
+	"github.com/Ivan825/Stampede/internal/api/gen"
 	"github.com/Ivan825/Stampede/internal/client"
 	"github.com/Ivan825/Stampede/internal/safety"
 	"github.com/Ivan825/Stampede/internal/scenario"
@@ -42,10 +43,13 @@ reports where your product breaks.`,
 			return tui.Run(c, consoleOptions())
 		},
 	}
-	root.AddCommand(newVersionCmd(), newRunCmd(), newValidateCmd(), newTargetCmd(), newServerCmd(), newWorkerCmd(), newKeygenCmd(), newHealthcheckCmd(), newCompareCmd(), newReportCmd(),
+	root.AddCommand(newVersionCmd(), newRunCmd(), newValidateCmd(), newTargetsCmd(), newServerCmd(), newWorkerCmd(), newKeygenCmd(), newHealthcheckCmd(), newCompareCmd(), newReportCmd(),
 		newLoginCmd(), newStartCmd(), newPushCmd(), newRunsCmd(), newSchedulesCmd(), newStopCmd(false), newStopCmd(true), newWorkersCmd(),
 		newUpCmd(), newDownCmd(), newDoctorCmd(), newPackCmd(), newInitCmd(), newPluginCmd())
 	root.AddCommand(newGenerateCmd(), newGenDocsCmd(), newAgentCmd(), newCoverageCmd(), newDriftCmd(), newBackupCmd(), newRestoreCmd())
+	root.AddCommand(newSetupCmd(), newLogoutCmd(), newWhoamiCmd(), newPasswordCmd(),
+		newUsersCmd(), newTokensCmd(), newProjectsCmd(), newCapsCmd(), newSecretsCmd(), newScenariosCmd(),
+		newAICmd(), newNarrativeCmd(), newIntegrationsCmd(), newNotifyCmd(), newAuditCmd(), newSettingsCmd())
 	return root
 }
 
@@ -79,12 +83,28 @@ func consoleOptions() tui.Options {
 }
 
 func newVersionCmd() *cobra.Command {
-	return &cobra.Command{
+	var server bool
+	cmd := &cobra.Command{
 		Use:   "version",
 		Short: "Print version information",
 		Args:  cobra.NoArgs,
-		Run: func(cmd *cobra.Command, _ []string) {
+		RunE: func(cmd *cobra.Command, _ []string) error {
 			fmt.Fprintln(cmd.OutOrStdout(), version.String())
+			if !server {
+				return nil
+			}
+			c, err := client.New()
+			if err != nil {
+				return err
+			}
+			var v gen.VersionInfo
+			if err := c.Do(cmd.Context(), "GET", "/version", nil, &v); err != nil {
+				return err
+			}
+			fmt.Fprintf(cmd.OutOrStdout(), "server %s: %s (%s)\n", c.Server, v.Version, v.Commit)
+			return nil
 		},
 	}
+	cmd.Flags().BoolVar(&server, "server", false, "also print the version of the server you signed in to")
+	return cmd
 }

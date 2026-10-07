@@ -1,7 +1,6 @@
 package cli
 
 import (
-	"bufio"
 	"bytes"
 	"context"
 	"encoding/json"
@@ -14,7 +13,6 @@ import (
 	"time"
 
 	"github.com/spf13/cobra"
-	"golang.org/x/term"
 
 	"github.com/Ivan825/Stampede/internal/api/gen"
 	"github.com/Ivan825/Stampede/internal/client"
@@ -27,38 +25,29 @@ func newLoginCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "login",
 		Short: "Sign in to a Stampede server and store an API token for this CLI",
+		Long: `Sign in with your email and password and store an API token for this
+CLI in the config file, so later commands need no credentials. The
+password is read from STAMPEDE_PASSWORD or asked without echo. For CI,
+set STAMPEDE_SERVER and STAMPEDE_TOKEN instead (stampede tokens create).`,
+		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			in := bufio.NewReader(cmd.InOrStdin())
-			out := cmd.ErrOrStderr()
+			p := newPrompter(cmd)
 			if server == "" {
 				server = "http://localhost:8080"
 			}
 			if email == "" {
-				fmt.Fprint(out, "Email: ")
-				line, _ := in.ReadString('\n')
-				email = strings.TrimSpace(line)
+				email = p.line("Email: ")
 			}
-			fmt.Fprint(out, "Password: ")
-			var pw string
-			if f, ok := cmd.InOrStdin().(*os.File); ok && term.IsTerminal(int(f.Fd())) {
-				b, err := term.ReadPassword(int(f.Fd()))
-				fmt.Fprintln(out)
-				if err != nil {
-					return err
-				}
-				pw = string(b)
-			} else {
-				line, _ := in.ReadString('\n')
-				pw = strings.TrimSpace(line)
+			pw, err := p.secret("Password: ", "STAMPEDE_PASSWORD")
+			if err != nil {
+				return err
 			}
 			host, _ := os.Hostname()
 			tok, me, err := client.Login(cmd.Context(), server, email, pw, "cli on "+host)
 			if err != nil {
 				return err
 			}
-			cfg, _ := client.LoadConfig()
-			cfg.Server, cfg.Token = server, tok
-			path, err := client.SaveConfig(cfg)
+			path, err := saveLogin(server, tok)
 			if err != nil {
 				return err
 			}
@@ -305,51 +294,6 @@ func newPushCmd() *cobra.Command {
 	return cmd
 }
 
-func newRunsCmd() *cobra.Command {
-	var project string
-	var limit int
-	cmd := &cobra.Command{
-		Use:   "runs",
-		Short: "List recent runs on the server",
-		RunE: func(cmd *cobra.Command, _ []string) error {
-			c, err := client.New()
-			if err != nil {
-				return err
-			}
-			p, err := c.FindProject(cmd.Context(), project)
-			if err != nil {
-				return err
-			}
-			var runs []gen.Run
-			if err := c.Do(cmd.Context(), "GET", fmt.Sprintf("/projects/%s/runs?limit=%d", p.Id, limit), nil, &runs); err != nil {
-				return err
-			}
-			tw := tabwriter.NewWriter(cmd.OutOrStdout(), 0, 4, 2, ' ', 0)
-			fmt.Fprintln(tw, "RUN\tSCENARIO\tSTATUS\tVERDICT\tREQUESTS\tP95\tERRORS\tSTARTED")
-			for _, r := range runs {
-				verdict, reqs, p95, errs := "-", "-", "-", "-"
-				if r.Verdict != nil {
-					verdict = string(*r.Verdict)
-				}
-				if s := r.Summary; s != nil && s.Requests != nil {
-					reqs = fmt.Sprint(*s.Requests)
-					p95 = report.Ms(deref(s.P95))
-					errs = report.Pct(deref(s.ErrorRate))
-				}
-				name := ""
-				if r.ScenarioName != nil {
-					name = fmt.Sprintf("%s v%d", *r.ScenarioName, r.ScenarioVersion)
-				}
-				fmt.Fprintf(tw, "%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n", r.Id.String()[:8], name, r.Status, verdict, reqs, p95, errs, r.CreatedAt.Local().Format("Jan 2 15:04"))
-			}
-			return tw.Flush()
-		},
-	}
-	cmd.Flags().StringVar(&project, "project", "", "project name, slug or id")
-	cmd.Flags().IntVar(&limit, "limit", 20, "how many runs")
-	return cmd
-}
-
 func deref(f *float64) float64 {
 	if f == nil {
 		return 0
@@ -435,9 +379,11 @@ func newStopCmd(kill bool) *cobra.Command {
 }
 
 func newWorkersCmd() *cobra.Command {
-	return &cobra.Command{
+	var asJSON bool
+	cmd := &cobra.Command{
 		Use:   "workers",
 		Short: "List workers connected to the server",
+		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			c, err := client.New()
 			if err != nil {
@@ -446,6 +392,9 @@ func newWorkersCmd() *cobra.Command {
 			var ws []gen.Worker
 			if err := c.Do(cmd.Context(), "GET", "/workers", nil, &ws); err != nil {
 				return err
+			}
+			if asJSON {
+				return writeJSON(cmd.OutOrStdout(), ws)
 			}
 			if len(ws) == 0 {
 				fmt.Fprintln(cmd.OutOrStdout(), "No workers connected; runs execute inside the server.")
@@ -467,4 +416,6 @@ func newWorkersCmd() *cobra.Command {
 			return tw.Flush()
 		},
 	}
+	jsonFlag(cmd, &asJSON)
+	return cmd
 }

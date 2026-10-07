@@ -25,5 +25,8 @@ needs the editor role; starting one by hand needs runner.
 * [stampede schedules disable](stampede_schedules_disable.md)	 - Stop a schedule firing until it is enabled again
 * [stampede schedules enable](stampede_schedules_enable.md)	 - Let a schedule fire again (you become its owner)
 * [stampede schedules list](stampede_schedules_list.md)	 - List a project's schedules
+* [stampede schedules preview](stampede_schedules_preview.md)	 - Show the next times a cron expression fires
 * [stampede schedules run](stampede_schedules_run.md)	 - Start a schedule's run now, as you
+* [stampede schedules show](stampede_schedules_show.md)	 - Show a schedule in full
+* [stampede schedules update](stampede_schedules_update.md)	 - Change a schedule; only the flags given change
 

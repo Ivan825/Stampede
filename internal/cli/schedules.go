@@ -30,7 +30,10 @@ needs the editor role; starting one by hand needs runner.`,
 	cmd.PersistentFlags().StringVar(&project, "project", "", "project name, slug or id (default: the only project)")
 	cmd.AddCommand(
 		newSchedulesListCmd(&project),
+		newSchedulesShowCmd(&project),
 		newSchedulesCreateCmd(&project),
+		newSchedulesUpdateCmd(&project),
+		newSchedulesPreviewCmd(),
 		newSchedulesToggleCmd(&project, true),
 		newSchedulesToggleCmd(&project, false),
 		newSchedulesDeleteCmd(&project),
@@ -40,7 +43,8 @@ needs the editor role; starting one by hand needs runner.`,
 }
 
 func newSchedulesListCmd(project *string) *cobra.Command {
-	return &cobra.Command{
+	var asJSON bool
+	cmd := &cobra.Command{
 		Use:   "list",
 		Short: "List a project's schedules",
 		Args:  cobra.NoArgs,
@@ -54,6 +58,9 @@ func newSchedulesListCmd(project *string) *cobra.Command {
 				return err
 			}
 			out := cmd.OutOrStdout()
+			if asJSON {
+				return writeJSON(out, ss)
+			}
 			if len(ss) == 0 {
 				fmt.Fprintln(out, "No schedules. Create one with stampede schedules create.")
 				return nil
@@ -74,6 +81,8 @@ func newSchedulesListCmd(project *string) *cobra.Command {
 			return tw.Flush()
 		},
 	}
+	jsonFlag(cmd, &asJSON)
+	return cmd
 }
 
 func deref0(s *string) string {
@@ -368,32 +377,11 @@ func envFrom(kvs []string) (map[string]string, error) {
 // writeDriftResult prints a server drift check and maps it to the exit
 // code of stampede drift.
 func writeDriftResult(w io.Writer, r gen.DriftResult) error {
-	fmt.Fprintf(w, "Drift check %s of %s against %s: %s\n", r.Id, deref0(r.ScenarioName), deref0(r.TargetURL), r.Status)
-	if r.Journeys != nil {
-		for _, j := range *r.Journeys {
-			if j.Ok {
-				fmt.Fprintf(w, "  ✓ %s passes its dry run\n", j.Journey)
-			} else {
-				fmt.Fprintf(w, "  ✗ %s fails its dry run: %s\n", j.Journey, deref0(j.Problem))
-			}
-		}
-	}
-	if r.RemovedEndpoints != nil {
-		for _, e := range *r.RemovedEndpoints {
-			fmt.Fprintf(w, "  - %s was removed from the API\n", e)
-		}
-	}
-	if r.Unmatched != nil {
-		for _, u := range *r.Unmatched {
-			fmt.Fprintf(w, "  ✗ %s is not an endpoint of the current API\n", u)
-		}
-	}
-	if r.Error != nil {
-		fmt.Fprintf(w, "  ! %s\n", *r.Error)
+	if err := printDriftResult(w, r); err != nil {
+		return err
 	}
 	switch r.Status {
 	case gen.DriftDrifted:
-		fmt.Fprintf(w, "Propose a repair with POST /api/v1/drift-results/%s/repair (an AI provider is needed).\n", r.Id)
 		return &exitError{code: ExitDrift, msg: "the scenario drifted from the API: " + strings.Join(r.Broken, ", ")}
 	case gen.DriftError:
 		return errors.New("the drift check could not run")

@@ -10,6 +10,7 @@ stampede schedules list [flags]
 
 ```
   -h, --help   help for list
+      --json   print JSON for scripting
 ```
 
 ### Options inherited from parent commands

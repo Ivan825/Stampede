@@ -10,6 +10,7 @@ stampede workers [flags]
 
 ```
   -h, --help   help for workers
+      --json   print JSON for scripting
 ```
 
 ### SEE ALSO

@@ -1,68 +1,12 @@
 package cli
 
 import (
-	"bytes"
 	"context"
-	"encoding/json"
-	"io"
-	"log/slog"
-	"net/http"
-	"net/http/httptest"
 	"strings"
 	"testing"
-	"time"
 
 	"github.com/Ivan825/Stampede/internal/api/gen"
-	"github.com/Ivan825/Stampede/internal/client"
-	"github.com/Ivan825/Stampede/internal/server"
-	"github.com/Ivan825/Stampede/internal/store/storetest"
 )
-
-// signedIn starts a DB-backed server with an owner account and points
-// the CLI at it with an API token.
-func signedIn(t *testing.T) *client.Client {
-	t.Helper()
-	srv, err := server.New(server.Config{Store: storetest.Open(t), Logger: slog.New(slog.NewTextHandler(io.Discard, nil))})
-	if err != nil {
-		t.Fatal(err)
-	}
-	hs := httptest.NewServer(srv.Handler())
-	t.Cleanup(func() {
-		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-		defer cancel()
-		srv.Shutdown(ctx)
-		hs.Close()
-	})
-	b, _ := json.Marshal(map[string]string{"organisation": "Acme", "name": "Owner", "email": "owner@acme.test", "password": "correct horse battery"})
-	req, _ := http.NewRequest("POST", hs.URL+"/api/v1/setup", bytes.NewReader(b))
-	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("X-Stampede-CSRF", "1")
-	resp, err := http.DefaultClient.Do(req)
-	if err != nil || resp.StatusCode != 201 {
-		t.Fatalf("setup: %v %v", resp, err)
-	}
-	resp.Body.Close()
-	tok, _, err := client.Login(context.Background(), hs.URL, "owner@acme.test", "correct horse battery", "test")
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Setenv("HOME", t.TempDir()) // ignore any real CLI config
-	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
-	t.Setenv("STAMPEDE_SERVER", hs.URL)
-	t.Setenv("STAMPEDE_TOKEN", tok)
-	return &client.Client{Server: hs.URL, Token: tok, HTTP: &http.Client{Timeout: 30 * time.Second}}
-}
-
-func runCLI(t *testing.T, args ...string) (string, error) {
-	t.Helper()
-	root := NewRoot()
-	var out bytes.Buffer
-	root.SetOut(&out)
-	root.SetErr(&out)
-	root.SetArgs(args)
-	err := root.Execute()
-	return out.String(), err
-}
 
 func TestSchedulesCommands(t *testing.T) {
 	c := signedIn(t)
