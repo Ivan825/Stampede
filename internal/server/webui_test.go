@@ -91,7 +91,7 @@ load: {mode: rate, rate: 20/s, duration: 4s}`}, &sc)
 		}
 		for _, w := range h.Workers {
 			if h.Live && w.ID == "local" && w.Name == "this server" && w.LastHeartbeatAt != nil && w.SchedLagP99 != nil {
-				seen = w.Status == "running" || w.Status == "saturated"
+				seen = w.Status == "healthy" || w.Status == "saturated"
 			}
 		}
 	}

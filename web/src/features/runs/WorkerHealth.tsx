@@ -4,7 +4,7 @@ import { Chip } from '@/components/chips';
 import { Card, CardHeader } from '@/components/ui';
 import { ms, relativeTime } from '@/lib/format';
 
-const statusTone = { running: 'info', saturated: 'warn', lost: 'fail' } as const;
+const statusTone = { healthy: 'pass', saturated: 'warn', lost: 'fail' } as const;
 
 /** Scheduling lag above this is a sign the generator is falling behind. */
 const lagWarn = 0.01;
@@ -49,7 +49,7 @@ function WorkerCard({ w, now }: { w: RunWorkerHealth; now: number }) {
         <span className="min-w-0 flex-1 truncate text-[13px] font-medium" title={w.id}>
           {w.name}
         </span>
-        <Chip tone={statusTone[w.status]} dot pulse={w.status === 'running'}>
+        <Chip tone={statusTone[w.status]} dot pulse={w.status === 'healthy'}>
           {w.status}
         </Chip>
       </div>

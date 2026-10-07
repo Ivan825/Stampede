@@ -1,1 +1,0 @@
-import{$t as e}from"./vendor-CbgUUbZt.js";import{c as t}from"./index-Iq_CXbtF.js";var n=e();function r({target:e}){return e.private?(0,n.jsx)(t,{tone:`info`,children:`private`}):e.verified?(0,n.jsx)(t,{tone:`pass`,children:`verified`}):(0,n.jsx)(t,{tone:`warn`,children:`unverified`})}export{r as t};

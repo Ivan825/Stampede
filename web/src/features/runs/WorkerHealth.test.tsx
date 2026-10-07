@@ -17,7 +17,7 @@ const data: RunWorkers = {
       id: 'w1',
       name: 'worker-eu-1',
       region: 'eu-west-1',
-      status: 'running',
+      status: 'healthy',
       saturated: false,
       cpuPercent: 41.6,
       schedLagP99: 0.0008,
@@ -52,7 +52,7 @@ describe('WorkerHealthGrid', () => {
     expect(screen.getByText('3 workers · 1 saturated · 1 lost')).toBeInTheDocument();
     const grid = within(screen.getByRole('list', { name: 'Worker health' }));
     const one = within(grid.getByRole('listitem', { name: 'worker-eu-1' }));
-    expect(one.getByText('running')).toBeInTheDocument();
+    expect(one.getByText('healthy')).toBeInTheDocument();
     expect(one.getByText('eu-west-1')).toBeInTheDocument();
     expect(one.getByText('42%')).toBeInTheDocument();
     expect(one.getByRole('meter', { name: 'worker-eu-1 CPU' })).toHaveAttribute(

@@ -2382,8 +2382,9 @@ components:
         region: { type: string }
         status:
           type: string
-          enum: [running, saturated, lost]
-          description: lost means the worker stopped sending heartbeats during the run.
+          enum: [healthy, saturated, lost]
+          x-enum-varnames: [RunWorkerHealthy, RunWorkerSaturated, RunWorkerLost]
+          description: "healthy: generating load normally; saturated: it may be what limits the measured load; lost: it stopped sending heartbeats during the run."
         saturated: { type: boolean, description: The worker reports itself saturated, so it may limit the measured load. }
         reasons:
           type: array
@@ -2436,7 +2437,7 @@ components:
       required: [path, kind, scenario, journeys, yaml]
       properties:
         path: { type: string, example: journeys/shop-mix.yaml }
-        kind: { type: string, enum: [journey, stress] }
+        kind: { type: string, enum: [journey, stress], x-enum-varnames: [PackFileJourney, PackFileStress] }
         scenario: { type: string, description: The scenario's metadata.name. }
         description: { type: string }
         journeys:

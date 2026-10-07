@@ -40,7 +40,7 @@ test('the live view shows each worker’s health', async ({ page }) => {
   await open(page, '/');
   await openRun(page, 'checkout-stress', 'running');
   const grid = page.getByRole('list', { name: 'Worker health' });
-  await expect(grid.getByRole('listitem', { name: 'worker-eu-1' })).toContainText('running');
+  await expect(grid.getByRole('listitem', { name: 'worker-eu-1' })).toContainText('healthy');
   await expect(grid.getByRole('listitem', { name: 'worker-eu-2' })).toContainText('saturated');
   await expect(grid.getByRole('meter', { name: 'worker-eu-1 CPU' })).toBeVisible();
 });

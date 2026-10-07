@@ -1949,10 +1949,10 @@ export interface components {
             name: string;
             region?: string;
             /**
-             * @description lost means the worker stopped sending heartbeats during the run.
+             * @description healthy: generating load normally; saturated: it may be what limits the measured load; lost: it stopped sending heartbeats during the run.
              * @enum {string}
              */
-            status: "running" | "saturated" | "lost";
+            status: "healthy" | "saturated" | "lost";
             /** @description The worker reports itself saturated */
             saturated: boolean;
             /** @description Why it is saturated, such as cpu or sched-lag. */

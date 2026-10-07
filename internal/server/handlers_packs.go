@@ -110,9 +110,9 @@ func packFileOf(rel string, b []byte) gen.PackFile {
 		} `yaml:"load"`
 	}
 	_ = yaml.Unmarshal(b, &doc) // a file that does not parse still lists by path
-	kind := gen.Journey
+	kind := gen.PackFileJourney
 	if strings.HasPrefix(rel, "stresses/") {
-		kind = gen.Stress
+		kind = gen.PackFileStress
 	}
 	f := gen.PackFile{
 		Path: rel, Kind: kind, Scenario: doc.Metadata.Name, Journeys: []string{}, Yaml: string(b),

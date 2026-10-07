@@ -48,7 +48,7 @@ export function runWorkerHealth(db: Db, r: Run): RunWorkers {
       id: g.id,
       name: g.name,
       region: g.region,
-      status: lost ? 'lost' : saturated ? 'saturated' : 'running',
+      status: lost ? 'lost' : saturated ? 'saturated' : 'healthy',
       saturated,
       ...(saturated ? { reasons: ['cpu 92% above 85% for 10s'] } : {}),
       cpuPercent: Math.round(cpu * 10) / 10,

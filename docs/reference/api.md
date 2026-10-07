@@ -2028,7 +2028,7 @@ string: `run.finished`, `run.target_failed`, `run.killed`
 | `id` | string | yes |  |
 | `name` | string | yes |  |
 | `region` | string | no |  |
-| `status` | string: `running`, `saturated`, `lost` | yes | lost means the worker stopped sending heartbeats during the run. |
+| `status` | string: `healthy`, `saturated`, `lost` | yes | healthy: generating load normally; saturated: it may be what limits the measured load; lost: it stopped sending heartbeats during the run. |
 | `saturated` | boolean | yes | The worker reports itself saturated |
 | `reasons` | array of string | no | Why it is saturated, such as cpu or sched-lag. |
 | `cpuPercent` | number (double) | yes | Process CPU use as a share of all the machine's cores, 0 to 100. |

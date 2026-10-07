@@ -61,12 +61,12 @@ func (x *distExec) WorkerHealth() []WorkerHealth {
 }
 
 func runWorkerHealthOf(w WorkerHealth) gen.RunWorkerHealth {
-	status := gen.RunWorkerHealthStatusRunning
+	status := gen.RunWorkerHealthy
 	switch {
 	case !w.Connected:
-		status = gen.RunWorkerHealthStatusLost
+		status = gen.RunWorkerLost
 	case w.Saturated:
-		status = gen.RunWorkerHealthStatusSaturated
+		status = gen.RunWorkerSaturated
 	}
 	out := gen.RunWorkerHealth{
 		Id: w.ID, Name: w.Name, Status: status, Saturated: w.Saturated,
