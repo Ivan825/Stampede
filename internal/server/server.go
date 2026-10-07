@@ -4,6 +4,7 @@ package server
 
 import (
 	"context"
+	"crypto/tls"
 	"errors"
 	"fmt"
 	"io/fs"
@@ -43,6 +44,13 @@ type Config struct {
 	UI fs.FS
 	// SecureCookies sets the Secure flag (enable behind HTTPS).
 	SecureCookies bool
+	// TLS, when set, serves the API and web UI over HTTPS.
+	TLS *tls.Config
+	// RedirectAddr, with TLS, also listens for plain HTTP there and
+	// redirects to HTTPS; RedirectHandler (for ACME HTTP-01 challenges)
+	// wraps the redirect when set.
+	RedirectAddr    string
+	RedirectHandler func(fallback http.Handler) http.Handler
 	// SessionTTL is how long a login lasts (default 7 days).
 	SessionTTL time.Duration
 	// HardCaps bound every run regardless of target settings.
@@ -273,6 +281,23 @@ func (s *Server) ListenAndServe(ctx context.Context, addr string) error {
 	if err != nil {
 		return err
 	}
+	if s.cfg.TLS != nil {
+		ln = tls.NewListener(ln, s.cfg.TLS)
+	}
+	if s.cfg.TLS != nil && s.cfg.RedirectAddr != "" {
+		var h http.Handler = http.HandlerFunc(redirectHTTPS)
+		if s.cfg.RedirectHandler != nil {
+			h = s.cfg.RedirectHandler(h)
+		}
+		rs := &http.Server{Addr: s.cfg.RedirectAddr, Handler: h, ReadHeaderTimeout: 10 * time.Second}
+		go func() {
+			if err := rs.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
+				s.log.Error("HTTP redirect listener", "addr", s.cfg.RedirectAddr, "error", err)
+			}
+		}()
+		defer func() { _ = rs.Close() }()
+		s.log.Info("redirecting HTTP to HTTPS", "addr", s.cfg.RedirectAddr)
+	}
 	hs := &http.Server{
 		Handler:           s.handler,
 		ReadHeaderTimeout: 10 * time.Second,
@@ -281,7 +306,7 @@ func (s *Server) ListenAndServe(ctx context.Context, addr string) error {
 	}
 	errCh := make(chan error, 1)
 	go func() { errCh <- hs.Serve(ln) }()
-	s.log.Info("stampede server listening", "addr", ln.Addr().String())
+	s.log.Info("stampede server listening", "addr", ln.Addr().String(), "tls", s.cfg.TLS != nil)
 	select {
 	case err := <-errCh:
 		return err
@@ -294,6 +319,16 @@ func (s *Server) ListenAndServe(ctx context.Context, addr string) error {
 		return fmt.Errorf("shutdown: %w", err)
 	}
 	return nil
+}
+
+// redirectHTTPS sends plain-HTTP requests to the same URL over HTTPS.
+func redirectHTTPS(w http.ResponseWriter, r *http.Request) {
+	host := r.Host
+	if h, _, err := net.SplitHostPort(host); err == nil {
+		host = h
+	}
+	// The client asked for this host itself; only the scheme changes.
+	http.Redirect(w, r, "https://"+host+r.URL.RequestURI(), http.StatusPermanentRedirect) //nolint:gosec // same host as the request
 }
 
 // handlers implements the generated strict server interface.

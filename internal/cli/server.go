@@ -11,10 +11,12 @@ import (
 	"net/http"
 	"net/netip"
 	"os"
+	"path/filepath"
 	"strings"
 	"time"
 
 	"github.com/spf13/cobra"
+	"golang.org/x/crypto/acme/autocert"
 
 	"google.golang.org/grpc"
 
@@ -53,6 +55,12 @@ type serverFlags struct {
 	dataDir       string
 	tlsCert       string
 	tlsKey        string
+	uiCert        string
+	uiKey         string
+	acmeDomains   []string
+	acmeEmail     string
+	acmeCache     string
+	redirectAddr  string
 	workerMTLS    bool
 	publicURL     string
 	ha            string
@@ -89,6 +97,12 @@ Environment:
 	fl.StringVar(&f.databaseURL, "database-url", os.Getenv("STAMPEDE_DATABASE_URL"), "PostgreSQL URL")
 	fl.BoolVar(&f.migrateOnly, "migrate-only", false, "apply migrations and exit")
 	fl.BoolVar(&f.migrateDryRun, "migrate-dry-run", false, "report pending migrations and exit")
+	fl.StringVar(&f.uiCert, "tls-cert", os.Getenv("STAMPEDE_TLS_CERT"), "serve the API and web UI over HTTPS with this certificate (PEM)")
+	fl.StringVar(&f.uiKey, "tls-key", os.Getenv("STAMPEDE_TLS_KEY"), "the key for --tls-cert (PEM)")
+	fl.StringSliceVar(&f.acmeDomains, "acme-domain", splitEnv("STAMPEDE_ACME_DOMAINS"), "serve HTTPS with certificates from Let's Encrypt for these host names (repeatable; the server must be reachable on port 443 under them)")
+	fl.StringVar(&f.acmeEmail, "acme-email", os.Getenv("STAMPEDE_ACME_EMAIL"), "contact address for the Let's Encrypt account")
+	fl.StringVar(&f.acmeCache, "acme-cache", os.Getenv("STAMPEDE_ACME_CACHE"), "directory for Let's Encrypt account keys and certificates (default <data-dir>/acme, or ./acme)")
+	fl.StringVar(&f.redirectAddr, "http-redirect-addr", os.Getenv("STAMPEDE_HTTP_REDIRECT_ADDR"), "with HTTPS, also listen for plain HTTP here (for example :80) and redirect it, answering ACME HTTP-01 challenges")
 	fl.BoolVar(&f.secureCookies, "secure-cookies", os.Getenv("STAMPEDE_SECURE_COOKIES") == "true", "mark session cookies Secure (use behind HTTPS)")
 	fl.StringVar(&f.logLevel, "log-level", envOr("STAMPEDE_LOG_LEVEL", "info"), "debug, info, warn or error")
 	fl.StringVar(&f.logFormat, "log-format", envOr("STAMPEDE_LOG_FORMAT", "json"), "json or text")
@@ -270,6 +284,9 @@ func runServer(cmd *cobra.Command, f *serverFlags) error {
 		return fmt.Errorf("--executor must be auto, workers or local")
 	}
 	cfg.Store, cfg.Keyring, cfg.Logger, cfg.UI, cfg.SecureCookies = st, kr, log, UI, f.secureCookies
+	if err := f.uiTLS(&cfg, log); err != nil {
+		return err
+	}
 	cfg.HardCaps = safety.Caps{MaxRate: f.maxRate, MaxVUs: f.maxVUs, MaxDuration: f.maxDuration}
 	cfg.TrustedProxies = proxies
 	cfg.Notify.PublicURL = f.publicURL
@@ -434,4 +451,46 @@ func watchLeadership(ctx context.Context, cancel context.CancelCauseFunc, log *s
 			return
 		}
 	}
+}
+
+// uiTLS sets up HTTPS for the API and web UI from --tls-cert or
+// --acme-domain. Either turns on secure cookies.
+func (f *serverFlags) uiTLS(cfg *server.Config, log *slog.Logger) error {
+	switch {
+	case f.uiCert != "" && len(f.acmeDomains) > 0:
+		return errors.New("--tls-cert and --acme-domain are alternatives; choose one")
+	case f.uiCert != "" || f.uiKey != "":
+		if f.uiCert == "" || f.uiKey == "" {
+			return errors.New("--tls-cert and --tls-key go together")
+		}
+		cert, err := tls.LoadX509KeyPair(f.uiCert, f.uiKey)
+		if err != nil {
+			return fmt.Errorf("--tls-cert: %w", err)
+		}
+		cfg.TLS = &tls.Config{Certificates: []tls.Certificate{cert}, MinVersion: tls.VersionTLS12, NextProtos: []string{"h2", "http/1.1"}}
+	case len(f.acmeDomains) > 0:
+		dir := f.acmeCache
+		if dir == "" {
+			dir = "acme"
+			if f.dataDir != "" {
+				dir = filepath.Join(f.dataDir, "acme")
+			}
+		}
+		m := &autocert.Manager{
+			Prompt: autocert.AcceptTOS, Cache: autocert.DirCache(dir), Email: f.acmeEmail,
+			HostPolicy: autocert.HostWhitelist(f.acmeDomains...),
+		}
+		cfg.TLS = m.TLSConfig()
+		cfg.TLS.MinVersion = tls.VersionTLS12
+		cfg.RedirectHandler = m.HTTPHandler
+		log.Info("HTTPS with Let's Encrypt certificates", "domains", f.acmeDomains, "cache", dir)
+	default:
+		if f.redirectAddr != "" {
+			return errors.New("--http-redirect-addr needs HTTPS (--tls-cert or --acme-domain)")
+		}
+		return nil
+	}
+	cfg.RedirectAddr = f.redirectAddr
+	cfg.SecureCookies = true
+	return nil
 }

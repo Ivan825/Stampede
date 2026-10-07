@@ -8,6 +8,7 @@
 | `--database-url` | `STAMPEDE_DATABASE_URL` | — | PostgreSQL URL; migrations run on start |
 | — | `STAMPEDE_MASTER_KEY` | — | 32 random bytes, base64 (`stampede keygen`); encrypts secrets and AI keys |
 | — | `STAMPEDE_MASTER_KEY_FILE` | — | read the key from a file instead |
+| — | `STAMPEDE_MASTER_KEY_COMMAND` | — | run this shell command and use what it prints, so the key can come from a cloud KMS or secret manager, for example `gcloud secrets versions access latest --secret=stampede-master-key` or `aws secretsmanager get-secret-value --secret-id stampede-master-key --query SecretString --output text` (30-second limit) |
 | — | `STAMPEDE_MASTER_KEY_AUTOGEN` | `false` | with `_FILE`, create the key file on first start (Compose does this) |
 | `--worker-addr` | `STAMPEDE_WORKER_ADDR` | `:8081` | gRPC port workers connect to |
 | `--join-token` | `STAMPEDE_JOIN_TOKEN` | — | shared secret workers must present; workers are disabled without it |
@@ -18,6 +19,10 @@
 | `--abort-errors`, `--abort-for` | `STAMPEDE_ABORT_ERRORS` | `90%`, `30s` | stop any run whose error rate stays at or above this; `0` disables |
 | `--trusted-proxy` | `STAMPEDE_TRUSTED_PROXIES` (comma separated) | none | reverse proxies whose `X-Forwarded-For` is believed |
 | `--secure-cookies` | `STAMPEDE_SECURE_COOKIES=true` | `false` | mark the session cookie Secure (behind HTTPS) |
+| `--tls-cert`, `--tls-key` | `STAMPEDE_TLS_CERT`, `STAMPEDE_TLS_KEY` | — | serve the API and web UI over HTTPS with this certificate and key (PEM); turns on secure cookies |
+| `--acme-domain` | `STAMPEDE_ACME_DOMAINS` (comma separated) | — | serve HTTPS with certificates from Let's Encrypt for these host names, renewed automatically; the server must be reachable on port 443 under them (`--addr :443`) |
+| `--acme-email`, `--acme-cache` | `STAMPEDE_ACME_EMAIL`, `STAMPEDE_ACME_CACHE` | —, `<data-dir>/acme` | the Let's Encrypt account contact and where its keys and certificates are kept (keep this directory across restarts) |
+| `--http-redirect-addr` | `STAMPEDE_HTTP_REDIRECT_ADDR` | — | with HTTPS, also listen for plain HTTP (for example `:80`), redirect it to HTTPS and answer ACME HTTP-01 challenges |
 | `--public-url` | `STAMPEDE_PUBLIC_URL` | — | external URL of the web UI; notifications link to `<url>/runs/<id>` when set |
 | `--ha` | `STAMPEDE_HA` | `standby` | how server replicas share the work: `standby` (one serves, the others wait) or `active` (all serve; see [Helm](../deploy/helm.md#server-replicas)) |
 | `--scheduler-interval` | `STAMPEDE_SCHEDULER_INTERVAL` | `15s` | how often a serving replica looks for due [schedules](../guides/schedules.md); `0` disables scheduled runs |
