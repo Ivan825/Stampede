@@ -1,7 +1,7 @@
 import * as Tabs from '@radix-ui/react-tabs';
 import { Link, useNavigate, useParams, useSearch } from '@tanstack/react-router';
 import { clsx } from 'clsx';
-import { AlertTriangle, CheckCircle2, History, Play, Save, Trash2 } from 'lucide-react';
+import { AlertTriangle, CheckCircle2, History, ListChecks, Play, Save, Trash2 } from 'lucide-react';
 import { useState } from 'react';
 import {
   useCreateScenario,
@@ -318,6 +318,15 @@ function EditorLayout({
                 {scenario ? 'Save version' : 'Create scenario'}
               </Button>
             </>
+          )}
+          {scenario && (
+            <Link
+              to="/projects/$projectId/scenarios/$scenarioId/coverage"
+              params={{ projectId, scenarioId: scenario.id }}
+              className="inline-flex h-8 items-center gap-2 rounded-md border border-line bg-surface px-3 text-sm font-medium hover:border-line-strong hover:bg-surface-2"
+            >
+              <ListChecks className="size-3.5" aria-hidden /> API coverage
+            </Link>
           )}
           {scenario && can.startRuns && (
             <Button onClick={() => setNewRun(true)}>
