@@ -12,7 +12,9 @@ name: release
 
 on:
   push:
-    tags: ["v*"]
+    # Full versions only: the moving v1 tag (for the GitHub Action) must not
+    # start a release.
+    tags: ["v[0-9]+.[0-9]+.[0-9]+", "v[0-9]+.[0-9]+.[0-9]+-*"]
 
 permissions:
   contents: write   # create the GitHub release and upload assets
