@@ -2031,7 +2031,7 @@ string: `run.finished`, `run.target_failed`, `run.killed`
 | `status` | string: `running`, `saturated`, `lost` | yes | lost means the worker stopped sending heartbeats during the run. |
 | `saturated` | boolean | yes | The worker reports itself saturated |
 | `reasons` | array of string | no | Why it is saturated, such as cpu or sched-lag. |
-| `cpuPercent` | number (double) | yes | Process CPU use; 100 is one core. |
+| `cpuPercent` | number (double) | yes | Process CPU use as a share of all the machine's cores, 0 to 100. |
 | `schedLagP99` | number (double) | yes | 99th percentile of how late iterations were dispatched |
 | `gcPauseP99` | number (double) | no | Seconds. |
 | `dropped` | integer (int64) | no | Iterations dropped in the last sample because no virtual user was free. |

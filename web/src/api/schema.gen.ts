@@ -1959,7 +1959,7 @@ export interface components {
             reasons?: string[];
             /**
              * Format: double
-             * @description Process CPU use; 100 is one core.
+             * @description Process CPU use as a share of all the machine's cores, 0 to 100.
              */
             cpuPercent: number;
             /**
