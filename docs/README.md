@@ -10,6 +10,7 @@ not built yet are marked **planned**.
 - [Quick start](quickstart.md): ShopLab, a first run, a report, a breakpoint, in about five minutes
 - [Installation](install.md): binary, Docker Compose, Kubernetes
 - [Your first real target](guides/first-target.md)
+- [Using Stampede from the CLI](guides/cli.md): setup, projects, targets, runs, reports, schedules, AI and notifications from the terminal
 
 ## Concepts
 

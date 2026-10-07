@@ -30,8 +30,11 @@ stampede schedules create weekday-soak --project shop --scenario browse \
 ```
 
 `stampede schedules list` shows each schedule's next run and how its last
-run went; `enable`, `disable`, `delete` and `run` take a schedule's name
-or id. See the [CLI reference](../reference/cli/stampede_schedules.md).
+run went; `show`, `update`, `enable`, `disable`, `delete` and `run` take a
+schedule's name or id, and `stampede schedules preview --cron "0 2 * * *"`
+prints when an expression fires next. `update` changes only the flags you
+give, the drift spec URL included. See the [CLI
+reference](../reference/cli/stampede_schedules.md).
 
 When you save a schedule the server checks it in full, the same way it
 would check the run if it fired now, so a wrong override or a cap that

@@ -67,6 +67,14 @@ docker compose up -d --build
 The [quick start](docs/quickstart.md) takes you from there to a breakpoint,
 a fix and a comparison in about five minutes.
 
+**Everything from the terminal.** Every server feature has a command, each
+with a table or summary and `--json` for scripts: `stampede setup` and
+`login`, `users`, `tokens`, `projects`, `targets`, `secrets`, `push` and
+`scenarios`, `start`, `runs`, `report`, `schedules`, `drift`, `ai`,
+`notify`, `integrations`, `caps`, `settings` and `audit`. [Using Stampede
+from the CLI](docs/guides/cli.md) goes from an empty server to scheduled,
+monitored runs without the web UI.
+
 **No internet access.** Each release attaches an offline bundle (images,
 binary, Helm chart) for networks without internet access; see
 [air-gapped installs](docs/deploy/airgap.md).
@@ -234,7 +242,8 @@ none has been published yet.
 
 ## Documentation
 
-Everything is in [docs/](docs/README.md): quick start, concepts, guides, the
+Everything is in [docs/](docs/README.md): quick start, concepts, guides
+(among them [using Stampede from the CLI](docs/guides/cli.md)), the
 [scenario reference](docs/reference/scenario.md), the [CLI
 reference](docs/reference/cli/stampede.md) and
 [configuration](docs/reference/configuration.md).
