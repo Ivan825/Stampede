@@ -7,7 +7,8 @@ import { useToast } from '@/components/toast';
 import { Button, Card, CardHeader, ErrorAlert, Loading, Notice, Table } from '@/components/ui';
 import { humanDuration, pct } from '@/lib/format';
 import { permissions } from '@/lib/roles';
-import { CapsFields, capsErrors, capsForm, toCaps } from './CapsFields';
+import { CapsFields } from './CapsFields';
+import { capsErrors, capsForm, toCaps } from './capsForm';
 
 function Row({ label, children }: { label: string; children: ReactNode }) {
   return (

@@ -505,7 +505,7 @@ export function createHandlers(initial: MockOptions, opts: MockHandlerOptions = 
       const b = (await request.json()) as ProjectSettings;
       const c = capsBody(b.caps);
       if (c instanceof Response) return c;
-      db.projectSettings[id] = { caps: c, requireDryRun: !!b.requireDryRun };
+      db.projectSettings[id] = { caps: c, requireDryRun: b.requireDryRun };
       return ok(db.projectSettings[id]);
     }),
     http.get(`${B}/projects/:id/roles`, async ({ params }) => {
@@ -546,7 +546,7 @@ export function createHandlers(initial: MockOptions, opts: MockHandlerOptions = 
       const cur = list.find((x) => x.userId === u.id);
       if (cur) cur.role = r;
       else list.push({ userId: u.id, role: r, createdAt: new Date().toISOString() });
-      return ok(projectRoles(id).find((x) => x.userId === u.id)!);
+      return ok(projectRoles(id).find((x) => x.userId === u.id));
     }),
     http.delete(`${B}/projects/:id/roles/:userId`, async ({ params }) => {
       const id = String(params.id);
