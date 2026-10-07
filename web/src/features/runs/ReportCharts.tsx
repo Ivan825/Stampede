@@ -401,8 +401,18 @@ export function CurveChart({
     const marks =
       knee?.found && knee.next
         ? [
-            { xAxis: knee.at.offered, name: 'last level that scaled' },
-            { xAxis: knee.next.offered, name: 'knee' },
+            // Each label sits on the outer side of its line, so the two never
+            // overlap however close the levels are.
+            {
+              xAxis: knee.at.offered,
+              name: 'scaled',
+              label: { align: 'right', padding: [0, 4, 0, 0] },
+            },
+            {
+              xAxis: knee.next.offered,
+              name: 'knee',
+              label: { align: 'left', padding: [0, 0, 0, 4] },
+            },
           ]
         : [];
     chart.setOption({
