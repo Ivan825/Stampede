@@ -158,6 +158,13 @@ func (m *Monitor) sample() {
 	now := time.Now()
 	s := sysSample{goroutines: runtime.NumGoroutine()}
 	cpu, ok := processCPU()
+	// The slow readings happen before taking the lock, which heartbeats
+	// also need; machine-wide ones are shared by every monitor in the
+	// process (a test may run hundreds of workers in one).
+	s.openFDs, s.fdLimit, _ = fdUsage()
+	ports := sharedPorts.get()
+	s.portsUsed, s.portRange = ports.used, ports.total
+	ifaces := sharedIfaces.get()
 
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -170,20 +177,41 @@ func (m *Monitor) sample() {
 			m.cpuHigh = 0
 		}
 	}
-	m.netSample(&s, now.Sub(m.prevWall))
+	m.netUse(ifaces, &s, now.Sub(m.prevWall))
 	m.prevCPU, m.prevWall = cpu, now
 	s.gcPauseP99 = m.gcP99()
-	s.openFDs, s.fdLimit, _ = fdUsage()
-	s.portsUsed, s.portRange, _ = portUsage()
 	m.last = s
 }
 
-// netSample finds the interface closest to its link speed since the
-// previous sample. Interfaces with an unknown speed are skipped.
-func (m *Monitor) netSample(s *sysSample, elapsed time.Duration) {
-	m.netUse(ifaceCounters(), s, elapsed)
+// cached holds a machine-wide reading for up to a second.
+type cached[T any] struct {
+	mu   sync.Mutex
+	at   time.Time
+	val  T
+	read func() T
 }
 
+func (c *cached[T]) get() T {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if time.Since(c.at) >= 900*time.Millisecond {
+		c.val, c.at = c.read(), time.Now()
+	}
+	return c.val
+}
+
+type portReading struct{ used, total uint64 }
+
+var (
+	sharedPorts = &cached[portReading]{read: func() portReading {
+		u, t, _ := portUsage()
+		return portReading{u, t}
+	}}
+	sharedIfaces = &cached[map[string]ifaceCount]{read: ifaceCounters}
+)
+
+// netUse finds the interface closest to its link speed since the
+// previous sample. Interfaces with an unknown speed are skipped.
 func (m *Monitor) netUse(cur map[string]ifaceCount, s *sysSample, elapsed time.Duration) {
 	wall := elapsed.Seconds()
 	if m.prevNet != nil && wall > 0 {
