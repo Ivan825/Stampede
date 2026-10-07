@@ -4,8 +4,9 @@
  * hints match the CLI.
  */
 
-/** Quotes an argument for a POSIX shell when it needs it. */
+/** Quotes an argument for a POSIX shell when it needs it; <placeholders> stay as they are. */
 export function shellArg(s: string): string {
+  if (/^<[\w.-]+>$/.test(s)) return s;
   return /^[\w@%+=:,./-]+$/.test(s) ? s : `'${s.replace(/'/g, `'\\''`)}'`;
 }
 
