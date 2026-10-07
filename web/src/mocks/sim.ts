@@ -5,6 +5,11 @@
 import { parse } from 'yaml';
 import type {
   Check,
+  CurvePoint,
+  ErrorExample,
+  Knee,
+  Recovery,
+  WorkerRow,
   PlanSummary,
   Point,
   Report,
@@ -462,22 +467,180 @@ export function buildReport(args: {
     ...(notes.length ? { notes } : {}),
     targetMetrics: targetMetricsFor(tl),
   };
+  const unit = report.load.mode === 'rate' ? '/s' : ' VUs';
   if (args.breakpoint) {
     const failing = tl.find((p) => p.p95 > 0.25 || p.errorRate > 0.01);
-    const unit = report.load.mode === 'rate' ? '/s' : ' VUs';
-    report.breakpoint = failing
-      ? {
-          found: true,
-          lastPass: Math.round(
-            Math.max(...tl.filter((p) => p.t < failing.t).map((p) => p.planned), 0),
-          ),
-          firstFail: Math.round(failing.planned),
-          unit,
-          failedOn: ['http.p95 < 250ms'],
-        }
-      : { found: false, lastPass: Math.round(peakPlanned), unit };
+    if (failing) {
+      const lastPass = Math.round(
+        Math.max(...tl.filter((p) => p.t < failing.t).map((p) => p.planned), 0),
+      );
+      const firstFail = Math.round(failing.planned);
+      const mid = Math.round((lastPass + firstFail) / 2);
+      report.breakpoint = {
+        found: true,
+        lastPass,
+        firstFail,
+        unit,
+        failedOn: ['http.p95 < 250ms'],
+        refined: [
+          { level: mid, pass: true },
+          { level: Math.round((mid + firstFail) / 2), pass: false, failedOn: ['http.p95 < 250ms'] },
+        ],
+      };
+    } else {
+      report.breakpoint = { found: false, lastPass: Math.round(peakPlanned), unit };
+    }
   }
+  const shape = report.load.shape;
+  if (shape && shape !== 'smoke' && shape !== 'baseline' && shape !== 'soak') {
+    report.curve = curveOf(tl);
+    if (report.curve.length >= 2) report.knee = kneeOf(report.curve, unit);
+    else delete report.curve;
+  }
+  if (shape === 'spike' || shape === 'recovery') report.recovery = recoveryOf(tl);
+  if (args.workers > 1) report.workers = workersOf(args.workers, tl, report.overall.requests);
+  report.errors = (report.errors ?? []).map((e, i) => ({
+    ...e,
+    examples: examplesFor(e, i, args),
+  }));
   return report;
+}
+
+/** Groups settled intervals by planned load, like report.buildCurve. */
+function curveOf(tl: Point[]): CurvePoint[] {
+  const levels: { offered: number; pts: Point[] }[] = [];
+  tl.forEach((p, i) => {
+    if (p.planned <= 0) return;
+    const prev = tl[i - 1]?.planned;
+    const next = tl[i + 1]?.planned;
+    // Ramp intervals differ from both neighbours.
+    if (prev != null && next != null && Math.abs(prev - p.planned) > 0.02 * p.planned) {
+      if (Math.abs(next - p.planned) > 0.02 * p.planned) return;
+    }
+    const lv = levels.find((l) => Math.abs(l.offered - p.planned) <= 0.02 * l.offered);
+    if (lv) lv.pts.push(p);
+    else levels.push({ offered: p.planned, pts: [p] });
+  });
+  return levels
+    .filter((l) => l.pts.length >= 3)
+    .sort((a, b) => a.offered - b.offered)
+    .map((l) => {
+      const n = l.pts.length;
+      const avg = (f: (p: Point) => number) => l.pts.reduce((s, p) => s + f(p), 0) / n;
+      return {
+        offered: Math.round(l.offered * 10) / 10,
+        throughput: round1(avg((p) => p.rps) / 1.2),
+        rps: round1(avg((p) => p.rps)),
+        p50: round6(avg((p) => p.p50)),
+        p95: round6(avg((p) => p.p95)),
+        p99: round6(avg((p) => p.p99)),
+        errorRate: Math.round(avg((p) => p.errorRate) * 1e5) / 1e5,
+        seconds: n,
+      };
+    });
+}
+
+const round1 = (v: number) => Math.round(v * 10) / 10;
+
+/** The last level that still scaled and the first that did not, like report.findKnee. */
+function kneeOf(curve: CurvePoint[], unit: string): Knee {
+  const first = curve[0]!;
+  for (let i = 1; i < curve.length; i++) {
+    const a = curve[i - 1]!;
+    const b = curve[i]!;
+    const ideal = (b.offered - a.offered) * (a.throughput / Math.max(a.offered, 1e-9));
+    let reason = '';
+    if (b.throughput - a.throughput < 0.5 * ideal) reason = 'throughput stopped growing with load';
+    else if (b.p95 > 3 * first.p95) reason = 'p95 latency rose sharply';
+    else if (b.errorRate > first.errorRate + 0.05) reason = 'errors rose sharply';
+    if (reason) return { found: true, at: a, next: b, unit, reason };
+  }
+  return { found: false, at: curve[curve.length - 1]!, unit };
+}
+
+/** Recovery after the overload of a spike or recovery shape. */
+function recoveryOf(tl: Point[]): Recovery {
+  const peak = Math.max(...tl.map((p) => p.planned), 0);
+  const high = tl.filter((p) => p.planned >= peak * 0.9);
+  const normalAt = (high[high.length - 1]?.t ?? 0) + 1;
+  const before = tl.filter((p) => p.t < (high[0]?.t ?? 0) && p.rps > 0);
+  const p95s = before.map((p) => p.p95).sort((a, b) => a - b);
+  const baselineP95 = p95s[Math.floor(p95s.length / 2)] ?? 0;
+  const baselineErrorRate = before.length
+    ? before.reduce((s, p) => s + p.errorRate, 0) / before.length
+    : 0;
+  const after = tl.filter((p) => p.t >= normalAt);
+  let streak = 0;
+  for (const p of after) {
+    const ok =
+      p.p95 <= Math.max(baselineP95 * 1.25, baselineP95 + 0.005) &&
+      p.errorRate <= baselineErrorRate + 0.01;
+    streak = ok ? streak + 1 : 0;
+    if (streak === 3) {
+      return {
+        recovered: true,
+        seconds: p.t - 2 - normalAt,
+        normalAt,
+        baselineP95: round6(baselineP95),
+        baselineErrorRate,
+      };
+    }
+  }
+  return { recovered: false, normalAt, baselineP95: round6(baselineP95), baselineErrorRate };
+}
+
+/** Workers of a distributed run; the second one saturates for a while. */
+function workersOf(n: number, tl: Point[], requests: number): WorkerRow[] {
+  const dur = tl.length;
+  const peakVUs = Math.max(...tl.map((p) => p.vus), 0);
+  return Array.from({ length: n }, (_, i) => {
+    const row: WorkerRow = {
+      id: `w${i + 1}`,
+      name: `gen-${i + 1}`,
+      region: 'eu-west-1',
+      shareLo: i / n,
+      shareHi: (i + 1) / n,
+      state: 'finished',
+      peakVUs: Math.round(peakVUs / n),
+      requests: Math.round(requests / n),
+      clockOffset: (i % 2 ? -1 : 1) * 0.0004 * (i + 1),
+    };
+    if (i === 1 && dur > 20) {
+      row.saturated = [{ from: Math.floor(dur * 0.55), to: Math.floor(dur * 0.55) + 6 }];
+      row.saturationReasons = ['cpu'];
+    }
+    return row;
+  });
+}
+
+/** Up to three redacted request/response pairs for an error row. */
+function examplesFor(
+  e: { step: string; error: string },
+  i: number,
+  args: { started: string; targetURL: string },
+): ErrorExample[] {
+  const method = /^(GET|POST|PUT|PATCH|DELETE)\s/.exec(e.step)?.[1] ?? (i === 1 ? 'POST' : 'GET');
+  const path = /\s(\/\S*)/.exec(e.step)?.[1] ?? '/api/checkout';
+  const status = /status (\d{3})/.exec(e.error)?.[1] ?? /got (\d{3})/.exec(e.error)?.[1];
+  return Array.from({ length: i === 2 ? 1 : 2 }, (_, k) => ({
+    at: new Date(Date.parse(args.started) + (12 + k * 9 + i * 4) * 1000).toISOString(),
+    traceId: traceId(900 + i * 10 + k),
+    request: `${method} ${args.targetURL.replace(/\/$/, '')}${path}`,
+    requestHeaders: {
+      Accept: 'application/json',
+      Authorization: '[redacted]',
+      ...(method === 'POST' ? { 'Content-Type': 'application/json' } : {}),
+    },
+    ...(method === 'POST' ? { requestBody: '{"productId":42,"qty":1}' } : {}),
+    ...(status
+      ? {
+          status: Number(status),
+          responseHeaders: { 'Content-Type': 'application/json', 'Retry-After': '1' },
+          responseBody: `{"error":"${status === '503' ? 'overloaded' : 'internal error'}"}`,
+        }
+      : {}),
+    detail: e.error,
+  }));
 }
 
 /** A deterministic 32-hex-digit trace ID. */

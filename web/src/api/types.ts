@@ -225,6 +225,30 @@ export interface ErrorRow {
   step: string;
   error: string;
   count: number;
+  /** Up to three of these failures, with what was sent and received (secrets redacted). */
+  examples?: ErrorExample[];
+}
+
+/** One failed request as sent and received (internal/metrics ErrorExample). */
+export interface ErrorExample {
+  at: string;
+  traceId?: string;
+  /** "METHOD URL". */
+  request: string;
+  requestHeaders?: Record<string, string>;
+  requestBody?: string;
+  status?: number;
+  responseHeaders?: Record<string, string>;
+  responseBody?: string;
+  /** The error message, such as a check's mismatch or a connection error. */
+  detail?: string;
+}
+
+/** One confirmation hold of a breakpoint search. */
+export interface RefineStep {
+  level: number;
+  pass: boolean;
+  failedOn?: string[];
 }
 
 export interface Breakpoint {
@@ -233,6 +257,69 @@ export interface Breakpoint {
   firstFail?: number;
   unit: string;
   failedOn?: string[];
+  /** Holds that narrowed lastPass and firstFail after the first failing step. */
+  refined?: RefineStep[];
+}
+
+/** One load level of a run whose load changed over time. */
+export interface CurvePoint {
+  /** Planned load: users, or iterations per second. */
+  offered: number;
+  /** Completed iterations per second. */
+  throughput: number;
+  rps: number;
+  p50: number;
+  p95: number;
+  p99: number;
+  errorRate: number;
+  seconds: number;
+}
+
+/** Where adding load stops adding throughput. */
+export interface Knee {
+  found: boolean;
+  /** The last level that still scaled. */
+  at: CurvePoint;
+  /** The first level that did not. */
+  next?: CurvePoint;
+  unit: string;
+  reason?: string;
+}
+
+/** How long the target took to return to normal after a spike or overload. */
+export interface Recovery {
+  recovered: boolean;
+  seconds?: number;
+  /** When load returned to normal, seconds since start. */
+  normalAt: number;
+  baselineP95: number;
+  baselineErrorRate: number;
+}
+
+/** A time window in seconds since the start; `to` is exclusive. */
+export interface Span {
+  from: number;
+  to: number;
+}
+
+/** One worker's part in a run (internal/report/workers.go). */
+export interface WorkerRow {
+  id: string;
+  name: string;
+  region?: string;
+  shareLo: number;
+  shareHi: number;
+  state: string;
+  stopReason?: string;
+  error?: string;
+  peakVUs: number;
+  requests: number;
+  saturated?: Span[];
+  saturationReasons?: string[];
+  lost?: Span;
+  replaces?: string;
+  /** Measured clock offset in seconds. */
+  clockOffset: number;
 }
 
 export interface LoadInfo {
@@ -262,7 +349,14 @@ export interface Report {
   errors: ErrorRow[] | null;
   timeline: Point[] | null;
   breakpoint?: Breakpoint;
+  /** Throughput against load, for runs whose load changed over time. */
+  curve?: CurvePoint[];
+  knee?: Knee;
+  /** Set for spike and recovery shapes. */
+  recovery?: Recovery;
   notes?: string[];
+  /** Each worker of a distributed run; an in-process run lists its machine only when saturated. */
+  workers?: WorkerRow[];
   targetMetrics?: TargetMetric[];
   /** AI-written summary; every claim cites report figures. */
   narrative?: Narrative;
