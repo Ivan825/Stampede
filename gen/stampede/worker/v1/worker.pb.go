@@ -1791,8 +1791,15 @@ type StartRun struct {
 	T0UnixNano int64 `protobuf:"varint,9,opt,name=t0_unix_nano,json=t0UnixNano,proto3" json:"t0_unix_nano,omitempty"`
 	// allow_hosts lists public hosts requests may reach. Private hosts are
 	// always allowed.
-	AllowHosts    []string `protobuf:"bytes,10,rep,name=allow_hosts,json=allowHosts,proto3" json:"allow_hosts,omitempty"`
-	IntervalNs    int64    `protobuf:"varint,11,opt,name=interval_ns,json=intervalNs,proto3" json:"interval_ns,omitempty"`
+	AllowHosts []string `protobuf:"bytes,10,rep,name=allow_hosts,json=allowHosts,proto3" json:"allow_hosts,omitempty"`
+	IntervalNs int64    `protobuf:"varint,11,opt,name=interval_ns,json=intervalNs,proto3" json:"interval_ns,omitempty"`
+	// resume_ns, when set, starts the worker part-way through the plan: it
+	// takes over a lost worker's share, so arrivals before t0 + resume_ns
+	// are skipped rather than sent at once. Added in protocol v1.4.
+	ResumeNs int64 `protobuf:"varint,12,opt,name=resume_ns,json=resumeNs,proto3" json:"resume_ns,omitempty"`
+	// attempt counts takeovers of this share (0 for the original worker),
+	// so generated test data stays unique. Added in protocol v1.4.
+	Attempt       uint32 `protobuf:"varint,13,opt,name=attempt,proto3" json:"attempt,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -1900,6 +1907,20 @@ func (x *StartRun) GetAllowHosts() []string {
 func (x *StartRun) GetIntervalNs() int64 {
 	if x != nil {
 		return x.IntervalNs
+	}
+	return 0
+}
+
+func (x *StartRun) GetResumeNs() int64 {
+	if x != nil {
+		return x.ResumeNs
+	}
+	return 0
+}
+
+func (x *StartRun) GetAttempt() uint32 {
+	if x != nil {
+		return x.Attempt
 	}
 	return 0
 }
@@ -2241,7 +2262,7 @@ const file_stampede_worker_v1_worker_proto_rawDesc = "" +
 	"\bprotocol\x18\x03 \x01(\v2#.stampede.worker.v1.ProtocolVersionR\bprotocol\"-\n" +
 	"\tClockPing\x12 \n" +
 	"\ft1_unix_nano\x18\x01 \x01(\x03R\n" +
-	"t1UnixNano\"\x8f\x04\n" +
+	"t1UnixNano\"\xc6\x04\n" +
 	"\bStartRun\x12\x15\n" +
 	"\x06run_id\x18\x01 \x01(\tR\x05runId\x12\x1a\n" +
 	"\bscenario\x18\x02 \x01(\fR\bscenario\x127\n" +
@@ -2257,7 +2278,9 @@ const file_stampede_worker_v1_worker_proto_rawDesc = "" +
 	" \x03(\tR\n" +
 	"allowHosts\x12\x1f\n" +
 	"\vinterval_ns\x18\v \x01(\x03R\n" +
-	"intervalNs\x1a6\n" +
+	"intervalNs\x12\x1b\n" +
+	"\tresume_ns\x18\f \x01(\x03R\bresumeNs\x12\x18\n" +
+	"\aattempt\x18\r \x01(\rR\aattempt\x1a6\n" +
 	"\bEnvEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
 	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\x1a:\n" +

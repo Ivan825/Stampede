@@ -287,6 +287,13 @@ message StartRun {
   // always allowed.
   repeated string allow_hosts = 10;
   int64 interval_ns = 11;
+  // resume_ns, when set, starts the worker part-way through the plan: it
+  // takes over a lost worker's share, so arrivals before t0 + resume_ns
+  // are skipped rather than sent at once. Added in protocol v1.4.
+  int64 resume_ns = 12;
+  // attempt counts takeovers of this share (0 for the original worker),
+  // so generated test data stays unique. Added in protocol v1.4.
+  uint32 attempt = 13;
 }
 
 // StopRun ends a run. kill abandons in-flight requests at once; otherwise

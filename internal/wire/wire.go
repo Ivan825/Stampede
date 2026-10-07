@@ -18,7 +18,9 @@ import (
 // so any minor of the same major interoperates.
 const (
 	ProtocolMajor = 1
-	ProtocolMinor = 3 // 1.3: browser phases (fcp, lcp, cls, inp, load)
+	// 1.3: browser phases (fcp, lcp, cls, inp, load). 1.4: busy_elsewhere
+	// heartbeats and mid-run takeover (StartRun resume_ns and attempt).
+	ProtocolMinor = 4
 )
 
 // Version is the protocol version as a message.
