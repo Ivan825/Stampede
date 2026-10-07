@@ -8,33 +8,13 @@ import {
 } from '@tanstack/react-query';
 import { api, ApiError, unwrap } from './client';
 import type {
-  AIJob,
-  AIJobApprove,
-  AIJobCreate,
-  AIProviderPut,
-  Caps,
   CompareRequest,
-  DriftRepair,
   CoverageRequest,
   DriftRequest,
-  IntegrationCreate,
   LoginRequest,
-  NotificationChannelCreate,
   Me,
-  ProjectCreate,
-  ProjectSettings,
   Report,
-  Role,
   Run,
-  RunCreate,
-  ScenarioVersionCreate,
-  ScheduleCreate,
-  ScheduleUpdate,
-  SecretPut,
-  SetupRequest,
-  TargetCreate,
-  TokenCreate,
-  UserCreate,
 } from './types';
 import { activeStatuses, isAIJobActive } from './types';
 
@@ -53,11 +33,8 @@ export const keys = {
   version_: (scenarioId: string, v: number) => ['scenarios', scenarioId, 'versions', v] as const,
   runs: (projectId: string, filters: object = {}) =>
     ['projects', projectId, 'runs', filters] as const,
-  allRuns: (projectId: string) => ['projects', projectId, 'runs'] as const,
   run: (id: string) => ['runs', id] as const,
   schedules: (projectId: string) => ['projects', projectId, 'schedules'] as const,
-  schedulePreview: (cron: string, timezone: string) =>
-    ['schedule-preview', cron, timezone] as const,
   timeline: (id: string) => ['runs', id, 'timeline'] as const,
   report: (id: string) => ['runs', id, 'report'] as const,
   activeRuns: ['active-runs'] as const,
@@ -137,19 +114,6 @@ export function useLogin() {
   });
 }
 
-export function useSetup() {
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: (body: SetupRequest) => unwrap(api.POST('/setup', { body })),
-    onSuccess: (session) => {
-      qc.setQueryData(keys.me, session.user);
-      qc.setQueryData(keys.version, (v: { setupRequired: boolean } | undefined) =>
-        v ? { ...v, setupRequired: false } : v,
-      );
-    },
-  });
-}
-
 export function useLogout() {
   const qc = useQueryClient();
   return useMutation({
@@ -158,13 +122,6 @@ export function useLogout() {
       qc.clear();
       qc.setQueryData(keys.me, null);
     },
-  });
-}
-
-export function useChangePassword() {
-  return useMutation({
-    mutationFn: (body: { current: string; new: string }) =>
-      unwrap(api.PUT('/me/password', { body })),
   });
 }
 
@@ -178,51 +135,8 @@ export function useUsers(enabled = true) {
   });
 }
 
-export function useCreateUser() {
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: (body: UserCreate) => unwrap(api.POST('/users', { body })),
-    onSuccess: () => qc.invalidateQueries({ queryKey: keys.users }),
-  });
-}
-
-export function useUpdateUser() {
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: ({ id, ...body }: { id: string; role?: Role; name?: string }) =>
-      unwrap(api.PATCH('/users/{userId}', { params: { path: { userId: id } }, body })),
-    onSuccess: () => qc.invalidateQueries({ queryKey: keys.users }),
-  });
-}
-
-export function useDeleteUser() {
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: (id: string) =>
-      unwrap(api.DELETE('/users/{userId}', { params: { path: { userId: id } } })),
-    onSuccess: () => qc.invalidateQueries({ queryKey: keys.users }),
-  });
-}
-
 export function useTokens() {
   return useQuery({ queryKey: keys.tokens, queryFn: () => unwrap(api.GET('/tokens')) });
-}
-
-export function useCreateToken() {
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: (body: TokenCreate) => unwrap(api.POST('/tokens', { body })),
-    onSuccess: () => qc.invalidateQueries({ queryKey: keys.tokens }),
-  });
-}
-
-export function useDeleteToken() {
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: (id: string) =>
-      unwrap(api.DELETE('/tokens/{tokenId}', { params: { path: { tokenId: id } } })),
-    onSuccess: () => qc.invalidateQueries({ queryKey: keys.tokens }),
-  });
 }
 
 export function useAudit(enabled: boolean) {
@@ -242,67 +156,10 @@ export function useIntegrations() {
   });
 }
 
-export function useCreateIntegration() {
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: (body: IntegrationCreate) => unwrap(api.POST('/integrations', { body })),
-    onSuccess: () => qc.invalidateQueries({ queryKey: keys.integrations }),
-  });
-}
-
-export function useDeleteIntegration() {
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: (id: string) =>
-      unwrap(
-        api.DELETE('/integrations/{integrationId}', { params: { path: { integrationId: id } } }),
-      ),
-    onSuccess: () => qc.invalidateQueries({ queryKey: keys.integrations }),
-  });
-}
-
 export function useNotificationChannels() {
   return useQuery({
     queryKey: keys.channels,
     queryFn: () => unwrap(api.GET('/notifications/channels')),
-  });
-}
-
-export function useCreateNotificationChannel() {
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: (body: NotificationChannelCreate) =>
-      unwrap(api.POST('/notifications/channels', { body })),
-    onSuccess: () => qc.invalidateQueries({ queryKey: keys.channels }),
-  });
-}
-
-export function useDeleteNotificationChannel() {
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: (id: string) =>
-      unwrap(
-        api.DELETE('/notifications/channels/{channelId}', {
-          params: { path: { channelId: id } },
-        }),
-      ),
-    onSuccess: () => qc.invalidateQueries({ queryKey: keys.channels }),
-  });
-}
-
-export function useTestNotificationChannel() {
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: (id: string) =>
-      unwrap(
-        api.POST('/notifications/channels/{channelId}/test', {
-          params: { path: { channelId: id } },
-        }),
-      ),
-    onSuccess: (_d, id) => {
-      void qc.invalidateQueries({ queryKey: keys.channels });
-      void qc.invalidateQueries({ queryKey: keys.deliveries(id) });
-    },
   });
 }
 
@@ -339,50 +196,12 @@ export function useProject(id: string) {
   });
 }
 
-export function useCreateProject() {
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: (body: ProjectCreate) => unwrap(api.POST('/projects', { body })),
-    onSuccess: () => qc.invalidateQueries({ queryKey: keys.projects }),
-  });
-}
-
-export function useUpdateProject() {
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: ({ id, ...body }: ProjectCreate & { id: string }) =>
-      unwrap(api.PATCH('/projects/{projectId}', { params: { path: { projectId: id } }, body })),
-    onSuccess: () => qc.invalidateQueries({ queryKey: keys.projects }),
-  });
-}
-
-export function useDeleteProject() {
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: (id: string) =>
-      unwrap(api.DELETE('/projects/{projectId}', { params: { path: { projectId: id } } })),
-    onSuccess: () => qc.invalidateQueries({ queryKey: keys.projects }),
-  });
-}
-
 /** A project's caps and dry-run gate. */
 export function useProjectSettings(projectId: string) {
   return useQuery({
     queryKey: keys.projectSettings(projectId),
     queryFn: () =>
       unwrap(api.GET('/projects/{projectId}/settings', { params: { path: { projectId } } })),
-  });
-}
-
-export function usePutProjectSettings(projectId: string) {
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: (body: ProjectSettings) =>
-      unwrap(api.PUT('/projects/{projectId}/settings', { params: { path: { projectId } }, body })),
-    onSuccess: (s) => {
-      qc.setQueryData(keys.projectSettings(projectId), s);
-      void qc.invalidateQueries({ queryKey: keys.limitSettings });
-    },
   });
 }
 
@@ -395,55 +214,11 @@ export function useProjectRoles(projectId: string) {
   });
 }
 
-export function usePutProjectRole(projectId: string) {
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: ({ userId, role }: { userId: string; role: Role }) =>
-      unwrap(
-        api.PUT('/projects/{projectId}/roles/{userId}', {
-          params: { path: { projectId, userId } },
-          body: { role },
-        }),
-      ),
-    onSuccess: () => {
-      void qc.invalidateQueries({ queryKey: keys.projectRoles(projectId) });
-      void qc.invalidateQueries({ queryKey: keys.projects });
-    },
-  });
-}
-
-export function useDeleteProjectRole(projectId: string) {
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: (userId: string) =>
-      unwrap(
-        api.DELETE('/projects/{projectId}/roles/{userId}', {
-          params: { path: { projectId, userId } },
-        }),
-      ),
-    onSuccess: () => {
-      void qc.invalidateQueries({ queryKey: keys.projectRoles(projectId) });
-      void qc.invalidateQueries({ queryKey: keys.projects });
-    },
-  });
-}
-
 /** The organisation's caps on every run. */
 export function useOrgCaps() {
   return useQuery({
     queryKey: keys.orgCaps,
     queryFn: () => unwrap(api.GET('/organisation/caps')),
-  });
-}
-
-export function usePutOrgCaps() {
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: (body: Caps) => unwrap(api.PUT('/organisation/caps', { body })),
-    onSuccess: (c) => {
-      qc.setQueryData(keys.orgCaps, c);
-      void qc.invalidateQueries({ queryKey: keys.limitSettings });
-    },
   });
 }
 
@@ -457,42 +232,6 @@ export function useTargets(projectId: string) {
   });
 }
 
-export function useCreateTarget(projectId: string) {
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: (body: TargetCreate) =>
-      unwrap(api.POST('/projects/{projectId}/targets', { params: { path: { projectId } }, body })),
-    onSuccess: () => qc.invalidateQueries({ queryKey: keys.targets(projectId) }),
-  });
-}
-
-export function useUpdateTarget(projectId: string) {
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: ({ id, ...body }: TargetCreate & { id: string }) =>
-      unwrap(api.PATCH('/targets/{targetId}', { params: { path: { targetId: id } }, body })),
-    onSuccess: () => qc.invalidateQueries({ queryKey: keys.targets(projectId) }),
-  });
-}
-
-export function useDeleteTarget(projectId: string) {
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: (id: string) =>
-      unwrap(api.DELETE('/targets/{targetId}', { params: { path: { targetId: id } } })),
-    onSuccess: () => qc.invalidateQueries({ queryKey: keys.targets(projectId) }),
-  });
-}
-
-export function useVerifyTarget(projectId: string) {
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: (id: string) =>
-      unwrap(api.POST('/targets/{targetId}/verify', { params: { path: { targetId: id } } })),
-    onSuccess: () => qc.invalidateQueries({ queryKey: keys.targets(projectId) }),
-  });
-}
-
 // ---------------------------------------------------------------- secrets
 
 export function useSecrets(projectId: string) {
@@ -500,28 +239,6 @@ export function useSecrets(projectId: string) {
     queryKey: keys.secrets(projectId),
     queryFn: () =>
       unwrap(api.GET('/projects/{projectId}/secrets', { params: { path: { projectId } } })),
-  });
-}
-
-export function usePutSecret(projectId: string) {
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: (body: SecretPut) =>
-      unwrap(api.PUT('/projects/{projectId}/secrets', { params: { path: { projectId } }, body })),
-    onSuccess: () => qc.invalidateQueries({ queryKey: keys.secrets(projectId) }),
-  });
-}
-
-export function useDeleteSecret(projectId: string) {
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: (name: string) =>
-      unwrap(
-        api.DELETE('/projects/{projectId}/secrets/{name}', {
-          params: { path: { projectId, name } },
-        }),
-      ),
-    onSuccess: () => qc.invalidateQueries({ queryKey: keys.secrets(projectId) }),
   });
 }
 
@@ -566,45 +283,6 @@ export function useScenarioVersion(id: string, version: number | undefined) {
         }),
       ),
     enabled: version != null,
-  });
-}
-
-export function useCreateScenario(projectId: string) {
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: (body: ScenarioVersionCreate) =>
-      unwrap(
-        api.POST('/projects/{projectId}/scenarios', { params: { path: { projectId } }, body }),
-      ),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['projects', projectId, 'scenarios'] }),
-  });
-}
-
-export function useCreateScenarioVersion(projectId: string, scenarioId: string) {
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: (body: ScenarioVersionCreate) =>
-      unwrap(
-        api.POST('/scenarios/{scenarioId}/versions', {
-          params: { path: { scenarioId } },
-          body,
-        }),
-      ),
-    onSuccess: async () => {
-      await Promise.all([
-        qc.invalidateQueries({ queryKey: keys.scenario(scenarioId) }),
-        qc.invalidateQueries({ queryKey: ['projects', projectId, 'scenarios'] }),
-      ]);
-    },
-  });
-}
-
-export function useDeleteScenario(projectId: string) {
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: (id: string) =>
-      unwrap(api.DELETE('/scenarios/{scenarioId}', { params: { path: { scenarioId: id } } })),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['projects', projectId, 'scenarios'] }),
   });
 }
 
@@ -684,37 +362,13 @@ export function useReport(id: string, enabled: boolean) {
   });
 }
 
-/** Asks the server's AI provider for a narrative and puts it in the cached report. */
-export function useCreateNarrative(runId: string) {
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: () =>
-      unwrap(api.POST('/runs/{runId}/narrative', { params: { path: { runId } }, body: {} })),
-    onSuccess: (res) => {
-      qc.setQueryData<Report>(keys.report(runId), (r) =>
-        r ? { ...r, narrative: res.narrative } : r,
-      );
-    },
-  });
-}
-
-export function useCreateRun(projectId: string) {
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: (body: RunCreate) =>
-      unwrap(api.POST('/projects/{projectId}/runs', { params: { path: { projectId } }, body })),
-    onSuccess: (run) => {
-      qc.setQueryData(keys.run(run.id), run);
-      void qc.invalidateQueries({ queryKey: keys.allRuns(projectId) });
-      void qc.invalidateQueries({ queryKey: keys.activeRuns });
-    },
-  });
-}
-
 function invalidateRun(qc: QueryClient, id: string) {
   void qc.invalidateQueries({ queryKey: keys.run(id) });
   void qc.invalidateQueries({ queryKey: keys.activeRuns });
 }
+
+// Safety controls: stop, kill and kill-all are the only changes the read-only
+// UI can make, besides signing in and out. Everything else is done with the CLI.
 
 export function useStopRun() {
   const qc = useQueryClient();
@@ -776,54 +430,6 @@ export function useSchedules(projectId: string) {
   });
 }
 
-export function useCreateSchedule(projectId: string) {
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: (body: ScheduleCreate) =>
-      unwrap(
-        api.POST('/projects/{projectId}/schedules', { params: { path: { projectId } }, body }),
-      ),
-    onSuccess: () => qc.invalidateQueries({ queryKey: keys.schedules(projectId) }),
-  });
-}
-
-export function useUpdateSchedule(projectId: string) {
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: ({ id, ...body }: ScheduleUpdate & { id: string }) =>
-      unwrap(api.PATCH('/schedules/{scheduleId}', { params: { path: { scheduleId: id } }, body })),
-    onSuccess: () => qc.invalidateQueries({ queryKey: keys.schedules(projectId) }),
-  });
-}
-
-export function useDeleteSchedule(projectId: string) {
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: (id: string) =>
-      unwrap(api.DELETE('/schedules/{scheduleId}', { params: { path: { scheduleId: id } } })),
-    onSuccess: () => qc.invalidateQueries({ queryKey: keys.schedules(projectId) }),
-  });
-}
-
-/** Starts a schedule's run now, as the signed-in user. */
-export function useRunSchedule(projectId: string) {
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: (id: string) =>
-      unwrap(api.POST('/schedules/{scheduleId}/run', { params: { path: { scheduleId: id } } })),
-    onSuccess: (res) => {
-      // A drift schedule's check returns a drift result, not a run.
-      if ('broken' in res) {
-        qc.setQueryData(keys.driftResult(res.id), res);
-        void qc.invalidateQueries({ queryKey: keys.driftResults(projectId) });
-      } else qc.setQueryData(keys.run(res.id), res);
-      void qc.invalidateQueries({ queryKey: keys.schedules(projectId) });
-      void qc.invalidateQueries({ queryKey: keys.allRuns(projectId) });
-      void qc.invalidateQueries({ queryKey: keys.activeRuns });
-    },
-  });
-}
-
 /** Results of a project's scheduled drift checks, newest first, without traces. */
 export function useDriftResults(projectId: string) {
   return useQuery({
@@ -845,43 +451,6 @@ export function useDriftResult(id: string | null) {
     queryFn: () =>
       unwrap(api.GET('/drift-results/{driftId}', { params: { path: { driftId: id ?? '' } } })),
     enabled: !!id,
-  });
-}
-
-/** Asks the AI generator to repair a drift check's broken journeys. */
-export function useRepairDrift(projectId: string) {
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: ({ id, providerId, maxRepairs }: Partial<DriftRepair> & { id: string }) =>
-      unwrap(
-        api.POST('/drift-results/{driftId}/repair', {
-          params: { path: { driftId: id } },
-          body: { maxRepairs: maxRepairs ?? 3, ...(providerId ? { providerId } : {}) },
-        }),
-      ),
-    onSuccess: (job, { id }) => {
-      qc.setQueryData(keys.aiJob(job.id), job);
-      void qc.invalidateQueries({ queryKey: keys.aiJobs(projectId) });
-      void qc.invalidateQueries({ queryKey: keys.driftResults(projectId) });
-      void qc.invalidateQueries({ queryKey: keys.driftResult(id) });
-    },
-  });
-}
-
-/** The next times a cron expression fires, checked by the server. */
-export function useSchedulePreview(cron: string, timezone: string) {
-  return useQuery({
-    queryKey: keys.schedulePreview(cron, timezone),
-    queryFn: ({ signal }) =>
-      unwrap(
-        api.GET('/schedules/preview', {
-          params: { query: { cron, ...(timezone ? { timezone } : {}), count: 3 } },
-          signal,
-        }),
-      ),
-    enabled: cron.trim() !== '',
-    retry: false,
-    staleTime: 30_000,
   });
 }
 
@@ -989,23 +558,6 @@ export function useAIProviders() {
   });
 }
 
-export function usePutAIProvider() {
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: (body: AIProviderPut) => unwrap(api.POST('/ai/providers', { body })),
-    onSuccess: () => qc.invalidateQueries({ queryKey: keys.aiProviders }),
-  });
-}
-
-export function useDeleteAIProvider() {
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: (id: string) =>
-      unwrap(api.DELETE('/ai/providers/{providerId}', { params: { path: { providerId: id } } })),
-    onSuccess: () => qc.invalidateQueries({ queryKey: keys.aiProviders }),
-  });
-}
-
 /** Generation jobs, polled while any of them is queued or running. */
 export function useAIJobs(projectId: string) {
   return useQuery({
@@ -1026,33 +578,5 @@ export function useAIJob(id: string) {
     queryKey: keys.aiJob(id),
     queryFn: () => unwrap(api.GET('/ai/jobs/{jobId}', { params: { path: { jobId: id } } })),
     refetchInterval: (q) => (q.state.data && isAIJobActive(q.state.data.status) ? 1_500 : false),
-  });
-}
-
-export function useCreateAIJob(projectId: string) {
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: (body: AIJobCreate) =>
-      unwrap(api.POST('/projects/{projectId}/ai/jobs', { params: { path: { projectId } }, body })),
-    onSuccess: (job) => {
-      qc.setQueryData(keys.aiJob(job.id), job);
-      void qc.invalidateQueries({ queryKey: keys.aiJobs(projectId) });
-      void qc.invalidateQueries({ queryKey: keys.aiProviders });
-    },
-  });
-}
-
-export function useApproveAIJob(job: AIJob) {
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: (body: AIJobApprove) =>
-      unwrap(api.POST('/ai/jobs/{jobId}/approve', { params: { path: { jobId: job.id } }, body })),
-    onSuccess: (res) => {
-      qc.setQueryData(keys.scenario(res.scenario.id), res.scenario);
-      void qc.invalidateQueries({ queryKey: keys.aiJob(job.id) });
-      void qc.invalidateQueries({ queryKey: keys.aiJobs(job.projectId) });
-      void qc.invalidateQueries({ queryKey: ['projects', job.projectId, 'scenarios'] });
-      void qc.invalidateQueries({ queryKey: keys.versions(res.scenario.id) });
-    },
   });
 }
