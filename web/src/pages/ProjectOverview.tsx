@@ -1,109 +1,19 @@
-import { Link, useNavigate, useParams } from '@tanstack/react-router';
-import { Pencil, Play, Trash2 } from 'lucide-react';
-import { useState, type FormEvent } from 'react';
-import {
-  useDeleteProject,
-  useMe,
-  useProject,
-  useRuns,
-  useScenarios,
-  useTargets,
-  useUpdateProject,
-} from '@/api/queries';
-import type { Project } from '@/api/types';
+import { Link, useParams } from '@tanstack/react-router';
+import { useProject, useRuns, useScenarios, useTargets } from '@/api/queries';
 import { Chip } from '@/components/chips';
-import { Confirm, Modal } from '@/components/dialog';
-import {
-  Button,
-  Card,
-  CardHeader,
-  EmptyState,
-  ErrorAlert,
-  Field,
-  Input,
-  Loading,
-  PageHeader,
-  Textarea,
-} from '@/components/ui';
-import { NewRunDialog } from '@/features/runs/NewRunDialog';
+import { CliHint } from '@/components/cliHint';
+import { Card, CardHeader, EmptyState, ErrorAlert, Loading, PageHeader } from '@/components/ui';
 import { RunsTable } from '@/features/runs/RunsTable';
 import { TargetBadge } from '@/features/targets/TargetBadge';
+import { cli } from '@/lib/cli';
 import { load, relativeTime } from '@/lib/format';
-import { permissions } from '@/lib/roles';
-import { useToast } from '@/components/toast';
-
-function EditProjectDialog({
-  project,
-  open,
-  onOpenChange,
-}: {
-  project: Project;
-  open: boolean;
-  onOpenChange: (v: boolean) => void;
-}) {
-  const update = useUpdateProject();
-  const [name, setName] = useState(project.name);
-  const [description, setDescription] = useState(project.description ?? '');
-  const submit = (e: FormEvent) => {
-    e.preventDefault();
-    update.mutate(
-      { id: project.id, name: name.trim(), description: description.trim() },
-      { onSuccess: () => onOpenChange(false) },
-    );
-  };
-  return (
-    <Modal
-      open={open}
-      onOpenChange={onOpenChange}
-      title="Edit project"
-      footer={
-        <>
-          <Button onClick={() => onOpenChange(false)}>Cancel</Button>
-          <Button
-            variant="primary"
-            type="submit"
-            form="edit-project"
-            loading={update.isPending}
-            disabled={!name.trim()}
-          >
-            Save
-          </Button>
-        </>
-      }
-    >
-      <form id="edit-project" onSubmit={submit} className="flex flex-col gap-4">
-        <Field label="Name">
-          {(p) => <Input {...p} value={name} onChange={(e) => setName(e.target.value)} />}
-        </Field>
-        <Field label="Description">
-          {(p) => (
-            <Textarea
-              {...p}
-              rows={3}
-              value={description}
-              onChange={(e) => setDescription(e.target.value)}
-            />
-          )}
-        </Field>
-        <ErrorAlert error={update.error} />
-      </form>
-    </Modal>
-  );
-}
 
 export function ProjectOverviewPage() {
   const { projectId } = useParams({ from: '/app/projects/$projectId/' });
-  const me = useMe();
-  const can = permissions(me.role);
   const project = useProject(projectId);
   const runs = useRuns(projectId, { limit: 10 }, 5_000);
   const scenarios = useScenarios(projectId);
   const targets = useTargets(projectId);
-  const del = useDeleteProject();
-  const navigate = useNavigate();
-  const toast = useToast();
-  const [newRun, setNewRun] = useState(false);
-  const [edit, setEdit] = useState(false);
 
   if (project.isPending) return <Loading />;
   if (project.error) return <ErrorAlert error={project.error} className="m-6" />;
@@ -114,38 +24,7 @@ export function ProjectOverviewPage() {
       <PageHeader
         title={p.name}
         description={p.description || undefined}
-        actions={
-          <>
-            {can.editProjects && (
-              <Button onClick={() => setEdit(true)}>
-                <Pencil className="size-3.5" aria-hidden /> Edit
-              </Button>
-            )}
-            {can.deleteProjects && (
-              <Confirm
-                trigger={
-                  <Button variant="danger">
-                    <Trash2 className="size-3.5" aria-hidden /> Delete
-                  </Button>
-                }
-                title={`Delete ${p.name}?`}
-                description="This deletes the project with all of its scenarios, targets, secrets and run history. It cannot be undone."
-                confirmLabel="Delete project"
-                destructive
-                onConfirm={async () => {
-                  await del.mutateAsync(p.id);
-                  toast.success(`Deleted ${p.name}.`);
-                  void navigate({ to: '/projects' });
-                }}
-              />
-            )}
-            {can.startRuns && (
-              <Button variant="primary" onClick={() => setNewRun(true)}>
-                <Play className="size-3.5" aria-hidden /> New run
-              </Button>
-            )}
-          </>
-        }
+        actions={<CliHint command={cli.start({ project: p.slug })}>Start a run from the terminal</CliHint>}
       />
 
       <Card>
@@ -167,9 +46,8 @@ export function ProjectOverviewPage() {
           <ErrorAlert error={runs.error} className="m-4" />
         ) : runs.data.length === 0 ? (
           <EmptyState title="No runs yet">
-            {can.startRuns
-              ? 'Start a run to see throughput, latency and a verdict here.'
-              : 'Runs started by your team will appear here.'}
+            Runs started with <code className="font-mono text-xs">stampede start</code> appear here
+            with throughput, latency and a verdict.
           </EmptyState>
         ) : (
           <RunsTable runs={runs.data} />
@@ -186,7 +64,7 @@ export function ProjectOverviewPage() {
                 params={{ projectId }}
                 className="text-[13px] text-info hover:underline"
               >
-                Manage
+                All scenarios
               </Link>
             }
           />
@@ -195,7 +73,10 @@ export function ProjectOverviewPage() {
           ) : scenarios.error ? (
             <ErrorAlert error={scenarios.error} className="m-4" />
           ) : scenarios.data.length === 0 ? (
-            <EmptyState title="No scenarios">Describe how your users behave in YAML.</EmptyState>
+            <EmptyState title="No scenarios">
+              Describe how your users behave in YAML and save it with{' '}
+              <code className="font-mono text-xs">stampede push</code>.
+            </EmptyState>
           ) : (
             <ul className="divide-y divide-line">
               {scenarios.data.slice(0, 8).map((s) => {
@@ -243,7 +124,7 @@ export function ProjectOverviewPage() {
                 params={{ projectId }}
                 className="text-[13px] text-info hover:underline"
               >
-                Manage
+                All targets
               </Link>
             }
           />
@@ -252,7 +133,10 @@ export function ProjectOverviewPage() {
           ) : targets.error ? (
             <ErrorAlert error={targets.error} className="m-4" />
           ) : targets.data.length === 0 ? (
-            <EmptyState title="No targets">Add the base URL of the system you test.</EmptyState>
+            <EmptyState title="No targets">
+              Add the base URL of the system you test with{' '}
+              <code className="font-mono text-xs">stampede targets create</code>.
+            </EmptyState>
           ) : (
             <ul className="divide-y divide-line">
               {targets.data.map((t) => (
@@ -268,11 +152,6 @@ export function ProjectOverviewPage() {
           )}
         </Card>
       </div>
-
-      {can.startRuns && (
-        <NewRunDialog projectId={projectId} open={newRun} onOpenChange={setNewRun} />
-      )}
-      {edit && <EditProjectDialog project={p} open={edit} onOpenChange={setEdit} />}
     </div>
   );
 }
