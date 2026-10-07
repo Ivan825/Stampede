@@ -2,8 +2,22 @@
 
 Render a saved JSON report as HTML, PDF, CSV, JUnit, Markdown or a summary
 
+### Synopsis
+
+Render a JSON report (from stampede run --json) as a summary or as HTML,
+PDF, CSV, JUnit or Markdown files. The argument is a file or, when no such
+file exists, the id of a run on the server you signed in to (a unique
+prefix of the id is enough), whose report is downloaded.
+
 ```
-stampede report <report.json> [flags]
+stampede report <report.json | run-id> [flags]
+```
+
+### Examples
+
+```
+  stampede report report.json -o report.html
+  stampede report 3f2a91c0 --pdf run.pdf
 ```
 
 ### Options

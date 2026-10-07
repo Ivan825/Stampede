@@ -2,6 +2,7 @@ package cli
 
 import (
 	"bufio"
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -117,23 +118,38 @@ func startRemote(cmd *cobra.Command, f *remoteRunFlags) error {
 	if err != nil {
 		return err
 	}
-	proj, err := c.FindProject(ctx, f.project)
+	run, err := createRemoteRun(ctx, cmd.ErrOrStderr(), c, f, "pushed by stampede start")
 	if err != nil {
 		return err
+	}
+	if f.detach {
+		fmt.Fprintln(cmd.OutOrStdout(), run.Id)
+		return nil
+	}
+	return followRun(ctx, cmd, c, run.Id.String(), f.md)
+}
+
+// createRemoteRun starts a run on the server: the scenario named by
+// f.scenarioRef, or f.file saved as a new version first, against the
+// target named by f.target. It reports the start on errw.
+func createRemoteRun(ctx context.Context, errw io.Writer, c *client.Client, f *remoteRunFlags, pushMsg string) (gen.Run, error) {
+	proj, err := c.FindProject(ctx, f.project)
+	if err != nil {
+		return gen.Run{}, err
 	}
 	pid := proj.Id.String()
 	var sc gen.Scenario
 	if f.file != "" {
-		sc, err = pushScenario(ctx, c, pid, f.file, "pushed by stampede start")
+		sc, err = pushScenario(ctx, c, pid, f.file, pushMsg)
 	} else {
 		sc, err = c.FindScenario(ctx, pid, f.scenarioRef)
 	}
 	if err != nil {
-		return err
+		return gen.Run{}, err
 	}
 	tgt, err := c.FindTarget(ctx, pid, f.target)
 	if err != nil {
-		return err
+		return gen.Run{}, err
 	}
 	body := map[string]any{"scenarioId": sc.Id, "targetId": tgt.Id, "workers": f.workers}
 	if ov := overridesFrom(f.shape, f.rate, f.duration, f.start, f.max, f.vus); len(ov) > 0 {
@@ -141,7 +157,7 @@ func startRemote(cmd *cobra.Command, f *remoteRunFlags) error {
 	}
 	env, err := envFrom(f.env)
 	if err != nil {
-		return err
+		return gen.Run{}, err
 	}
 	if len(env) > 0 {
 		body["env"] = env
@@ -151,27 +167,33 @@ func startRemote(cmd *cobra.Command, f *remoteRunFlags) error {
 	}
 	var run gen.Run
 	if err := c.Do(ctx, "POST", "/projects/"+pid+"/runs", body, &run); err != nil {
-		return err
+		return gen.Run{}, err
 	}
-	out := cmd.OutOrStdout()
-	if f.detach {
-		fmt.Fprintln(out, run.Id)
-		return nil
+	if !f.detach {
+		fmt.Fprintf(errw, "stampede: run %s of %s against %s started; Ctrl-C stops following (the run continues)\n", run.Id, sc.Name, tgt.BaseURL)
 	}
-	fmt.Fprintf(cmd.ErrOrStderr(), "stampede: run %s of %s against %s started; Ctrl-C stops following (the run continues)\n", run.Id, sc.Name, tgt.BaseURL)
-	return followRun(ctx, cmd, c, run.Id.String(), f.md)
+	return run, nil
 }
 
 // followRun prints live progress, then the report, and maps the verdict to
 // an exit code.
 func followRun(ctx context.Context, cmd *cobra.Command, c *client.Client, runID, md string) error {
+	return followRunWith(ctx, cmd, c, runID, false, func(rep *report.Report) error {
+		rep.WriteText(cmd.OutOrStdout())
+		return writeFile(cmd.OutOrStdout(), md, func(w io.Writer) error { rep.WriteMarkdown(w); return nil })
+	})
+}
+
+// followRunWith follows a run like followRun and hands its report to
+// write. quiet leaves out the per-second progress lines.
+func followRunWith(ctx context.Context, cmd *cobra.Command, c *client.Client, runID string, quiet bool, write func(*report.Report) error) error {
 	errw := cmd.ErrOrStderr()
 	var final gen.Run
 	err := c.Follow(ctx, runID, func(ev client.Event) {
 		switch ev.Type {
 		case "point":
 			var p gen.Point
-			if json.Unmarshal(ev.Data, &p) == nil {
+			if !quiet && json.Unmarshal(ev.Data, &p) == nil {
 				fmt.Fprintf(errw, "  %5.0fs  vus %-5d rps %-7.0f p95 %-9s err %-7s dropped %d\n", p.T+1, p.Vus, p.Rps, report.Ms(p.P95), report.Pct(p.ErrorRate), p.Dropped)
 			}
 		case "status":
@@ -196,22 +218,26 @@ func followRun(ctx context.Context, cmd *cobra.Command, c *client.Client, runID,
 		}
 		return errors.New(msg)
 	}
-	var raw []byte
-	if err := c.Do(ctx, "GET", "/runs/"+runID+"/report", nil, &raw); err != nil {
-		return err
-	}
-	rep, err := report.ReadJSON(strings.NewReader(string(raw)))
+	rep, err := fetchReport(ctx, c, runID)
 	if err != nil {
 		return err
 	}
-	rep.WriteText(cmd.OutOrStdout())
-	if err := writeFile(cmd.OutOrStdout(), md, func(w io.Writer) error { rep.WriteMarkdown(w); return nil }); err != nil {
+	if err := write(rep); err != nil {
 		return err
 	}
 	if rep.Verdict == report.VerdictFail {
 		return &exitError{code: ExitTargetsFailed, msg: "one or more targets failed"}
 	}
 	return nil
+}
+
+// fetchReport downloads a finished run's JSON report from the server.
+func fetchReport(ctx context.Context, c *client.Client, runID string) (*report.Report, error) {
+	var raw []byte
+	if err := c.Do(ctx, "GET", "/runs/"+runID+"/report", nil, &raw); err != nil {
+		return nil, err
+	}
+	return report.ReadJSON(bytes.NewReader(raw))
 }
 
 // pushScenario saves a local file as a new scenario or a new version of

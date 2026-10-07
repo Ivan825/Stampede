@@ -1,12 +1,15 @@
 package tui
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
 	"io"
 	"log/slog"
+	"net/url"
 	"os"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -58,9 +61,22 @@ func banner() string {
 	return lipgloss.JoinHorizontal(lipgloss.Center, art, "   ", text) + "\n"
 }
 
+// Options connect the console to commands that live in the CLI.
+type Options struct {
+	// Init is stampede init with the confirmation already given: it
+	// detects the target's product type, installs the matching pack into
+	// dir and dry-runs it, writing its progress to w.
+	Init func(ctx context.Context, w io.Writer, target, dir string, env []string) error
+	// CheckTarget applies stampede run's safety rules to a local run of
+	// s and returns the host policy its requests must pass. Messages go
+	// to w. Nil leaves local runs without a host policy.
+	CheckTarget func(ctx context.Context, w io.Writer, s *scenario.Scenario, env map[string]string) (func(*url.URL) bool, error)
+}
+
 // Model is the Bubble Tea model.
 type Model struct {
 	c       *client.Client
+	opts    Options
 	send    func(tea.Msg)
 	input   textinput.Model
 	view    viewport.Model
@@ -103,13 +119,13 @@ type (
 
 // New builds the model. c may be nil, in which case /run works on local
 // scenario files with the in-process engine.
-func New(c *client.Client) *Model {
+func New(c *client.Client, opts Options) *Model {
 	in := textinput.New()
 	in.Placeholder = "type /help, a slash command, or what you want to test"
 	in.Prompt = "› "
 	in.Focus()
 	in.CharLimit = 500
-	m := &Model{c: c, input: in, view: viewport.New(80, 20)}
+	m := &Model{c: c, opts: opts, input: in, view: viewport.New(80, 20)}
 	m.say(banner())
 	if c == nil {
 		m.say("Not signed in to a server, so runs use local files with the built-in engine:")
@@ -121,8 +137,8 @@ func New(c *client.Client) *Model {
 }
 
 // Run starts the program on the terminal.
-func Run(c *client.Client) error {
-	m := New(c)
+func Run(c *client.Client, opts Options) error {
+	m := New(c, opts)
 	p := tea.NewProgram(m, tea.WithAltScreen())
 	m.send = p.Send
 	_, err := p.Run()
@@ -281,10 +297,15 @@ func (m *Model) handle(line string) tea.Cmd {
 }
 
 const help = `Commands
-  /run <shape> [--scenario name] [--target name] [--rate 100/s] [--vus 50]
-               [--duration 5m] [--start ..] [--max ..]    start a run and watch it
+  /run <shape> [duration] [scenario] [--scenario name] [--target name] [--rate 100/s]
+               [--vus 50] [--duration 5m] [--start ..] [--max ..]    start a run and watch it
        shapes: smoke baseline stress spike soak breakpoint steps recovery wave
+       for example: /run soak 4h checkout-flow
        without a server: /run <shape> --file scenario.yaml
+  /run replay <access.log | recording.har> --target http://host:port [--speed 2]
+                            replay recorded traffic with the built-in engine
+  /init <url> [--dir stampede] [--env KEY=VALUE]
+                            detect the product type, install the matching pack, dry-run it
   /runs                     recent runs
   /scenarios                scenarios in the project
   /workers                  connected workers
@@ -311,7 +332,7 @@ func (m *Model) exec(c Command) tea.Cmd {
 		}
 		m.say("usage: /use <project>")
 	case "init":
-		m.say("Generating journeys with AI is planned and not in this build. Write a scenario (see README) or start from examples/shoplab/scenarios.")
+		return m.initPack(c)
 	case "run":
 		return m.run(c)
 	case "runs":
@@ -449,17 +470,13 @@ func (m *Model) run(c Command) tea.Cmd {
 		m.say("A run is already being watched; Ctrl-C to stop following it first.")
 		return nil
 	}
-	shape := ""
-	if len(c.Args) > 0 {
-		shape = c.Args[0]
+	if len(c.Args) > 0 && c.Args[0] == "replay" {
+		return m.replay(c.Args[1:], c.Flags)
 	}
-	if shape != "" && !contains(scenario.Shapes, shape) {
-		m.say(fmt.Sprintf("Unknown shape %q; use one of %s.", shape, strings.Join(scenario.Shapes, ", ")))
+	ov, problem := runOverrides(c)
+	if problem != "" {
+		m.say(problem)
 		return nil
-	}
-	ov := scenario.Overrides{Shape: shape, Rate: c.Flags["rate"], Duration: c.Flags["duration"], Start: c.Flags["start"], Max: c.Flags["max"]}
-	if v := c.Flags["vus"]; v != "" {
-		_, _ = fmt.Sscanf(v, "%d", &ov.VUs)
 	}
 	ctx, cancel := context.WithCancel(context.Background())
 	m.live = &liveRun{cancel: cancel, started: time.Now(), status: "starting"}
@@ -468,7 +485,7 @@ func (m *Model) run(c Command) tea.Cmd {
 		if file == "" {
 			m.live = nil
 			cancel()
-			m.say("Without a server, give a file: /run " + shape + " --file scenario.yaml")
+			m.say("Without a server, give a file: " + strings.Join(append([]string{"/run"}, c.Args...), " ") + " --file scenario.yaml")
 			return nil
 		}
 		m.live.localRun, m.live.name = true, file
@@ -476,6 +493,42 @@ func (m *Model) run(c Command) tea.Cmd {
 	}
 	m.live.name = c.Flags["scenario"]
 	return m.runRemote(ctx, c, ov)
+}
+
+// runOverrides reads /run's arguments: an optional shape, then an
+// optional duration (/run soak 4h) and scenario name, then flags. It
+// fills in c.Flags["scenario"] from a positional name. A non-empty
+// problem explains what is wrong.
+func runOverrides(c Command) (scenario.Overrides, string) {
+	args := c.Args
+	shape := ""
+	if len(args) > 0 {
+		if _, err := scenario.ParseDuration(args[0]); err != nil {
+			shape, args = args[0], args[1:]
+		}
+	}
+	if shape != "" && !contains(scenario.Shapes, shape) {
+		return scenario.Overrides{}, fmt.Sprintf("Unknown shape %q; use one of %s or replay.", shape, strings.Join(scenario.Shapes, ", "))
+	}
+	ov := scenario.Overrides{Shape: shape, Rate: c.Flags["rate"], Duration: c.Flags["duration"], Start: c.Flags["start"], Max: c.Flags["max"]}
+	if v := c.Flags["vus"]; v != "" {
+		_, _ = fmt.Sscanf(v, "%d", &ov.VUs)
+	}
+	for _, a := range args {
+		if _, err := scenario.ParseDuration(a); err == nil {
+			if ov.Duration != "" {
+				return scenario.Overrides{}, fmt.Sprintf("Two durations: %s and %s.", ov.Duration, a)
+			}
+			ov.Duration = a
+			continue
+		}
+		if c.Flags["scenario"] == "" && c.Flags["file"] == "" {
+			c.Flags["scenario"] = a
+			continue
+		}
+		return scenario.Overrides{}, fmt.Sprintf("Unexpected %q; try /help.", a)
+	}
+	return ov, ""
 }
 
 func contains(xs []string, x string) bool {
@@ -575,9 +628,11 @@ func planned(r gen.Run) time.Duration {
 }
 
 func (m *Model) runLocal(ctx context.Context, file string, ov scenario.Overrides) tea.Cmd {
-	send := m.send
 	return func() tea.Msg {
 		s, err := scenario.LoadFile(file)
+		if err == nil {
+			err = s.LoadReplay()
+		}
 		if err != nil {
 			return doneMsg{sBad.Render(err.Error())}
 		}
@@ -587,39 +642,184 @@ func (m *Model) runLocal(ctx context.Context, file string, ov scenario.Overrides
 		if err := s.Validate(); err != nil {
 			return doneMsg{sBad.Render(err.Error())}
 		}
-		env := map[string]string{}
-		for _, kv := range os.Environ() {
-			k, v, _ := strings.Cut(kv, "=")
-			env[k] = v
+		return m.execLocal(ctx, s)
+	}
+}
+
+// replay replays an access log or HAR recording against a target with
+// the in-process engine, as load.mode: replay does.
+func (m *Model) replay(args []string, flags map[string]string) tea.Cmd {
+	if len(args) != 1 {
+		m.say("usage: /run replay <access.log | recording.har> --target http://host:port [--speed 2]")
+		return nil
+	}
+	base := flags["target"]
+	if base == "" {
+		base = os.Getenv("TARGET_URL")
+	}
+	if base == "" {
+		m.say("Give the address to replay against: /run replay " + args[0] + " --target http://localhost:8080")
+		return nil
+	}
+	speed := 1.0
+	if v := flags["speed"]; v != "" {
+		if _, err := fmt.Sscanf(v, "%g", &speed); err != nil || speed <= 0 {
+			m.say(fmt.Sprintf("--speed %q: give a positive number, such as 2 to replay twice as fast.", v))
+			return nil
 		}
-		plan, _ := s.Load.Plan()
-		if send != nil {
-			send(liveIDMsg{id: "local", name: s.Metadata.Name, planned: plan.TotalDuration()})
-			send(statusMsg("running"))
-		}
-		rep, err := runner.Run(ctx, runner.Options{
-			Scenario: s, Env: env, Secrets: env,
-			Logger: slog.New(slog.NewTextHandler(io.Discard, nil)),
-			Progress: func(p runner.Progress) {
-				if send == nil {
-					return
-				}
-				t := p.Snapshot.Totals()
-				pt := gen.Point{T: p.Elapsed.Seconds() - 1, Rps: float64(t.Requests), Vus: p.Snapshot.VUs, Planned: p.Planned, Dropped: int(p.Snapshot.Dropped)} //nolint:gosec // counts fit
-				if t.Requests > 0 {
-					pt.ErrorRate = float64(t.Failed) / float64(t.Requests)
-					pt.P95 = t.Latency.QuantileSeconds(0.95)
-				}
-				send(pointMsg(pt))
-			},
-		})
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	m.live = &liveRun{cancel: cancel, started: time.Now(), status: "loading", localRun: true, name: args[0]}
+	m.layout()
+	file := args[0]
+	return func() tea.Msg {
+		s, err := ReplayScenario(file, base, speed)
 		if err != nil {
 			return doneMsg{sBad.Render(err.Error())}
 		}
-		var b strings.Builder
-		rep.WriteText(&b)
-		return doneMsg{strings.TrimRight(b.String(), "\n")}
+		return m.execLocal(ctx, s)
 	}
+}
+
+// ReplayScenario builds a scenario that replays a recording against base.
+func ReplayScenario(file, base string, speed float64) (*scenario.Scenario, error) {
+	abs, err := filepath.Abs(file)
+	if err != nil {
+		return nil, err
+	}
+	doc, err := json.Marshal(map[string]any{
+		"metadata": map[string]any{"name": "replay"},
+		"target":   map[string]any{"baseURL": base},
+		"load":     map[string]any{"mode": scenario.ModeReplay, "replay": map[string]any{"file": abs, "speed": speed}},
+	})
+	if err != nil {
+		return nil, err
+	}
+	s, err := scenario.Decode(doc)
+	if err != nil {
+		return nil, err
+	}
+	if err := s.LoadReplay(); err != nil {
+		return nil, err
+	}
+	if err := s.Validate(); err != nil {
+		return nil, err
+	}
+	return s, nil
+}
+
+// execLocal runs a loaded scenario with the in-process engine, sending
+// live points, and returns the summary when it ends.
+func (m *Model) execLocal(ctx context.Context, s *scenario.Scenario) tea.Msg {
+	send := m.send
+	env := map[string]string{}
+	for _, kv := range os.Environ() {
+		k, v, _ := strings.Cut(kv, "=")
+		env[k] = v
+	}
+	plan, err := s.Load.Plan()
+	if err != nil {
+		return doneMsg{sBad.Render(err.Error())}
+	}
+	var allow func(*url.URL) bool
+	if m.opts.CheckTarget != nil {
+		w := &lineWriter{send: send}
+		allow, err = m.opts.CheckTarget(ctx, w, s, env)
+		if rest := w.rest(); rest != "" && send != nil {
+			send(logMsg(rest))
+		}
+		if err != nil {
+			return doneMsg{sBad.Render(err.Error())}
+		}
+	}
+	if send != nil {
+		send(liveIDMsg{id: "local", name: s.Metadata.Name, planned: plan.TotalDuration()})
+		send(statusMsg("running"))
+	}
+	rep, err := runner.Run(ctx, runner.Options{
+		Scenario: s, Env: env, Secrets: env, AllowHost: allow,
+		Logger: slog.New(slog.NewTextHandler(io.Discard, nil)),
+		Progress: func(p runner.Progress) {
+			if send == nil {
+				return
+			}
+			t := p.Snapshot.Totals()
+			pt := gen.Point{T: p.Elapsed.Seconds() - 1, Rps: float64(t.Requests), Vus: p.Snapshot.VUs, Planned: p.Planned, Dropped: int(p.Snapshot.Dropped)} //nolint:gosec // counts fit
+			if t.Requests > 0 {
+				pt.ErrorRate = float64(t.Failed) / float64(t.Requests)
+				pt.P95 = t.Latency.QuantileSeconds(0.95)
+			}
+			send(pointMsg(pt))
+		},
+	})
+	if err != nil {
+		return doneMsg{sBad.Render(err.Error())}
+	}
+	var b strings.Builder
+	rep.WriteText(&b)
+	return doneMsg{strings.TrimRight(b.String(), "\n")}
+}
+
+// initPack runs stampede init from the console.
+func (m *Model) initPack(c Command) tea.Cmd {
+	if len(c.Args) != 1 {
+		m.say("usage: /init <url> [--dir stampede] [--env KEY=VALUE]")
+		return nil
+	}
+	if m.opts.Init == nil {
+		m.say("/init is not available here; run stampede init --target " + c.Args[0])
+		return nil
+	}
+	target, dir := c.Args[0], c.Flags["dir"]
+	var env []string
+	if v := c.Flags["env"]; v != "" {
+		env = []string{v}
+	}
+	run, send := m.opts.Init, m.send
+	m.say("Looking at " + target + "...")
+	return func() tea.Msg {
+		ctx, cancel := context.WithTimeout(context.Background(), 15*time.Minute)
+		defer cancel()
+		w := &lineWriter{send: send}
+		err := run(ctx, w, target, dir, env)
+		out := w.rest()
+		if err != nil {
+			out = strings.TrimLeft(out+"\n"+sBad.Render(err.Error()), "\n")
+		}
+		if out == "" {
+			return nil
+		}
+		return logMsg(out)
+	}
+}
+
+// lineWriter sends each complete line written to it to the console as it
+// arrives. Without a send function it keeps everything for rest.
+type lineWriter struct {
+	send func(tea.Msg)
+	buf  []byte
+}
+
+func (w *lineWriter) Write(p []byte) (int, error) {
+	w.buf = append(w.buf, p...)
+	if w.send == nil {
+		return len(p), nil
+	}
+	for {
+		i := bytes.IndexByte(w.buf, '\n')
+		if i < 0 {
+			return len(p), nil
+		}
+		w.send(logMsg(string(w.buf[:i])))
+		w.buf = w.buf[i+1:]
+	}
+}
+
+// rest returns what has not been sent, without a trailing newline.
+func (w *lineWriter) rest() string {
+	s := strings.TrimRight(string(w.buf), "\n")
+	w.buf = nil
+	return s
 }
 
 // View renders the screen.

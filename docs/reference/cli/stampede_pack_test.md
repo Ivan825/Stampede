@@ -16,5 +16,5 @@ stampede pack test <pack or folder> [flags]
 
 ### SEE ALSO
 
-* [stampede pack](stampede_pack.md)	 - List, install and test product packs
+* [stampede pack](stampede_pack.md)	 - List, install, test and create product packs
 

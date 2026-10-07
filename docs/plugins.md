@@ -132,6 +132,29 @@ and hosts given with `--allow-host`.
 
 ## Writing a plugin
 
+The quickest start is a scaffold:
+
+```sh
+stampede plugin create smtp --module github.com/you/stampede-plugin-smtp
+cd stampede-plugin-smtp
+go test ./...                  # builds the plugin and runs the conformance suite
+stampede plugin install .
+```
+
+`plugin create <name>` writes `stampede-plugin-<name>/` (`--dest` chooses
+the parent folder): a Go module whose `main.go` has one working step,
+`<name>.send`, which writes a line to a TCP server and times the reply
+line, with a session per virtual user that keeps its connection; a
+`main_test.go` that starts a local TCP echo server and runs the
+[conformance suite](#conformance) against the built plugin; and a README.
+The module requires `github.com/Ivan825/Stampede` at the version of the
+`stampede` binary that created it (the latest one for a development
+build); `--sdk <checkout>` builds against a local Stampede checkout through
+a `replace` directive instead. It then runs `go mod tidy` (`--no-tidy`
+skips it). Replace the step with your protocol and keep the test passing.
+The scaffold is tested in CI by generating one against the checkout and
+running its `go vet` and `go test`.
+
 A plugin is a Go program built on [`pkg/pluginsdk`](../pkg/pluginsdk). It
 describes its steps, each with a JSON Schema for its settings, and calls
 `Serve`:

@@ -81,7 +81,9 @@ targets:
   content type, with millisecond timing; only requests to one host are
   kept (the most frequent, or `host:`).
 - Static assets (`.js`, `.css`, images, fonts) are skipped unless
-  `static: true`. At most `limit` requests are replayed (default 100,000).
+  `static: true`. At most `limit` requests are replayed (default 100,000),
+  and a replay lasts at most 7 days after `speed`; a longer recording is
+  refused.
 - Headers and cookies from the recording are not replayed. Set any
   credentials the target needs in `target.headers`.
 - Every distinct endpoint (`GET /api/products/{id}`: numbers, UUIDs and
@@ -97,6 +99,10 @@ targets:
 
 `--rate`, `--vus`, `--duration` and `--shape` do not apply to a replay;
 change `speed` instead.
+
+In the terminal console, `/run replay access.log --target
+http://localhost:8080 --speed 2` replays a recording without writing a
+scenario, with the built-in engine on your machine.
 
 ## Targeted stresses
 

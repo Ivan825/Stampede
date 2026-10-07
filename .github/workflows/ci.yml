@@ -26,9 +26,56 @@ jobs:
           if [ -n "$out" ]; then echo "needs gofmt -s:"; echo "$out"; exit 1; fi
       - name: go vet
         run: go vet ./...
+      - name: the Compose file and its profiles parse
+        run: docker compose --profile browser --profile observability config --quiet
       - uses: golangci/golangci-lint-action@v8
         with:
           version: latest
+
+  proto:
+    # Lint the protobuf definitions and refuse changes that break the wire
+    # or JSON encoding: against the base branch for a pull request, the
+    # previous commit for a push.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: bufbuild/buf-action@v1
+        with:
+          version: 1.73.0
+          setup_only: true
+      - name: buf lint
+        run: buf lint
+      - name: buf breaking
+        env:
+          BASE: ${{ github.event_name == 'pull_request' && github.event.pull_request.base.sha || github.event.before }}
+        run: |
+          # A new branch's first push has no previous commit.
+          if [ -z "$BASE" ] || ! git cat-file -e "$BASE^{commit}" 2>/dev/null; then
+            echo "no base commit to compare with; skipping"
+            exit 0
+          fi
+          buf breaking --against ".git#ref=$BASE"
+
+  docs:
+    # The CLI and REST API reference pages are generated from the commands
+    # and api/openapi.yaml; they must match this commit.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - run: make docs
+      - name: generated reference pages are current
+        run: |
+          if [ -n "$(git status --porcelain -- docs/reference)" ]; then
+            echo "::error title=docs/reference is stale::run make docs and commit the result"
+            git status --porcelain -- docs/reference
+            git diff --stat -- docs/reference
+            exit 1
+          fi
 
   test:
     strategy:

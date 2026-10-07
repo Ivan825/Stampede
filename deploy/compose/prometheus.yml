@@ -1,0 +1,11 @@
+# Prometheus for `docker compose --profile observability`: scrapes the
+# Stampede server's own /metrics (no authentication, internal network).
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+
+scrape_configs:
+  - job_name: stampede-server
+    metrics_path: /metrics
+    static_configs:
+      - targets: ["server:8080"]

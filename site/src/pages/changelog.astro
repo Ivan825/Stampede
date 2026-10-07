@@ -1,0 +1,13 @@
+---
+import Site from '../layouts/Site.astro';
+import { changelogHTML, GITHUB } from '../lib/data';
+const html = changelogHTML();
+---
+<Site title="Changelog" description="What changed in each version of Stampede.">
+  <div class="wrap">
+    <header class="page-head"><span class="num">CHANGELOG</span><h1>What changed.</h1><p>Built from <a href={`${GITHUB}/blob/main/CHANGELOG.md`}>CHANGELOG.md</a> in the repository.</p></header>
+    <section class="block">
+      {html ? <div class="prose" set:html={html} /> : <p class="lede">No changelog yet.</p>}
+    </section>
+  </div>
+</Site>

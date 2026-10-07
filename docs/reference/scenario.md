@@ -1,7 +1,10 @@
 # Scenario reference
 
 The authoritative definition is the [JSON Schema](../../schema/scenario.schema.json);
-`stampede validate file.yaml` checks a file. This page lists every field.
+`stampede validate file.yaml` checks a file, and `stampede validate
+file.yaml --dry-run -e TARGET_URL=...` also runs each journey once with one
+user against the target and reports which ones pass. This page lists every
+field.
 
 ## Top level
 

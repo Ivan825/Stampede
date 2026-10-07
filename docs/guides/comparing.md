@@ -25,6 +25,11 @@ any generator-limited run, are flagged **not comparable**.
 
 `compare` exits with 4 when there is a regression, for CI.
 
+A report can also be a run on the server you signed in to: an argument
+that is not an existing file is taken as a run id, or a unique prefix of
+one, and its report is downloaded (`stampede compare 3f2a91c0 7be01d44`,
+or `--a` and `--b` lists mixing files and run ids).
+
 The JSON output (`--json`) also compares each request step's p95 and error
 rate under `steps`. Step results do not change the verdict: with many steps,
 some differ by chance. Use them to find which step a change comes from. A

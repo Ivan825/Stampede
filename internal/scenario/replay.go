@@ -24,6 +24,9 @@ const ModeReplay = "replay"
 // ExecReplay is the executor of replay plans.
 const ExecReplay = "replay"
 
+// MaxReplaySpan is the longest a replay may last, after speed.
+const MaxReplaySpan = 7 * 24 * time.Hour
+
 // Replay reproduces recorded traffic: every request in an access log or
 // HAR file is sent at its recorded time (divided by Speed), as an open
 // model, so the target sees the recorded arrival pattern.
@@ -221,6 +224,13 @@ func ParseRecording(b []byte, opt Replay) (*Recording, error) {
 	speed := opt.Speed
 	if speed <= 0 {
 		speed = 1
+	}
+	// A plan holds a rate for every second of the replay, so its span is
+	// bounded; the check is in float seconds so a huge span or a tiny
+	// speed cannot overflow a Duration first.
+	if span := reqs[len(reqs)-1].at.Sub(reqs[0].at).Seconds() / speed; !(span <= MaxReplaySpan.Seconds()) {
+		return nil, fmt.Errorf("the recording spans %s at speed %g; a replay can last at most %s (raise load.replay.speed or trim the file)",
+			reqs[len(reqs)-1].at.Sub(reqs[0].at).Round(time.Second), speed, MaxReplaySpan)
 	}
 	rec := &Recording{Skipped: skipped}
 	index := map[string]int{}

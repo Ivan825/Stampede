@@ -5,6 +5,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"net/url"
 	"os"
 	"path/filepath"
@@ -21,7 +22,8 @@ import (
 )
 
 func newPackCmd() *cobra.Command {
-	cmd := &cobra.Command{Use: "pack", Short: "List, install and test product packs"}
+	cmd := &cobra.Command{Use: "pack", Short: "List, install, test and create product packs"}
+	cmd.AddCommand(newPackCreateCmd())
 	cmd.AddCommand(&cobra.Command{
 		Use:   "list",
 		Short: "List product packs and whether each is shipped or planned",
@@ -72,7 +74,7 @@ func newPackCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			return testPack(cmd, p, target, env)
+			return testPack(cmd.Context(), cmd.OutOrStdout(), p, target, env)
 		},
 	}
 	test.Flags().StringVar(&target, "target", "", "target base URL (sets TARGET_URL)")
@@ -108,7 +110,7 @@ func missingVariables(p *pack.Pack, env map[string]string) []string {
 // testPack dry-runs every journey of a pack. It installs the pack into a
 // temporary folder first so relative data paths resolve as they would
 // for a user.
-func testPack(cmd *cobra.Command, p *pack.Pack, target string, envKV []string) error {
+func testPack(ctx context.Context, out io.Writer, p *pack.Pack, target string, envKV []string) error {
 	if target == "" {
 		return errors.New("--target is required")
 	}
@@ -133,15 +135,14 @@ func testPack(cmd *cobra.Command, p *pack.Pack, target string, envKV []string) e
 		return err
 	}
 	policy := safety.NewHostPolicy(u.Hostname(), nil)
-	out := cmd.OutOrStdout()
 	failed := 0
 	for _, f := range files {
 		s, err := scenario.LoadFile(filepath.Join(tmp, p.Name, filepath.FromSlash(f)))
 		if err != nil {
 			return err
 		}
-		ctx, cancel := context.WithTimeout(cmd.Context(), 2*time.Minute)
-		res, err := pack.DryRun(ctx, f, s, env, policy.Allow)
+		fctx, cancel := context.WithTimeout(ctx, 2*time.Minute)
+		res, err := pack.DryRun(fctx, f, s, env, policy.Allow)
 		cancel()
 		if err != nil {
 			return err
@@ -162,10 +163,16 @@ func testPack(cmd *cobra.Command, p *pack.Pack, target string, envKV []string) e
 	return nil
 }
 
+// initOptions are stampede init's settings.
+type initOptions struct {
+	target, dir string
+	env         []string
+	// yes skips the confirmation read from in.
+	yes bool
+}
+
 func newInitCmd() *cobra.Command {
-	var target, dir string
-	var env []string
-	var yes bool
+	o := initOptions{}
 	cmd := &cobra.Command{
 		Use:   "init",
 		Short: "Detect what kind of product a target is and set up the matching pack",
@@ -176,87 +183,95 @@ installs the pack into ./stampede and dry-runs its journeys once against
 the target. A pack that needs more than the target's URL (the address of
 a broker, for example) says what to pass with -e.`,
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			if target == "" {
-				return errors.New("--target is required, e.g. stampede init --target http://localhost:8090")
-			}
-			u, err := url.Parse(target)
-			if err != nil || u.Host == "" {
-				return fmt.Errorf("invalid --target %q", target)
-			}
-			out := cmd.OutOrStdout()
-			ctx, cancel := context.WithTimeout(cmd.Context(), 30*time.Second)
-			defer cancel()
-			ev, err := pack.Probe(ctx, u, nil)
-			if err != nil {
-				return err
-			}
-			if ev.OpenAPI {
-				fmt.Fprintf(out, "Found an OpenAPI document with %d paths.\n", len(ev.Paths))
-			}
-			if ev.OIDC {
-				fmt.Fprintln(out, "Found an OpenID Connect discovery document.")
-			}
-			shipped, err := pack.Shipped()
-			if err != nil {
-				return err
-			}
-			matches := pack.Score(ev, shipped)
-			if len(matches) == 0 {
-				fmt.Fprintln(out, "No shipped pack matches this target. Run `stampede pack list` to see the packs, or write a scenario by hand (see README).")
-				return nil
-			}
-			best := matches[0]
-			fmt.Fprintf(out, "This looks like %s (%s).\n", best.Pack.Title, strings.Join(firstN(best.Reasons, 4), ", "))
-			if !yes {
-				fmt.Fprintf(out, "Set up the %s pack in ./%s? [Y/n] ", best.Pack.Name, dir)
-				line, _ := bufio.NewReader(cmd.InOrStdin()).ReadString('\n')
-				if a := strings.ToLower(strings.TrimSpace(line)); a != "" && a != "y" && a != "yes" {
-					fmt.Fprintln(out, "Nothing installed.")
-					return nil
-				}
-			}
-			files, err := best.Pack.Install(dir, false)
-			if err != nil {
-				return err
-			}
-			root := filepath.Join(dir, best.Pack.Name)
-			var flags string
-			for _, kv := range env {
-				flags += " -e " + kv
-			}
-			if missing := missingVariables(best.Pack, packEnv(target, env)); len(missing) > 0 {
-				fmt.Fprintf(out, "Installed %d files into %s. The pack also needs:\n", len(files), root)
-				for _, k := range missing {
-					fmt.Fprintf(out, "  %s: %s\n", k, best.Pack.Variables[k].Description)
-				}
-				fmt.Fprintf(out, "\nNext: stampede pack test %s --target %s%s -e %s=...\n", root, target, flags, missing[0])
-				return nil
-			}
-			fmt.Fprintf(out, "Installed %d files into %s. Checking each journey once against %s:\n", len(files), root, target)
-			if err := testPack(cmd, best.Pack, target, env); err != nil {
-				fmt.Fprintf(out, "\nSome journeys need adjusting to this API (paths or JSON fields). Edit the files in %s and run stampede pack test %s --target %s%s\n",
-					root, root, target, flags)
-				return err
-			}
-			next := "journeys"
-			if files, err := best.Pack.Files(); err == nil && len(files) > 0 {
-				next = files[0]
-				for _, f := range files {
-					if strings.HasSuffix(f, "-mix.yaml") {
-						next = f
-						break
-					}
-				}
-			}
-			fmt.Fprintf(out, "\nNext: stampede run %s -e TARGET_URL=%s%s\n", filepath.Join(root, filepath.FromSlash(next)), target, flags)
-			return nil
+			return runInit(cmd.Context(), cmd.InOrStdin(), cmd.OutOrStdout(), o)
 		},
 	}
-	cmd.Flags().StringVar(&target, "target", "", "base URL of the system to test")
-	cmd.Flags().StringVar(&dir, "dir", "stampede", "folder to install the pack into")
-	cmd.Flags().BoolVarP(&yes, "yes", "y", false, "do not ask for confirmation")
-	cmd.Flags().StringArrayVarP(&env, "env", "e", nil, "KEY=VALUE for the pack's other variables, such as a broker address (repeatable)")
+	cmd.Flags().StringVar(&o.target, "target", "", "base URL of the system to test")
+	cmd.Flags().StringVar(&o.dir, "dir", "stampede", "folder to install the pack into")
+	cmd.Flags().BoolVarP(&o.yes, "yes", "y", false, "do not ask for confirmation")
+	cmd.Flags().StringArrayVarP(&o.env, "env", "e", nil, "KEY=VALUE for the pack's other variables, such as a broker address (repeatable)")
 	return cmd
+}
+
+// runInit is stampede init, also used by the terminal console's /init.
+func runInit(ctx context.Context, in io.Reader, out io.Writer, o initOptions) error {
+	target, dir, env := o.target, o.dir, o.env
+	if dir == "" {
+		dir = "stampede"
+	}
+	if target == "" {
+		return errors.New("--target is required, e.g. stampede init --target http://localhost:8090")
+	}
+	u, err := url.Parse(target)
+	if err != nil || u.Host == "" {
+		return fmt.Errorf("invalid --target %q", target)
+	}
+	pctx, cancel := context.WithTimeout(ctx, 30*time.Second)
+	defer cancel()
+	ev, err := pack.Probe(pctx, u, nil)
+	if err != nil {
+		return err
+	}
+	if ev.OpenAPI {
+		fmt.Fprintf(out, "Found an OpenAPI document with %d paths.\n", len(ev.Paths))
+	}
+	if ev.OIDC {
+		fmt.Fprintln(out, "Found an OpenID Connect discovery document.")
+	}
+	shipped, err := pack.Shipped()
+	if err != nil {
+		return err
+	}
+	matches := pack.Score(ev, shipped)
+	if len(matches) == 0 {
+		fmt.Fprintln(out, "No shipped pack matches this target. Run `stampede pack list` to see the packs, or write a scenario by hand (see README).")
+		return nil
+	}
+	best := matches[0]
+	fmt.Fprintf(out, "This looks like %s (%s).\n", best.Pack.Title, strings.Join(firstN(best.Reasons, 4), ", "))
+	if !o.yes {
+		fmt.Fprintf(out, "Set up the %s pack in ./%s? [Y/n] ", best.Pack.Name, dir)
+		line, _ := bufio.NewReader(in).ReadString('\n')
+		if a := strings.ToLower(strings.TrimSpace(line)); a != "" && a != "y" && a != "yes" {
+			fmt.Fprintln(out, "Nothing installed.")
+			return nil
+		}
+	}
+	files, err := best.Pack.Install(dir, false)
+	if err != nil {
+		return err
+	}
+	root := filepath.Join(dir, best.Pack.Name)
+	var flags string
+	for _, kv := range env {
+		flags += " -e " + kv
+	}
+	if missing := missingVariables(best.Pack, packEnv(target, env)); len(missing) > 0 {
+		fmt.Fprintf(out, "Installed %d files into %s. The pack also needs:\n", len(files), root)
+		for _, k := range missing {
+			fmt.Fprintf(out, "  %s: %s\n", k, best.Pack.Variables[k].Description)
+		}
+		fmt.Fprintf(out, "\nNext: stampede pack test %s --target %s%s -e %s=...\n", root, target, flags, missing[0])
+		return nil
+	}
+	fmt.Fprintf(out, "Installed %d files into %s. Checking each journey once against %s:\n", len(files), root, target)
+	if err := testPack(ctx, out, best.Pack, target, env); err != nil {
+		fmt.Fprintf(out, "\nSome journeys need adjusting to this API (paths or JSON fields). Edit the files in %s and run stampede pack test %s --target %s%s\n",
+			root, root, target, flags)
+		return err
+	}
+	next := "journeys"
+	if files, err := best.Pack.Files(); err == nil && len(files) > 0 {
+		next = files[0]
+		for _, f := range files {
+			if strings.HasSuffix(f, "-mix.yaml") {
+				next = f
+				break
+			}
+		}
+	}
+	fmt.Fprintf(out, "\nNext: stampede run %s -e TARGET_URL=%s%s\n", filepath.Join(root, filepath.FromSlash(next)), target, flags)
+	return nil
 }
 
 func firstN(s []string, n int) []string {

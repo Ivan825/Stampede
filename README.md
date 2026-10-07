@@ -166,9 +166,10 @@ server traces its API and runs with OpenTelemetry when an OTLP endpoint is
 set, and a Grafana dashboard covers its own metrics
 ([integrations](docs/guides/integrations.md)).
 
-**Terminal.** `stampede` alone opens a console: `/run spike`, `/runs`,
-`/kill all`, or plain language such as "find the breaking point for
-checkout", always confirmed before it runs.
+**Terminal.** `stampede` alone opens a console: `/run spike`, `/run soak
+4h`, `/run replay access.log`, `/init <url>`, `/runs`, `/kill all`, or
+plain language such as "find the breaking point for checkout", always
+confirmed before it runs.
 
 **Product packs.** `stampede init` probes a target (its OpenAPI document,
 OpenID Connect discovery, home page and headers) and installs the matching

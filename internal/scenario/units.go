@@ -3,6 +3,7 @@ package scenario
 import (
 	"encoding/json"
 	"fmt"
+	"math"
 	"strconv"
 	"strings"
 	"time"
@@ -26,14 +27,14 @@ func ParseDuration(s string) (Duration, error) {
 		return 0, fmt.Errorf("empty duration")
 	}
 	if f, err := strconv.ParseFloat(s, 64); err == nil {
-		return Duration(f * float64(time.Second)), nil
+		return durationOf(f*float64(time.Second), s)
 	}
 	if strings.HasSuffix(s, "d") {
 		n, err := strconv.ParseFloat(strings.TrimSuffix(s, "d"), 64)
 		if err != nil {
 			return 0, fmt.Errorf("invalid duration %q", s)
 		}
-		return Duration(n * 24 * float64(time.Hour)), nil
+		return durationOf(n*24*float64(time.Hour), s)
 	}
 	v, err := time.ParseDuration(s)
 	if err != nil {
@@ -43,6 +44,21 @@ func ParseDuration(s string) (Duration, error) {
 		return 0, fmt.Errorf("negative duration %q", s)
 	}
 	return Duration(v), nil
+}
+
+// durationOf converts a number of nanoseconds read from s, refusing what
+// a Duration cannot hold: NaN, infinities, negative values and more than
+// about 292 years.
+func durationOf(ns float64, s string) (Duration, error) {
+	switch {
+	case math.IsNaN(ns):
+		return 0, fmt.Errorf("invalid duration %q", s)
+	case ns < 0:
+		return 0, fmt.Errorf("negative duration %q", s)
+	case ns >= math.MaxInt64:
+		return 0, fmt.Errorf("duration %q is too long", s)
+	}
+	return Duration(ns), nil
 }
 
 func (d *Duration) UnmarshalYAML(n *yaml.Node) error {
@@ -87,7 +103,7 @@ func ParseRate(s string) (Rate, error) {
 	s = strings.TrimSpace(s)
 	num, unit, hasUnit := strings.Cut(s, "/")
 	f, err := strconv.ParseFloat(strings.TrimSpace(num), 64)
-	if err != nil || f < 0 {
+	if err != nil || !(f >= 0) || math.IsInf(f, 1) {
 		return 0, fmt.Errorf("invalid rate %q (use forms like 50/s, 3000/m)", s)
 	}
 	if !hasUnit {
@@ -144,13 +160,13 @@ func ParsePercent(s string) (Percent, error) {
 	s = strings.TrimSpace(s)
 	if strings.HasSuffix(s, "%") {
 		f, err := strconv.ParseFloat(strings.TrimSpace(strings.TrimSuffix(s, "%")), 64)
-		if err != nil || f < 0 || f > 100 {
+		if err != nil || !(f >= 0 && f <= 100) {
 			return 0, fmt.Errorf("invalid percentage %q", s)
 		}
 		return Percent(f / 100), nil
 	}
 	f, err := strconv.ParseFloat(s, 64)
-	if err != nil || f < 0 || f > 1 {
+	if err != nil || !(f >= 0 && f <= 1) {
 		return 0, fmt.Errorf("invalid percentage %q (use forms like 1%% or 0.01)", s)
 	}
 	return Percent(f), nil

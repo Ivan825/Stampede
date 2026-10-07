@@ -1,0 +1,50 @@
+name: New product pack
+description: Propose a pack of journeys and stresses for a kind of product
+labels: [pack]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        A pack is a folder of journeys, stresses and default targets for one
+        kind of product; see [docs/guides/packs.md](https://github.com/Ivan825/Stampede/blob/main/docs/guides/packs.md).
+        A pack ships only when its journeys run against a reference app in CI.
+  - type: input
+    id: product
+    attributes:
+      label: Product type
+      description: For example "food delivery" or "exam platforms". `stampede pack list` shows the planned ones.
+    validations:
+      required: true
+  - type: textarea
+    id: journeys
+    attributes:
+      label: Journeys
+      description: What real users of this kind of product do, roughly in what proportions.
+    validations:
+      required: true
+  - type: textarea
+    id: stresses
+    attributes:
+      label: Stresses
+      description: The moments that break this kind of product (a deadline rush, a reconnect storm, contention on one record).
+  - type: input
+    id: protocols
+    attributes:
+      label: Protocols
+      description: HTTP, GraphQL, WebSocket, SSE, gRPC, browser, or a plugin such as mqtt or kafka.
+  - type: textarea
+    id: detect
+    attributes:
+      label: How to recognise it
+      description: API paths, OpenAPI tags, page markup or headers that `stampede init` could use to propose the pack.
+  - type: textarea
+    id: reference
+    attributes:
+      label: Reference app
+      description: An open-source app to test the pack against, or what a small in-memory lab app under examples/packlab would need to do.
+  - type: checkboxes
+    id: contribute
+    attributes:
+      label: Contributing
+      options:
+        - label: I would like to write this pack.

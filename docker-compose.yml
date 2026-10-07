@@ -10,6 +10,14 @@
 # Everything except the UI (8080) and ShopLab (8090) stays on the internal
 # network. The defaults below suit a laptop; change the passwords and the
 # join token before exposing anything.
+#
+# Optional profiles add more services:
+#
+#   --profile browser         a worker with Chromium for browser steps
+#   --profile observability   Prometheus (:9090), Grafana (:3000) and
+#                             Jaeger (:16686) for the server's own metrics
+#                             and traces; set STAMPEDE_OTLP_ENDPOINT to
+#                             http://jaeger:4318 to send traces
 name: stampede
 
 include:
@@ -49,6 +57,9 @@ services:
       # CSV/JSON feeder files for runs. ShopLab's data folder is mounted so
       # its scenarios (which read ../data/users.csv) work unchanged.
       STAMPEDE_DATA_DIR: /srv/data
+      # Tracing is off while this is empty; the observability profile's
+      # Jaeger receives OTLP at http://jaeger:4318.
+      OTEL_EXPORTER_OTLP_ENDPOINT: ${STAMPEDE_OTLP_ENDPOINT:-}
     volumes:
       - stampede-data:/data
       - ./examples/shoplab/data:/srv/data/data:ro
@@ -78,6 +89,62 @@ services:
     <<: *worker
     command: ["worker", "--server", "server:8081", "--mtls", "--name", "worker-2", "--region", "local"]
 
+  # --profile browser: a worker with Chromium, for scenarios with browser
+  # steps. The other workers refuse such runs.
+  browser-worker:
+    <<: *worker
+    profiles: [browser]
+    build:
+      context: .
+      dockerfile: deploy/docker/Dockerfile.browser-worker
+    image: ghcr.io/ivan825/stampede-browser-worker:${STAMPEDE_VERSION:-local}
+    command: ["worker", "--server", "server:8081", "--mtls", "--name", "browser-worker", "--region", "local"]
+
+  # --profile observability: the server's own metrics and traces.
+  prometheus:
+    image: prom/prometheus:v3.5.0
+    profiles: [observability]
+    command: ["--config.file=/etc/prometheus/prometheus.yml", "--storage.tsdb.retention.time=7d"]
+    ports:
+      - "${STAMPEDE_PROMETHEUS_PORT:-9090}:9090"
+    volumes:
+      - ./deploy/compose/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - stampede-prometheus:/prometheus
+    restart: unless-stopped
+
+  grafana:
+    image: grafana/grafana:12.1.0
+    profiles: [observability]
+    ports:
+      - "${STAMPEDE_GRAFANA_PORT:-3000}:3000"
+    environment:
+      GF_SECURITY_ADMIN_PASSWORD: ${STAMPEDE_GRAFANA_PASSWORD:-admin}
+      GF_AUTH_ANONYMOUS_ENABLED: "true"
+      GF_AUTH_ANONYMOUS_ORG_ROLE: Viewer
+      GF_DASHBOARDS_DEFAULT_HOME_DASHBOARD_PATH: /etc/grafana/dashboards/stampede/stampede-server.json
+    volumes:
+      - ./deploy/compose/grafana/datasources.yml:/etc/grafana/provisioning/datasources/stampede.yml:ro
+      - ./deploy/compose/grafana/dashboards.yml:/etc/grafana/provisioning/dashboards/stampede.yml:ro
+      - ./deploy/grafana/stampede-server.json:/etc/grafana/dashboards/stampede/stampede-server.json:ro
+      - stampede-grafana:/var/lib/grafana
+    depends_on:
+      - prometheus
+    restart: unless-stopped
+
+  jaeger:
+    # All in one: OTLP on 4317 (gRPC) and 4318 (HTTP), the UI on 16686,
+    # traces kept in memory.
+    image: jaegertracing/jaeger:2.9.0
+    profiles: [observability]
+    environment:
+      # Listen on the Compose network, not only inside the container.
+      JAEGER_LISTEN_HOST: 0.0.0.0
+    ports:
+      - "${STAMPEDE_JAEGER_PORT:-16686}:16686"
+    restart: unless-stopped
+
 volumes:
   stampede-db:
   stampede-data:
+  stampede-prometheus:
+  stampede-grafana:
