@@ -332,11 +332,15 @@ func (h *handlers) startRun(ctx context.Context, p *auth.Principal, pr db.Projec
 	if err := h.checkRegions(r.regions); err != nil {
 		return db.GetRunRow{}, err
 	}
+	settings, err := h.projectSettings(ctx, pr)
+	if err != nil {
+		return db.GetRunRow{}, err
+	}
 	ovJSON, _ := json.Marshal(r.ov)
 	planJSON, _ := json.Marshal(planSummary(r.s))
 	envJSON, _ := json.Marshal(redactedEnv(r.in.env))
 	id, uid := uuid.New(), p.UserID
-	err := h.st.CreateRun(ctx, db.CreateRunParams{
+	err = h.st.CreateRun(ctx, db.CreateRunParams{
 		ID: id, ProjectID: pr.ID, ScenarioID: r.sc.ID, ScenarioVersion: r.version, TargetID: r.tg.ID,
 		Overrides: ovJSON, Plan: planJSON, Env: envJSON, Workers: int32(r.in.workers), Note: r.in.note, CreatedBy: &uid, //nolint:gosec // small
 	})
@@ -347,7 +351,7 @@ func (h *handlers) startRun(ctx context.Context, p *auth.Principal, pr db.Projec
 		"run": id, "version": r.version, "peak": r.plan.Peak(), "mode": r.plan.Mode, "duration": r.plan.TotalDuration().String(),
 	})
 
-	h.runs.launch(&activeRun{id: id, org: p.OrgID, project: pr.ID, target: r.tg.ID, scenario: r.sc.ID, obs: r.obs, faults: r.faults, link: trace.LinkFromContext(ctx)},
+	h.runs.launch(&activeRun{id: id, org: p.OrgID, project: pr.ID, target: r.tg.ID, scenario: r.sc.ID, obs: r.obs, faults: r.faults, link: trace.LinkFromContext(ctx), dryRun: settings.RequireDryRun},
 		ExecSpec{
 			RunID: id.String(), Scenario: r.s, YAML: r.yaml, Env: r.in.env, Secrets: r.secrets,
 			AllowHosts: r.tg.AllowHosts, TargetHost: r.tg.Host, Workers: r.in.workers,

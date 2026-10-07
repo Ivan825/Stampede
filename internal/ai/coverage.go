@@ -159,6 +159,40 @@ type JourneyCheck struct {
 	Traces  []Trace `json:"traces"`
 }
 
+// Problem describes the first failure of a journey's dry run in one line,
+// or returns "" when it passed.
+func (c JourneyCheck) Problem() string {
+	if c.OK {
+		return ""
+	}
+	for _, tr := range c.Traces {
+		if tr.OK {
+			continue
+		}
+		msg := tr.Error
+		for _, st := range tr.Steps {
+			if st.OK {
+				continue
+			}
+			why := st.Error
+			if why == "" && st.Status != 0 {
+				why = fmt.Sprintf("status %d", st.Status)
+			}
+			if why == "" {
+				why = "failed"
+			}
+			if msg != "" && msg != why {
+				return fmt.Sprintf("%s (step %s: %s)", msg, st.Step, why)
+			}
+			return fmt.Sprintf("step %s: %s", st.Step, why)
+		}
+		if msg != "" {
+			return msg
+		}
+	}
+	return "the journey did not complete"
+}
+
 // DryRunScenario runs every journey of s once against target with one
 // user, under the same host policy and third-party guard as generation.
 func DryRunScenario(ctx context.Context, s *scenario.Scenario, target string, allowHosts []string, env, secrets map[string]string, dataDir string) ([]JourneyCheck, error) {

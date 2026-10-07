@@ -809,6 +809,28 @@ paths:
                 items: { $ref: "#/components/schemas/Point" }
         "404": { $ref: "#/components/responses/NotFound" }
 
+  /runs/{runId}/events:
+    parameters:
+      - $ref: "#/components/parameters/runId"
+    get:
+      tags: [runs]
+      operationId: listRunEvents
+      summary: Events recorded for a run
+      description: |
+        Workers joining or being lost, safety stops, breakpoint
+        confirmations and, when the project requires one, the dry run
+        before load (dryrun.started, one dryrun.journey per journey, then
+        dryrun.passed or dryrun.failed). Oldest first.
+      responses:
+        "200":
+          description: Events
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/RunEvent" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
   /runs/{runId}/report:
     parameters:
       - $ref: "#/components/parameters/runId"
@@ -1592,6 +1614,18 @@ components:
         maxRate: { type: number, format: double, description: Iterations per second }
         maxVUs: { type: integer }
         maxDurationSeconds: { type: integer }
+
+    RunEvent:
+      type: object
+      required: [at, type, message]
+      properties:
+        at: { type: string, format: date-time }
+        type: { type: string, example: dryrun.journey }
+        message: { type: string }
+        worker: { type: string }
+        details:
+          type: object
+          additionalProperties: true
 
     ProjectSettings:
       type: object

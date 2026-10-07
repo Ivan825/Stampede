@@ -59,6 +59,10 @@ type activeRun struct {
 	faults *runner.FaultPlan
 	// link ties the run's span to the request that started it.
 	link trace.Link
+	// dryRun is set when the project requires a passing dry run before
+	// load; cancelDryRun stops it early (a kill).
+	dryRun       bool
+	cancelDryRun context.CancelFunc
 }
 
 type runManager struct {
@@ -191,6 +195,30 @@ func (m *runManager) execute(r *activeRun, spec ExecSpec, prog *scenario.Program
 	}
 
 	m.setStatus(ctx, r, statusStarting)
+	if r.dryRun {
+		err := m.dryRunGate(ctx, r, spec)
+		r.mu.Lock()
+		killed, stopping := r.killed, r.stopping
+		r.mu.Unlock()
+		switch {
+		case killed || stopping:
+			// Stopped before any load: nothing to report.
+			reason := "killed"
+			if !killed {
+				reason = "stopped"
+			}
+			msg := "the run was " + reason + " during its dry run, before any load"
+			_ = m.s.st.FinishRun(ctx, db.FinishRunParams{ID: r.id, Status: statusAborted, StopReason: &reason, Error: &msg})
+			m.finished.WithLabelValues(statusAborted).Inc()
+			m.publishStatus(ctx, r)
+			m.s.notify.runFinished(r, statusAborted, msg, nil)
+			return
+		case err != nil:
+			fail(err)
+			return
+		}
+		span.AddEvent("dry run passed")
+	}
 	exec, err := m.s.cfg.Executor.Start(ctx, spec)
 	if err != nil {
 		fail(fmt.Errorf("start: %w", err))
@@ -383,9 +411,12 @@ func (m *runManager) stop(id uuid.UUID) bool {
 		return false
 	}
 	r.mu.Lock()
-	exec := r.exec
+	exec, cancelDry := r.exec, r.cancelDryRun
 	r.stopping = true
 	r.mu.Unlock()
+	if exec == nil && cancelDry != nil {
+		cancelDry()
+	}
 	if exec != nil {
 		exec.Stop("stopped")
 	}
@@ -405,8 +436,11 @@ func (m *runManager) kill(id uuid.UUID, by string) bool {
 		r.killedBy = by
 	}
 	r.killed = true
-	exec := r.exec
+	exec, cancelDry := r.exec, r.cancelDryRun
 	r.mu.Unlock()
+	if cancelDry != nil {
+		cancelDry()
+	}
 	if exec != nil {
 		exec.Kill()
 	}
