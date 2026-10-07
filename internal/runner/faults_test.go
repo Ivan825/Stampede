@@ -81,7 +81,7 @@ faults:
 	if err := rep.WriteHTML(&html); err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(html.String(), `class="band"`) || !strings.Contains(html.String(), "Injected faults") {
+	if !strings.Contains(html.String(), `class="band fault"`) || !strings.Contains(html.String(), "Injected faults") {
 		t.Error("the HTML report must shade and list the fault")
 	}
 }
