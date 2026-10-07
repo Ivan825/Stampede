@@ -230,6 +230,10 @@ const methods = ['get', 'post', 'put', 'patch', 'delete', 'head', 'options'];
 export const mockShopSpec = `openapi: 3.0.3
 info: { title: Shop, version: "2" }
 paths:
+  /:
+    get: { summary: Home page }
+  /api/search:
+    get: { summary: Search products }
   /api/products:
     get: { summary: List products }
   /api/products/{id}:

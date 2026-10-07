@@ -136,6 +136,14 @@ const scenarioRoute = createRoute({
   component: lazyRouteComponent(() => import('@/pages/ScenarioEditor'), 'ScenarioEditorPage'),
 });
 
+const scenarioCoverageRoute = createRoute({
+  getParentRoute: () => projectRoute,
+  path: '/scenarios/$scenarioId/coverage',
+  validateSearch: (s: Record<string, unknown>): { tab?: 'coverage' | 'drift' } =>
+    s.tab === 'coverage' || s.tab === 'drift' ? { tab: s.tab } : {},
+  component: lazyRouteComponent(() => import('@/pages/ScenarioCoverage'), 'ScenarioCoveragePage'),
+});
+
 const schedulesRoute = createRoute({
   getParentRoute: () => projectRoute,
   path: '/schedules',
@@ -199,6 +207,18 @@ const runRoute = createRoute({
   component: lazyRouteComponent(() => import('@/pages/RunPage'), 'RunPage'),
 });
 
+const libraryRoute = createRoute({
+  getParentRoute: () => appRoute,
+  path: '/library',
+  component: lazyRouteComponent(() => import('@/pages/Library'), 'LibraryPage'),
+});
+
+const packRoute = createRoute({
+  getParentRoute: () => appRoute,
+  path: '/library/$packName',
+  component: lazyRouteComponent(() => import('@/pages/Library'), 'PackPage'),
+});
+
 const workersRoute = createRoute({
   getParentRoute: () => appRoute,
   path: '/workers',
@@ -238,6 +258,7 @@ const routeTree = rootRoute.addChildren([
       scenariosRoute,
       scenarioNewRoute,
       scenarioRoute,
+      scenarioCoverageRoute,
       schedulesRoute,
       targetsRoute,
       secretsRoute,
@@ -246,6 +267,8 @@ const routeTree = rootRoute.addChildren([
       compareRoute,
     ]),
     runRoute,
+    libraryRoute,
+    packRoute,
     workersRoute,
     settingsRoute,
   ]),
