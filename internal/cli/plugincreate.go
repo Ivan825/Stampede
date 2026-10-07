@@ -132,7 +132,7 @@ func sdkVersion() string {
 
 func goCmd(ctx context.Context, log io.Writer, dir string, args ...string) error {
 	fmt.Fprintf(log, "go %s\n", strings.Join(args, " "))
-	cmd := exec.CommandContext(ctx, "go", args...)
+	cmd := exec.CommandContext(ctx, "go", args...) //nolint:gosec // go get and go mod tidy in the new module
 	cmd.Dir = dir
 	cmd.Stdout, cmd.Stderr = log, log
 	if err := cmd.Run(); err != nil {

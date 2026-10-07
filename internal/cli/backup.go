@@ -28,8 +28,9 @@ The backup holds runs, scenarios, reports and encrypted secrets. Back up
 the master key as well, and keep it apart from the dump: without it the
 secrets cannot be decrypted, and the two together unlock them. See
 docs/deploy/upgrades.md.`,
-		Example: `  stampede backup stampede-$(date +%F).dump --database-url postgres://stampede:...@db.internal:5432/stampede`,
-		Args:    cobra.ExactArgs(1),
+		Example: `  export STAMPEDE_DATABASE_URL=postgres://stampede@db.internal:5432/stampede PGPASSWORD=...
+  stampede backup stampede-$(date +%F).dump`,
+		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if dbURL == "" {
 				return errors.New("set --database-url or STAMPEDE_DATABASE_URL")
@@ -78,7 +79,8 @@ a database with the same TimescaleDB version.
 Start the server afterwards with the master key that matches the backup;
 it applies any migrations the backup is missing.`,
 		Example: `  createdb -h db.internal -U stampede stampede
-  stampede restore stampede-2026-10-01.dump --database-url postgres://stampede:...@db.internal:5432/stampede`,
+  export STAMPEDE_DATABASE_URL=postgres://stampede@db.internal:5432/stampede PGPASSWORD=...
+  stampede restore stampede-2026-10-01.dump`,
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if dbURL == "" {

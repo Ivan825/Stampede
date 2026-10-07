@@ -22,7 +22,8 @@ stampede restore <file> [flags]
 
 ```
   createdb -h db.internal -U stampede stampede
-  stampede restore stampede-2026-10-01.dump --database-url postgres://stampede:...@db.internal:5432/stampede
+  export STAMPEDE_DATABASE_URL=postgres://stampede@db.internal:5432/stampede PGPASSWORD=...
+  stampede restore stampede-2026-10-01.dump
 ```
 
 ### Options

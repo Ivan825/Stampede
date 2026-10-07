@@ -20,7 +20,8 @@ stampede backup <file> [flags]
 ### Examples
 
 ```
-  stampede backup stampede-$(date +%F).dump --database-url postgres://stampede:...@db.internal:5432/stampede
+  export STAMPEDE_DATABASE_URL=postgres://stampede@db.internal:5432/stampede PGPASSWORD=...
+  stampede backup stampede-$(date +%F).dump
 ```
 
 ### Options

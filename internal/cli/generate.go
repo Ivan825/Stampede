@@ -52,7 +52,7 @@ func newGenerateCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:     "generate",
 		Aliases: []string{"gen"},
-		Short: "Draft a scenario with an AI model and dry-run every journey (optional, bring your own key)",
+		Short:   "Draft a scenario with an AI model and dry-run every journey (optional, bring your own key)",
 		Long: `Generate a scenario from a description, an OpenAPI spec, a HAR recording
 and/or an access log, using a language model you choose. The model only
 writes the scenario; it is never used while load runs.
