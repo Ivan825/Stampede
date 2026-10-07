@@ -29,6 +29,7 @@ jobs:
     # The same workload through Stampede, k6 and wrk2, each checked against
     # the echo server's ground truth.
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-go@v7

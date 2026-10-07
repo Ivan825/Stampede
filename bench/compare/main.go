@@ -349,12 +349,24 @@ func runWrk2(c benchCase, addr string) toolResult {
 	t.Version = "wrk2"
 	// wrk2 gives every connection its own fixed schedule (rate/conns per
 	// second), so a slow reply delays the requests queued behind it on that
-	// connection and wrk2 rightly counts the wait. With one request per
-	// second per connection, a 300 ms reply delays none, as with k6's and
+	// connection and wrk2 rightly counts the wait. At three requests a
+	// second per connection the gap (333 ms) is longer than the slowest
+	// reply in these cases (300 ms), so none is delayed, as with k6's and
 	// Stampede's pools.
-	conns := max(c.Rate, 16)
-	cmd := exec.Command(bin, "-t2", "-c"+strconv.Itoa(conns), "-d"+c.Duration, "-R"+strconv.Itoa(c.Rate), "--latency", "http://"+addr+"/echo")
+	conns := max(c.Rate/3, 16)
+	d, err := time.ParseDuration(c.Duration)
+	if err != nil {
+		t.Note = err.Error()
+		return t
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), d+2*time.Minute)
+	defer cancel()
+	cmd := exec.CommandContext(ctx, bin, "-t2", "-c"+strconv.Itoa(conns), "-d"+c.Duration, "-R"+strconv.Itoa(c.Rate), "--latency", "http://"+addr+"/echo")
 	out, err := cmd.CombinedOutput()
+	if ctx.Err() != nil {
+		t.Note = fmt.Sprintf("wrk2 did not finish within %s; last output: %s", d+2*time.Minute, lastLine(string(out), ctx.Err()))
+		return t
+	}
 	if err != nil {
 		t.Note = "wrk2 failed: " + lastLine(string(out), err)
 		return t
