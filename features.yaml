@@ -21,6 +21,8 @@ groups:
       - { name: "Fault injection agent: slow, cut or kill dependencies mid-run", status: shipped, doc: docs/guides/faults }
       - { name: "Test data from CSV, JSON, lists, ranges, generated fake data or a SQL query", status: shipped, doc: docs/concepts/scenarios }
       - { name: "Large-payload tests with generated bodies up to 64 MB", status: shipped, doc: docs/guides/test-types }
+      - { name: "JavaScript script steps between requests", status: shipped, doc: docs/concepts/scenarios }
+      - { name: "JSON Schema response checks", status: shipped, doc: docs/concepts/scenarios }
   - name: Protocols
     features:
       - { name: "HTTP/1.1 and HTTP/2 (TLS and h2c)", status: shipped, doc: docs/protocols }

@@ -47,6 +47,7 @@ Each step does exactly one thing.
 | Weighted choice | `branch: [{weight: 70, steps: [...]}, {weight: 30, steps: [...]}]` |
 | Repeat | `loop: 3` with `steps:`; `while: "${more}"` with `max:` and `steps:` |
 | Named group | `group: login` with `steps:` |
+| JavaScript | `script: "vars.total = vars.price * vars.qty"` with `sets: [total]` (see below) |
 | Condition on any step | `if: "${token != ''}"` |
 | Other protocols | `graphql:`, `ws:`, `sse:`, `grpc:` (see [protocols](../protocols.md)) |
 
@@ -59,6 +60,36 @@ Request steps take `headers`, `query`, one of `json`, `form` or `body`,
   check: { status: 200, json: { "$.token": exists } }
   extract: { token: "$.token" }
 ```
+
+### Script steps
+
+When an expression is not enough, a `script` step runs JavaScript between
+requests:
+
+```yaml
+- get: /api/cart
+  extract: { cart: "$" }
+- script: |
+    let total = 0;
+    for (const item of vars.cart.items) total += item.price * item.qty;
+    if (total === 0) fail("the cart is empty");
+    vars.total = total;
+    vars.coupon = total > 100 ? "BIG10" : "";
+  sets: [total, coupon]
+- post: /api/checkout
+  json: { amount: "${total}", coupon: "${coupon}" }
+```
+
+The script sees the user's variables as `vars` and may change or add to
+them; list under `sets` the new names later steps use, so the scenario
+can still be checked before it runs. It can read `env`, `data` (this
+iteration's feeder rows), `vu` and `iteration`, call `fail(message)` to
+fail the iteration, and `console.log`, which goes to the debug log. It has
+no network, file or timer access, `return` ends it early, an uncaught
+error fails the iteration, and a run longer than one second is stopped.
+Each virtual user has its own JavaScript runtime, compiled once per run,
+so scripts cost little, but they run on the load generator: keep them
+short.
 
 ## Expressions
 
