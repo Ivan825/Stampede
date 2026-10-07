@@ -33,14 +33,20 @@ func slugify(name string) string {
 	return s
 }
 
-func projectOf(p db.Project) gen.Project {
+func projectOf(p db.Project, role auth.Role) gen.Project {
 	d := p.Description
-	return gen.Project{Id: p.ID, Name: p.Name, Slug: p.Slug, Description: &d, CreatedAt: p.CreatedAt}
+	out := gen.Project{Id: p.ID, Name: p.Name, Slug: p.Slug, Description: &d, CreatedAt: p.CreatedAt}
+	if role != "" {
+		r := gen.Role(role)
+		out.Role = &r
+	}
+	return out
 }
 
-// project loads a project in the caller's organisation.
+// project loads a project in the caller's organisation and checks the
+// caller's role in it (see needIn).
 func (h *handlers) project(ctx context.Context, id uuid.UUID, min auth.Role) (*auth.Principal, db.Project, error) {
-	p, err := need(ctx, min)
+	p, err := need(ctx, auth.PermView)
 	if err != nil {
 		return nil, db.Project{}, err
 	}
@@ -48,7 +54,11 @@ func (h *handlers) project(ctx context.Context, id uuid.UUID, min auth.Role) (*a
 	if err != nil {
 		return nil, db.Project{}, notFoundOr(err, "project")
 	}
-	return p, pr, nil
+	pp, err := h.needIn(ctx, pr.ID, min)
+	if err != nil {
+		return nil, db.Project{}, err
+	}
+	return pp, pr, nil
 }
 
 func (h *handlers) ListProjects(ctx context.Context, _ gen.ListProjectsRequestObject) (gen.ListProjectsResponseObject, error) {
@@ -60,9 +70,17 @@ func (h *handlers) ListProjects(ctx context.Context, _ gen.ListProjectsRequestOb
 	if err != nil {
 		return nil, err
 	}
+	ovs, err := h.st.ListUserProjectRoles(ctx, db.ListUserProjectRolesParams{OrgID: p.OrgID, UserID: p.UserID})
+	if err != nil {
+		return nil, err
+	}
+	overrides := map[uuid.UUID]auth.Role{}
+	for _, o := range ovs {
+		overrides[o.ProjectID] = auth.Role(o.Role)
+	}
 	out := gen.ListProjects200JSONResponse{}
 	for _, r := range rows {
-		out = append(out, projectOf(r))
+		out = append(out, projectOf(r, p.InProject(overrides[r.ID]).Role))
 	}
 	return out, nil
 }
@@ -92,15 +110,15 @@ func (h *handlers) CreateProject(ctx context.Context, req gen.CreateProjectReque
 	if err != nil {
 		return nil, err
 	}
-	return gen.CreateProject201JSONResponse(projectOf(pr)), nil
+	return gen.CreateProject201JSONResponse(projectOf(pr, p.Role)), nil
 }
 
 func (h *handlers) GetProject(ctx context.Context, req gen.GetProjectRequestObject) (gen.GetProjectResponseObject, error) {
-	_, pr, err := h.project(ctx, req.ProjectId, auth.PermView)
+	p, pr, err := h.project(ctx, req.ProjectId, auth.PermView)
 	if err != nil {
 		return nil, err
 	}
-	return gen.GetProject200JSONResponse(projectOf(pr)), nil
+	return gen.GetProject200JSONResponse(projectOf(pr, p.Role)), nil
 }
 
 func (h *handlers) UpdateProject(ctx context.Context, req gen.UpdateProjectRequestObject) (gen.UpdateProjectResponseObject, error) {
@@ -126,13 +144,19 @@ func (h *handlers) UpdateProject(ctx context.Context, req gen.UpdateProjectReque
 	if err != nil {
 		return nil, err
 	}
-	return gen.UpdateProject200JSONResponse(projectOf(pr)), nil
+	return gen.UpdateProject200JSONResponse(projectOf(pr, p.Role)), nil
 }
 
 func (h *handlers) DeleteProject(ctx context.Context, req gen.DeleteProjectRequestObject) (gen.DeleteProjectResponseObject, error) {
-	p, pr, err := h.project(ctx, req.ProjectId, auth.PermManageUsers)
+	// Deleting a project needs an organisation admin; a project-level
+	// override does not grant it.
+	p, err := need(ctx, auth.PermManageUsers)
 	if err != nil {
 		return nil, err
+	}
+	pr, err := h.st.GetProject(ctx, db.GetProjectParams{ID: req.ProjectId, OrgID: p.OrgID})
+	if err != nil {
+		return nil, notFoundOr(err, "project")
 	}
 	if h.runs.projectHasActiveRun(pr.ID) {
 		return nil, errConflict("stop the project's active runs first")
@@ -147,18 +171,7 @@ func (h *handlers) DeleteProject(ctx context.Context, req gen.DeleteProjectReque
 // Targets.
 
 func targetOf(t db.Target) gen.Target {
-	caps := gen.Caps{}
-	if t.MaxRate != nil {
-		caps.MaxRate = t.MaxRate
-	}
-	if t.MaxVus != nil {
-		v := int(*t.MaxVus)
-		caps.MaxVUs = &v
-	}
-	if t.MaxDurationS != nil {
-		v := int(*t.MaxDurationS)
-		caps.MaxDurationSeconds = &v
-	}
+	caps := capsOf(t.MaxRate, t.MaxVus, t.MaxDurationS)
 	allow := t.AllowHosts
 	return gen.Target{
 		Id: t.ID, ProjectId: t.ProjectID, Name: t.Name, BaseURL: t.BaseUrl, Private: t.Private,
@@ -203,21 +216,57 @@ func (h *handlers) checkTargetInput(ctx context.Context, in gen.TargetCreate) (t
 	if out.allow == nil {
 		out.allow = []string{}
 	}
-	if c := in.Caps; c != nil {
-		if c.MaxRate != nil && *c.MaxRate <= 0 || c.MaxVUs != nil && *c.MaxVUs <= 0 || c.MaxDurationSeconds != nil && *c.MaxDurationSeconds <= 0 {
-			return out, errInvalid("caps must be positive")
-		}
-		out.maxRate = c.MaxRate
-		if c.MaxVUs != nil {
-			v := int32(min(*c.MaxVUs, 10_000_000)) //nolint:gosec // bounded
-			out.maxVUs = &v
-		}
-		if c.MaxDurationSeconds != nil {
-			v := int32(min(*c.MaxDurationSeconds, 30*24*3600)) //nolint:gosec // bounded
-			out.maxDurSecs = &v
-		}
+	out.maxRate, out.maxVUs, out.maxDurSecs, err = capsInput(in.Caps)
+	return out, err
+}
+
+// capsInput checks caps from a request and converts them for storage.
+func capsInput(c *gen.Caps) (maxRate *float64, maxVUs, maxDurSecs *int32, err error) {
+	if c == nil {
+		return nil, nil, nil, nil
 	}
-	return out, nil
+	if c.MaxRate != nil && *c.MaxRate <= 0 || c.MaxVUs != nil && *c.MaxVUs <= 0 || c.MaxDurationSeconds != nil && *c.MaxDurationSeconds <= 0 {
+		return nil, nil, nil, errInvalid("caps must be positive")
+	}
+	maxRate = c.MaxRate
+	if c.MaxVUs != nil {
+		v := int32(min(*c.MaxVUs, 10_000_000)) //nolint:gosec // bounded
+		maxVUs = &v
+	}
+	if c.MaxDurationSeconds != nil {
+		v := int32(min(*c.MaxDurationSeconds, 30*24*3600)) //nolint:gosec // bounded
+		maxDurSecs = &v
+	}
+	return maxRate, maxVUs, maxDurSecs, nil
+}
+
+// capsOf converts stored caps for the API.
+func capsOf(maxRate *float64, maxVUs, maxDurSecs *int32) gen.Caps {
+	c := gen.Caps{MaxRate: maxRate}
+	if maxVUs != nil {
+		v := int(*maxVUs)
+		c.MaxVUs = &v
+	}
+	if maxDurSecs != nil {
+		v := int(*maxDurSecs)
+		c.MaxDurationSeconds = &v
+	}
+	return c
+}
+
+// safetyCaps converts stored caps for safety.CheckPlan.
+func safetyCaps(maxRate *float64, maxVUs, maxDurSecs *int32) safety.Caps {
+	c := safety.Caps{}
+	if maxRate != nil {
+		c.MaxRate = *maxRate
+	}
+	if maxVUs != nil {
+		c.MaxVUs = int(*maxVUs)
+	}
+	if maxDurSecs != nil {
+		c.MaxDuration = time.Duration(*maxDurSecs) * time.Second
+	}
+	return c
 }
 
 func randomHex(n int) string {
@@ -271,7 +320,7 @@ func (h *handlers) CreateTarget(ctx context.Context, req gen.CreateTargetRequest
 }
 
 func (h *handlers) target(ctx context.Context, id uuid.UUID, min auth.Role) (*auth.Principal, db.Target, error) {
-	p, err := need(ctx, min)
+	p, err := need(ctx, auth.PermView)
 	if err != nil {
 		return nil, db.Target{}, err
 	}
@@ -279,7 +328,11 @@ func (h *handlers) target(ctx context.Context, id uuid.UUID, min auth.Role) (*au
 	if err != nil {
 		return nil, db.Target{}, notFoundOr(err, "target")
 	}
-	return p, t, nil
+	pp, err := h.needIn(ctx, t.ProjectID, min)
+	if err != nil {
+		return nil, db.Target{}, err
+	}
+	return pp, t, nil
 }
 
 func (h *handlers) GetTarget(ctx context.Context, req gen.GetTargetRequestObject) (gen.GetTargetResponseObject, error) {

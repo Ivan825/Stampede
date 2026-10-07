@@ -53,7 +53,15 @@ type Principal struct {
 	Email   string
 	Name    string
 	OrgName string
-	Role    Role
+	// Role is the caller's role in the organisation (for a token, the
+	// lower of the token's and its owner's), or in one project once
+	// InProject has applied that project's override.
+	Role Role
+	// OrgRole is the member's own organisation role and TokenRole the
+	// role an API token was created with (empty for sessions). They let a
+	// project override replace the organisation role while a token still
+	// never grants more than its own role.
+	OrgRole, TokenRole Role
 	// Via is "session" or "token:<name>".
 	Via string
 	// SessionHash is set for cookie sessions (used by logout).
@@ -62,6 +70,27 @@ type Principal struct {
 
 // Can reports whether the principal holds at least role min.
 func (p *Principal) Can(min Role) bool { return p != nil && p.Role.AtLeast(min) }
+
+// InProject returns a copy of p acting in one project, where override
+// ("" for none) is the member's per-project role. The override replaces
+// the organisation role, higher or lower, except that owners are owners
+// everywhere; a token still never grants more than its own role.
+func (p *Principal) InProject(override Role) *Principal {
+	org := p.OrgRole
+	if org == "" {
+		org = p.Role
+	}
+	r := org
+	if override.Valid() && override != RoleOwner && org != RoleOwner {
+		r = override
+	}
+	if p.TokenRole != "" {
+		r = Lower(r, p.TokenRole)
+	}
+	cp := *p
+	cp.Role = r
+	return &cp
+}
 
 // Actor describes the principal for the audit log.
 func (p *Principal) Actor() string {

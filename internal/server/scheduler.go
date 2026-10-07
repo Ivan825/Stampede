@@ -155,18 +155,24 @@ func (s *Server) scheduleOwner(ctx context.Context, row db.GetScheduleRow) (*aut
 	if err != nil {
 		return nil, "", err
 	}
-	role := auth.Role(m.Role)
-	if !role.AtLeast(auth.PermRun) {
-		return nil, fmt.Sprintf("its owner %s is now a %s and cannot start runs; an editor can take it over by saving it", m.Email, role), nil
-	}
 	o, err := s.st.GetOrg(ctx, row.OrgID)
 	if err != nil {
 		return nil, "", err
 	}
-	return &auth.Principal{
-		UserID: m.ID, OrgID: row.OrgID, Email: m.Email, Name: m.Name, OrgName: o.Name, Role: role,
+	role := auth.Role(m.Role)
+	p := &auth.Principal{
+		UserID: m.ID, OrgID: row.OrgID, Email: m.Email, Name: m.Name, OrgName: o.Name, Role: role, OrgRole: role,
 		Via: "schedule:" + row.Name,
-	}, "", nil
+	}
+	// The owner's role in the schedule's project decides, override included.
+	pp, err := s.inProject(ctx, p, row.ProjectID)
+	if err != nil {
+		return nil, "", err
+	}
+	if !pp.Can(auth.PermRun) {
+		return nil, fmt.Sprintf("its owner %s is now a %s in this project and cannot start runs; an editor can take it over by saving it", m.Email, pp.Role), nil
+	}
+	return p, "", nil
 }
 
 // skipSchedule records why a firing started no run and, when it needs

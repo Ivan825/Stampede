@@ -24,7 +24,8 @@ func (h *handlers) CreateRunNarrative(ctx context.Context, req gen.CreateRunNarr
 	if err != nil {
 		return nil, err
 	}
-	p, err := need(ctx, auth.PermEditScenarios)
+	// The role was checked in the run's project above.
+	p, err := need(ctx, auth.PermView)
 	if err != nil {
 		return nil, err
 	}

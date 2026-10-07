@@ -109,7 +109,7 @@ func (h *handlers) checkSchedule(ctx context.Context, org uuid.UUID, pr db.Proje
 }
 
 func (h *handlers) schedule(ctx context.Context, id uuid.UUID, min auth.Role) (*auth.Principal, db.GetScheduleRow, error) {
-	p, err := need(ctx, min)
+	p, err := need(ctx, auth.PermView)
 	if err != nil {
 		return nil, db.GetScheduleRow{}, err
 	}
@@ -117,7 +117,11 @@ func (h *handlers) schedule(ctx context.Context, id uuid.UUID, min auth.Role) (*
 	if err != nil {
 		return nil, db.GetScheduleRow{}, notFoundOr(err, "schedule")
 	}
-	return p, row, nil
+	pp, err := h.needIn(ctx, row.ProjectID, min)
+	if err != nil {
+		return nil, db.GetScheduleRow{}, err
+	}
+	return pp, row, nil
 }
 
 func (h *handlers) ListSchedules(ctx context.Context, req gen.ListSchedulesRequestObject) (gen.ListSchedulesResponseObject, error) {

@@ -22,6 +22,7 @@ import (
 	"github.com/Ivan825/Stampede/internal/runner"
 	"github.com/Ivan825/Stampede/internal/safety"
 	"github.com/Ivan825/Stampede/internal/scenario"
+	"github.com/Ivan825/Stampede/internal/store"
 	"github.com/Ivan825/Stampede/internal/store/db"
 )
 
@@ -180,7 +181,7 @@ func (h *handlers) prepareRun(ctx context.Context, org uuid.UUID, pr db.Project,
 	if plan.StopOnFail && len(prog.Thresholds) == 0 {
 		return nil, errInvalid("the breakpoint shape needs at least one target, such as \"http.p95 < 500ms\"")
 	}
-	if err := h.checkCaps(tg, plan); err != nil {
+	if err := h.checkCaps(ctx, org, pr, tg, plan); err != nil {
 		return nil, err
 	}
 	obs, err := h.observeFor(ctx, org, s.Observe)
@@ -340,41 +341,53 @@ func redactedEnv(env map[string]string) map[string]string {
 	return out
 }
 
-// checkCaps applies, in order: the server's hard caps, the low caps for
-// unverified public targets, and the target's own caps.
-func (h *handlers) checkCaps(tg db.Target, plan *scenario.Plan) error {
+// checkCaps applies, in order: the server's hard caps, the organisation's
+// and the project's caps, the low caps for unverified public targets, and
+// the target's own caps. A run must fit within all of them.
+func (h *handlers) checkCaps(ctx context.Context, org uuid.UUID, pr db.Project, tg db.Target, plan *scenario.Plan) error {
 	if err := safety.CheckPlan(plan, h.cfg.HardCaps); err != nil {
 		return errForbidden("over the server's limits: " + err.Error())
+	}
+	oc, err := h.st.GetOrgCaps(ctx, org)
+	switch {
+	case err == nil:
+		if err := safety.CheckPlan(plan, safetyCaps(oc.MaxRate, oc.MaxVus, oc.MaxDurationS)); err != nil {
+			return errForbidden("over the organisation's caps: " + err.Error())
+		}
+	case !store.IsNotFound(err):
+		return err
+	}
+	ps, err := h.st.GetProjectSettings(ctx, pr.ID)
+	switch {
+	case err == nil:
+		if err := safety.CheckPlan(plan, safetyCaps(ps.MaxRate, ps.MaxVus, ps.MaxDurationS)); err != nil {
+			return errForbidden(fmt.Sprintf("over project %s's caps: %v", pr.Name, err))
+		}
+	case !store.IsNotFound(err):
+		return err
 	}
 	if !tg.Private && tg.VerifiedAt == nil {
 		if err := safety.CheckPlan(plan, safety.UnverifiedPublicCaps); err != nil {
 			return errForbidden(fmt.Sprintf("%s is public and its ownership is not verified, so load is capped: %v. Verify the target to lift this", tg.Host, err))
 		}
 	}
-	c := safety.Caps{}
-	if tg.MaxRate != nil {
-		c.MaxRate = *tg.MaxRate
-	}
-	if tg.MaxVus != nil {
-		c.MaxVUs = int(*tg.MaxVus)
-	}
-	if tg.MaxDurationS != nil {
-		c.MaxDuration = time.Duration(*tg.MaxDurationS) * time.Second
-	}
-	if err := safety.CheckPlan(plan, c); err != nil {
+	if err := safety.CheckPlan(plan, safetyCaps(tg.MaxRate, tg.MaxVus, tg.MaxDurationS)); err != nil {
 		return errForbidden("over this target's caps: " + err.Error())
 	}
 	return nil
 }
 
 func (h *handlers) run(ctx context.Context, id uuid.UUID, min auth.Role) (db.GetRunRow, error) {
-	p, err := need(ctx, min)
+	p, err := need(ctx, auth.PermView)
 	if err != nil {
 		return db.GetRunRow{}, err
 	}
 	r, err := h.st.GetRun(ctx, db.GetRunParams{ID: id, OrgID: p.OrgID})
 	if err != nil {
 		return db.GetRunRow{}, notFoundOr(err, "run")
+	}
+	if _, err := h.needIn(ctx, r.ProjectID, min); err != nil {
+		return db.GetRunRow{}, err
 	}
 	return r, nil
 }

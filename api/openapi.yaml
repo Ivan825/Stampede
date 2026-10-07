@@ -305,6 +305,130 @@ paths:
         "204": { description: Deleted with everything in it }
         "404": { $ref: "#/components/responses/NotFound" }
 
+  /organisation/caps:
+    get:
+      tags: [projects]
+      operationId: getOrgCaps
+      summary: The organisation's hard caps on every run
+      responses:
+        "200":
+          description: Caps; unset fields mean no cap at this level
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Caps" }
+    put:
+      tags: [projects]
+      operationId: putOrgCaps
+      summary: Set the organisation's hard caps (admin)
+      description: |
+        Every run in the organisation must fit within these caps, as well
+        as the server's, its project's and its target's. Send an empty
+        object to remove them. Audited.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/Caps" }
+      responses:
+        "200":
+          description: Saved
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Caps" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "422": { $ref: "#/components/responses/Invalid" }
+
+  /projects/{projectId}/settings:
+    parameters:
+      - $ref: "#/components/parameters/projectId"
+    get:
+      tags: [projects]
+      operationId: getProjectSettings
+      responses:
+        "200":
+          description: The project's caps and run gate
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ProjectSettings" }
+        "404": { $ref: "#/components/responses/NotFound" }
+    put:
+      tags: [projects]
+      operationId: putProjectSettings
+      summary: Set the project's caps and dry-run gate (admin)
+      description: |
+        Caps bound every run in the project, together with the server's,
+        the organisation's and the target's. With requireDryRun, starting a
+        run first runs each journey once with one user; the run fails
+        before any load when a journey fails. Needs the admin role in the
+        project. Audited.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ProjectSettings" }
+      responses:
+        "200":
+          description: Saved
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ProjectSettings" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "422": { $ref: "#/components/responses/Invalid" }
+
+  /projects/{projectId}/roles:
+    parameters:
+      - $ref: "#/components/parameters/projectId"
+    get:
+      tags: [projects]
+      operationId: listProjectRoles
+      summary: Per-project role overrides
+      description: |
+        A member's organisation role applies in every project unless an
+        override here sets another role for this project, higher or lower.
+        Owners are owners everywhere.
+      responses:
+        "200":
+          description: Overrides, by email
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/ProjectRole" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /projects/{projectId}/roles/{userId}:
+    parameters:
+      - $ref: "#/components/parameters/projectId"
+      - $ref: "#/components/parameters/userId"
+    put:
+      tags: [projects]
+      operationId: putProjectRole
+      summary: Give a member a different role in this project (admin)
+      description: Needs the admin role in the project. Owners cannot be overridden. Audited.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ProjectRoleSet" }
+      responses:
+        "200":
+          description: Saved
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ProjectRole" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "422": { $ref: "#/components/responses/Invalid" }
+    delete:
+      tags: [projects]
+      operationId: deleteProjectRole
+      summary: Remove an override, so the organisation role applies again (admin)
+      responses:
+        "204": { description: Removed }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
   /projects/{projectId}/targets:
     parameters:
       - $ref: "#/components/parameters/projectId"
@@ -1451,6 +1575,9 @@ components:
         slug: { type: string }
         description: { type: string }
         createdAt: { type: string, format: date-time }
+        role:
+          allOf: [{ $ref: "#/components/schemas/Role" }]
+          description: The caller's role in this project (the organisation role, or a per-project override)
 
     ProjectCreate:
       type: object
@@ -1465,6 +1592,32 @@ components:
         maxRate: { type: number, format: double, description: Iterations per second }
         maxVUs: { type: integer }
         maxDurationSeconds: { type: integer }
+
+    ProjectSettings:
+      type: object
+      required: [caps, requireDryRun]
+      properties:
+        caps: { $ref: "#/components/schemas/Caps" }
+        requireDryRun:
+          type: boolean
+          description: Before load, run each journey once with one user and fail the run if any journey fails.
+
+    ProjectRole:
+      type: object
+      required: [userId, email, role]
+      properties:
+        userId: { type: string, format: uuid }
+        email: { type: string }
+        name: { type: string }
+        role: { $ref: "#/components/schemas/Role" }
+        orgRole: { $ref: "#/components/schemas/Role" }
+        createdAt: { type: string, format: date-time }
+
+    ProjectRoleSet:
+      type: object
+      required: [role]
+      properties:
+        role: { $ref: "#/components/schemas/Role" }
 
     Target:
       type: object

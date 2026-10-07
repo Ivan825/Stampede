@@ -647,13 +647,16 @@ func (h *handlers) GetAIJob(ctx context.Context, req gen.GetAIJobRequestObject) 
 }
 
 func (h *handlers) ApproveAIJob(ctx context.Context, req gen.ApproveAIJobRequestObject) (gen.ApproveAIJobResponseObject, error) {
-	p, err := need(ctx, auth.PermEditScenarios)
+	p, err := need(ctx, auth.PermView)
 	if err != nil {
 		return nil, err
 	}
 	job, err := h.st.GetAIJob(ctx, db.GetAIJobParams{ID: req.JobId, OrgID: p.OrgID})
 	if err != nil {
 		return nil, notFoundOr(err, "AI job")
+	}
+	if _, err := h.needIn(ctx, job.ProjectID, auth.PermEditScenarios); err != nil {
+		return nil, err
 	}
 	b := req.Body
 	allow := b.AllowUnvalidated != nil && *b.AllowUnvalidated
