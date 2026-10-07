@@ -505,7 +505,7 @@ export function ScenarioCoveragePage() {
         title="API coverage and drift"
         description="The same checks as stampede coverage and stampede drift."
       />
-      {!can.editScenarios && (
+      {!can.fetchSpecs && (
         <Notice tone="info" className="mb-4">
           Paste the OpenAPI document; fetching it from a target needs the editor role.
         </Notice>
@@ -523,10 +523,10 @@ export function ScenarioCoveragePage() {
           </Tabs.Trigger>
         </Tabs.List>
         <Tabs.Content value="coverage">
-          <CoverageForm scenarioId={scenarioId} targets={list} canFetch={can.editScenarios} />
+          <CoverageForm scenarioId={scenarioId} targets={list} canFetch={can.fetchSpecs} />
         </Tabs.Content>
         <Tabs.Content value="drift">
-          <DriftForm scenarioId={scenarioId} targets={list} canFetch={can.editScenarios} />
+          <DriftForm scenarioId={scenarioId} targets={list} canFetch={can.fetchSpecs} />
         </Tabs.Content>
       </Tabs.Root>
     </div>
