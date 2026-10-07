@@ -1347,8 +1347,12 @@ type ErrorExample struct {
 	ResponseHeaders map[string]string `protobuf:"bytes,8,rep,name=response_headers,json=responseHeaders,proto3" json:"response_headers,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
 	ResponseBody    string            `protobuf:"bytes,9,opt,name=response_body,json=responseBody,proto3" json:"response_body,omitempty"`
 	Detail          string            `protobuf:"bytes,10,opt,name=detail,proto3" json:"detail,omitempty"`
-	unknownFields   protoimpl.UnknownFields
-	sizeCache       protoimpl.SizeCache
+	// Browser steps: a JPEG screenshot, console errors and a HAR log.
+	Screenshot    []byte   `protobuf:"bytes,11,opt,name=screenshot,proto3" json:"screenshot,omitempty"`
+	Console       []string `protobuf:"bytes,12,rep,name=console,proto3" json:"console,omitempty"`
+	Har           string   `protobuf:"bytes,13,opt,name=har,proto3" json:"har,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
 }
 
 func (x *ErrorExample) Reset() {
@@ -1447,6 +1451,27 @@ func (x *ErrorExample) GetResponseBody() string {
 func (x *ErrorExample) GetDetail() string {
 	if x != nil {
 		return x.Detail
+	}
+	return ""
+}
+
+func (x *ErrorExample) GetScreenshot() []byte {
+	if x != nil {
+		return x.Screenshot
+	}
+	return nil
+}
+
+func (x *ErrorExample) GetConsole() []string {
+	if x != nil {
+		return x.Console
+	}
+	return nil
+}
+
+func (x *ErrorExample) GetHar() string {
+	if x != nil {
+		return x.Har
 	}
 	return ""
 }
@@ -2354,7 +2379,7 @@ const file_stampede_worker_v1_worker_proto_rawDesc = "" +
 	"\x05value\x18\x02 \x01(\x04R\x05value:\x028\x01\x1a<\n" +
 	"\x0eProtocolsEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
-	"\x05value\x18\x02 \x01(\x04R\x05value:\x028\x01\"\xbb\x04\n" +
+	"\x05value\x18\x02 \x01(\x04R\x05value:\x028\x01\"\x87\x05\n" +
 	"\fErrorExample\x12\x14\n" +
 	"\x05error\x18\x01 \x01(\tR\x05error\x12 \n" +
 	"\fat_unix_nano\x18\x02 \x01(\x03R\n" +
@@ -2367,7 +2392,12 @@ const file_stampede_worker_v1_worker_proto_rawDesc = "" +
 	"\x10response_headers\x18\b \x03(\v25.stampede.worker.v1.ErrorExample.ResponseHeadersEntryR\x0fresponseHeaders\x12#\n" +
 	"\rresponse_body\x18\t \x01(\tR\fresponseBody\x12\x16\n" +
 	"\x06detail\x18\n" +
-	" \x01(\tR\x06detail\x1aA\n" +
+	" \x01(\tR\x06detail\x12\x1e\n" +
+	"\n" +
+	"screenshot\x18\v \x01(\fR\n" +
+	"screenshot\x12\x18\n" +
+	"\aconsole\x18\f \x03(\tR\aconsole\x12\x10\n" +
+	"\x03har\x18\r \x01(\tR\x03har\x1aA\n" +
 	"\x13RequestHeadersEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
 	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\x1aB\n" +

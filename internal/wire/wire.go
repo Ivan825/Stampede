@@ -326,7 +326,7 @@ func exampleToProto(err string, e metrics.ErrorExample) *workerv1.ErrorExample {
 	p := &workerv1.ErrorExample{
 		Error: err, AtUnixNano: e.At.UnixNano(), Request: e.Request, RequestHeaders: e.RequestHeaders,
 		RequestBody: e.RequestBody, Status: int32(e.Status), ResponseHeaders: e.ResponseHeaders, //nolint:gosec // HTTP status codes fit
-		ResponseBody: e.ResponseBody, Detail: e.Detail,
+		ResponseBody: e.ResponseBody, Detail: e.Detail, Screenshot: e.Screenshot, Console: e.Console, Har: e.HAR,
 	}
 	if id, err := hex.DecodeString(e.TraceID); err == nil && len(id) == 16 {
 		p.TraceId = id
@@ -338,7 +338,7 @@ func exampleFromProto(p *workerv1.ErrorExample) metrics.ErrorExample {
 	e := metrics.ErrorExample{
 		At: time.Unix(0, p.GetAtUnixNano()), Request: p.GetRequest(), RequestHeaders: p.GetRequestHeaders(),
 		RequestBody: p.GetRequestBody(), Status: int(p.GetStatus()), ResponseHeaders: p.GetResponseHeaders(),
-		ResponseBody: p.GetResponseBody(), Detail: p.GetDetail(),
+		ResponseBody: p.GetResponseBody(), Detail: p.GetDetail(), Screenshot: p.GetScreenshot(), Console: p.GetConsole(), HAR: p.GetHar(),
 	}
 	if id := p.GetTraceId(); len(id) == 16 {
 		e.TraceID = metrics.TraceIDString([16]byte(id))

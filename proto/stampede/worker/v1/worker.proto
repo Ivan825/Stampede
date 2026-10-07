@@ -226,6 +226,10 @@ message ErrorExample {
   map<string, string> response_headers = 8;
   string response_body = 9;
   string detail = 10;
+  // Browser steps: a JPEG screenshot, console errors and a HAR log.
+  bytes screenshot = 11;
+  repeated string console = 12;
+  string har = 13;
 }
 
 message SlowRequest {

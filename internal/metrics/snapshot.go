@@ -92,6 +92,11 @@ type ErrorExample struct {
 	// Detail is the error message, such as a check's mismatch or a
 	// connection error.
 	Detail string `json:"detail,omitempty"`
+	// Browser steps: a JPEG screenshot of the page when it failed, its
+	// console errors and warnings, and a HAR of its requests (no bodies).
+	Screenshot []byte   `json:"screenshot,omitempty"`
+	Console    []string `json:"console,omitempty"`
+	HAR        string   `json:"har,omitempty"`
 }
 
 // Snapshot holds everything recorded during one interval (normally one
