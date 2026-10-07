@@ -19,8 +19,13 @@ Stampede is an open-source, self-hosted load testing platform. You describe
 how your users behave, Stampede checks each journey with a single user, then
 runs many of them at once and tells you where your product breaks.
 
-> **Status: in development towards v1.0.** This README lists what works in
-> the repository today. Everything else in the plan is marked **planned**.
+<p align="center">
+  <img src="site/public/screenshots/console.png" alt="The Stampede console: the teal bull, a welcome naming the signed-in user, server and project, and suggested first commands" width="820">
+</p>
+
+> **Released.** Install the [latest release](https://github.com/Ivan825/Stampede/releases/latest)
+> with the one-line installer below. This README lists what works today;
+> anything not built yet is marked **planned**.
 
 ## Get started
 
@@ -82,6 +87,29 @@ monitored runs without the web UI.
 **No internet access.** Each release attaches an offline bundle (images,
 binary, Helm chart) for networks without internet access; see
 [air-gapped installs](docs/deploy/airgap.md).
+
+## See it
+
+<table>
+  <tr>
+    <td width="50%"><img src="site/public/screenshots/console-run.png" alt="A plain-language request confirmed as a command, then a live run at 623 requests per second with 1,210 virtual users"><br><sub>Ask in plain words, confirm, watch the run live in the console.</sub></td>
+    <td width="50%"><img src="site/public/screenshots/cli-run.png" alt="stampede run with 1,000 virtual users through four journeys: PASS, every target met, per-step latency"><br><sub><code>stampede run</code>: 1,000 users through four journeys, targets checked, every step timed.</sub></td>
+  </tr>
+  <tr>
+    <td width="50%"><img src="site/public/screenshots/web-report.png" alt="A run report in the web UI: FAIL with the missed targets, summary figures and exports"><br><sub>Every run's report in the web UI, with HTML, PDF, CSV, JSON, JUnit and Markdown exports.</sub></td>
+    <td width="50%"><img src="site/public/screenshots/web-live.png" alt="A live run in the web UI with worker health showing one saturated worker"><br><sub>Live runs with worker health; a saturated worker is called out.</sub></td>
+  </tr>
+  <tr>
+    <td width="50%"><img src="site/public/screenshots/report-html.png" alt="The self-contained HTML report of a baseline run"><br><sub>A self-contained HTML report from <code>stampede run -o report.html</code>.</sub></td>
+    <td width="50%"><img src="site/public/screenshots/web-overview.png" alt="A project overview in the web UI listing recent runs and verdicts"><br><sub>Each project's runs and verdicts at a glance.</sub></td>
+  </tr>
+</table>
+
+<p align="center"><img src="site/public/screenshots/web-curve.png" alt="Throughput against load with the knee marked" width="820"><br><sub>Throughput against load: where your system stops keeping up, marked.</sub></p>
+
+The screenshots are real: the terminal ones are recorded from the CLI
+running against the demo apps in [`examples/packlab`](examples/packlab), the
+web UI ones from its built-in demo data.
 
 ## What works today
 
@@ -228,11 +256,13 @@ drift](docs/guides/coverage.md)).
 until you prove ownership; requests cannot leave the target's host; hard caps
 per server and per target; audit log ([safety](docs/safety.md)).
 
-## Planned for v1.0
+## Planned
 
-wrk2 in the nightly side-by-side comparison (k6 is compared today, see
-the [benchmarks](https://stampede.vercel.app/benchmarks)), connection-flood and
-slow-client stresses, and the website.
+Connection-flood and slow-client stresses, and published cluster-scale
+measurements (200 workers, 100,000 requests per second across them, 50,000
+WebSocket connections). The nightly comparison with k6 and wrk2 and one
+process's measured throughput are in [bench](bench/README.md) and on the
+website's benchmarks page.
 
 ## Deploy
 
