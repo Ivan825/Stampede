@@ -51,7 +51,7 @@ groups:
       - { name: "Coverage map and drift detection for saved scenarios", status: shipped, doc: docs/guides/coverage }
       - { name: "Scheduled runs", status: shipped, doc: docs/guides/schedules }
       - { name: "Scaffolds for new packs and plugins, checked by a dry run and the conformance suite", status: shipped, doc: docs/plugins }
-      - { name: "Packaged GitHub Action", status: planned }
+      - { name: "Packaged GitHub Action (Ivan825/Stampede/action@main; @v1 after the first release)", status: shipped, doc: docs/guides/ci }
   - name: Integrations
     features:
       - { name: "Target metrics from Prometheus charted in the report", status: shipped, doc: docs/guides/integrations }
