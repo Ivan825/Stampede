@@ -159,9 +159,10 @@ export function RunPage() {
     onFinished,
   });
 
-  // The stream's status is fresher than the polled run while live.
+  // The stream's status is fresher than the polled run while live; once the
+  // polled run has ended (say, after Stop or Kill here), it is final.
   const run =
-    stream.run && runQ.data && stream.run.id === runQ.data.id
+    stream.run && runQ.data && stream.run.id === runQ.data.id && !isTerminal(runQ.data.status)
       ? { ...runQ.data, ...stream.run }
       : runQ.data;
   const finished = !!run && isTerminal(run.status);
