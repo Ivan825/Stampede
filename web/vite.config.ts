@@ -10,24 +10,28 @@ const require = createRequire(import.meta.url);
 const src = fileURLToPath(new URL('./src', import.meta.url));
 
 /**
- * In mock mode (`pnpm dev:mock`) MSW intercepts API calls in the browser.
+ * In mock mode (`pnpm dev:mock`, and `vite preview --mode mock` of a mock
+ * build for the end-to-end tests) MSW intercepts API calls in the browser.
  * Its service worker script is served straight from node_modules so it never
  * ends up in public/ or the production build.
  */
 function mockServiceWorker(): Plugin {
+  const serve = (server: { middlewares: { use: Connect['use'] } }) => {
+    const file = require.resolve('msw/mockServiceWorker.js');
+    server.middlewares.use('/mockServiceWorker.js', (_req, res) => {
+      res.setHeader('Content-Type', 'text/javascript');
+      res.setHeader('Service-Worker-Allowed', '/');
+      createReadStream(file).pipe(res);
+    });
+  };
   return {
     name: 'stampede-msw-worker',
-    apply: 'serve',
-    configureServer(server) {
-      const file = require.resolve('msw/mockServiceWorker.js');
-      server.middlewares.use('/mockServiceWorker.js', (_req, res) => {
-        res.setHeader('Content-Type', 'text/javascript');
-        res.setHeader('Service-Worker-Allowed', '/');
-        createReadStream(file).pipe(res);
-      });
-    },
+    configureServer: serve,
+    configurePreviewServer: serve,
   };
 }
+
+type Connect = import('vite').Connect.Server;
 
 export default defineConfig(({ mode }) => ({
   plugins: [react(), tailwindcss(), ...(mode === 'mock' ? [mockServiceWorker()] : [])],
