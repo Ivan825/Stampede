@@ -16,6 +16,10 @@ requests, light and dark), PDF, CSV, JSON, JUnit XML or Markdown.
 | JUnit XML | `--junit junit.xml` | `junit` |
 | Markdown | `--md summary.md` | `markdown` |
 
+`stampede report` takes a JSON report file or the id of a run on the
+server you signed in to (a unique prefix is enough):
+`stampede report 3f2a91c0 --pdf run.pdf`.
+
 `--pdf` prints the HTML report with headless Chrome or Chromium, on A4 in
 the light theme. It finds the browser as browser steps do (set
 `STAMPEDE_CHROME` to choose one); the server image has no browser, which

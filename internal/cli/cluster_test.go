@@ -4,6 +4,7 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"testing"
 
@@ -43,12 +44,29 @@ func TestRunCluster(t *testing.T) {
 	if !strings.Contains(out, "started; Ctrl-C stops following") || !strings.Contains(out, "list") {
 		t.Errorf("output: %s", out)
 	}
-	rs, err := readReports([]string{jsonOut})
+	rs, err := readReports(context.Background(), []string{jsonOut})
 	if err != nil {
 		t.Fatal(err)
 	}
 	if r := rs[0]; r.Verdict != report.VerdictPass || r.Overall.Requests < 5 {
 		t.Errorf("report: verdict %s, %d requests", r.Verdict, r.Overall.Requests)
+	}
+
+	// report and compare take the run's id, or a prefix of it, as well
+	// as files.
+	m := regexp.MustCompile(`run ([0-9a-f-]{36}) of items`).FindStringSubmatch(out)
+	if m == nil {
+		t.Fatalf("no run id in %s", out)
+	}
+	id := m[1]
+	if out, err := runCLI(t, "report", id[:8]); err != nil || !strings.Contains(out, "list") {
+		t.Errorf("report <run-id prefix>: %v %s", err, out)
+	}
+	if out, err := runCLI(t, "compare", id, jsonOut); err != nil || !strings.Contains(out, "A (1 runs) → B (1 runs)") {
+		t.Errorf("compare <run-id> <file>: %v %s", err, out)
+	}
+	if _, err := runCLI(t, "report", "ffffffff"); err == nil || !strings.Contains(err.Error(), "no run starts with") {
+		t.Errorf("unknown run: %v", err)
 	}
 
 	// start keeps working on the same code path.
@@ -71,5 +89,8 @@ func TestRunClusterFlags(t *testing.T) {
 	t.Setenv("STAMPEDE_TOKEN", "")
 	if _, err := runCLI(t, "run", "x.yaml", "--cluster"); err == nil || !strings.Contains(err.Error(), "not signed in") {
 		t.Errorf("not signed in: %v", err)
+	}
+	if _, err := runCLI(t, "report", "missing.json"); err == nil || !strings.Contains(err.Error(), "missing.json is not a file, and it cannot be looked up as a server run: not signed in") {
+		t.Errorf("report of a missing file: %v", err)
 	}
 }
