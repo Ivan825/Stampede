@@ -26,6 +26,8 @@ jobs:
           if [ -n "$out" ]; then echo "needs gofmt -s:"; echo "$out"; exit 1; fi
       - name: go vet
         run: go vet ./...
+      - name: the Compose file and its profiles parse
+        run: docker compose --profile browser --profile observability config --quiet
       - uses: golangci/golangci-lint-action@v8
         with:
           version: latest
