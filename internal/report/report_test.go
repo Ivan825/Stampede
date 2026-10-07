@@ -119,6 +119,16 @@ func TestExports(t *testing.T) {
 	if !strings.Contains(buf.String(), "✗ http.p95 < 100ms") {
 		t.Errorf("text: %s", buf.String())
 	}
+	if strings.Contains(buf.String(), "\x1b[") {
+		t.Error("plain text has colour codes")
+	}
+	buf.Reset()
+	r.WriteTextColor(&buf)
+	for _, want := range []string{"\x1b[1;97;41m FAIL \x1b[0m", "\x1b[31m✗\x1b[0m http.p95 < 100ms"} {
+		if !strings.Contains(buf.String(), want) {
+			t.Errorf("colour text lacks %q:\n%q", want, buf.String())
+		}
+	}
 }
 
 func TestNoDataIsNotPass(t *testing.T) {

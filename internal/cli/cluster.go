@@ -66,7 +66,7 @@ func runCluster(cmd *cobra.Command, path string, f *runFlags) error {
 	return followRunWith(ctx, cmd, c, run.Id.String(), f.quiet, func(rep *report.Report) error {
 		narrate(ctx, cmd.ErrOrStderr(), rep, narrator)
 		if f.json != "-" && f.md != "-" && f.csv != "-" && f.timelineCSV != "-" {
-			rep.WriteText(stdout)
+			writeSummary(stdout, rep)
 		}
 		return writeOutputs(ctx, stdout, rep, f)
 	})

@@ -17,6 +17,7 @@ import (
 	"cel.dev/cel-go/interpreter"
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
+	"golang.org/x/term"
 
 	"github.com/Ivan825/Stampede/internal/agent"
 	"github.com/Ivan825/Stampede/internal/observe"
@@ -57,6 +58,7 @@ type runFlags struct {
 	env                   []string
 	baseURL               string
 	vus                   int
+	maxVUs                int
 	rate                  string
 	duration              string
 	shape                 string
@@ -123,6 +125,7 @@ fails, 1 on any other error.`,
 	fl.StringVar(&f.baseURL, "base-url", "", "override target.baseURL")
 	fl.IntVar(&f.vus, "vus", 0, "override the number of virtual users")
 	fl.StringVar(&f.rate, "rate", "", "override the arrival rate, e.g. 100/s (switches to rate mode)")
+	fl.IntVar(&f.maxVUs, "max-vus", 0, "cap on virtual users in rate mode (default: five times the peak rate); raise it for long journeys")
 	fl.StringVar(&f.duration, "duration", "", "override the duration, e.g. 30s or 5m")
 	fl.StringVar(&f.shape, "shape", "", "apply a traffic shape: "+strings.Join(scenario.Shapes, ", "))
 	fl.IntVar(&f.iterations, "iterations", 0, "run a fixed number of iterations instead")
@@ -237,7 +240,7 @@ func runScenario(ctx context.Context, stdout, stderr io.Writer, path string, f *
 		obs.Apply(ctx, rep, time.Second)
 		narrate(ctx, stderr, rep, narrator)
 		if f.json != "-" && f.md != "-" && f.csv != "-" && f.timelineCSV != "-" {
-			rep.WriteText(stdout)
+			writeSummary(stdout, rep)
 		}
 		out := *f
 		out.html, out.json = repeatPath(f.html, n, f.repeat), repeatPath(f.json, n, f.repeat)
@@ -290,7 +293,7 @@ func applyOverrides(s *scenario.Scenario, f *runFlags) error {
 		s.Target.BaseURL = f.baseURL
 	}
 	return scenario.Overrides{
-		Shape: f.shape, VUs: f.vus, Rate: f.rate, Duration: f.duration, Iterations: f.iterations,
+		Shape: f.shape, VUs: f.vus, MaxVUs: f.maxVUs, Rate: f.rate, Duration: f.duration, Iterations: f.iterations,
 	}.Apply(s)
 }
 
@@ -482,14 +485,39 @@ func progressPrinter(w io.Writer) func(runner.Progress) {
 		if t.Requests > 0 {
 			errRate = float64(t.Failed) / float64(t.Requests)
 		}
-		planned := fmt.Sprintf("%.0f VUs", p.Planned)
+		planned := "plan " + fmt.Sprintf("%.0f VUs", p.Planned)
 		if p.Mode == scenario.ModeRate {
-			planned = fmt.Sprintf("%.0f/s", p.Planned)
+			planned = "plan " + fmt.Sprintf("%.0f/s", p.Planned)
 		}
-		fmt.Fprintf(w, "  %6s/%-6s  plan %-9s vus %-5d rps %-7d p95 %-9s err %-7s dropped %d\n",
-			p.Elapsed.Truncate(time.Second), p.Total.Truncate(time.Second), planned, p.Snapshot.VUs, t.Requests,
-			report.Ms(float64(t.Latency.Quantile(0.95))/1e6), report.Pct(errRate), p.Snapshot.Dropped)
+		elapsed := p.Elapsed
+		if p.Total > 0 && elapsed > p.Total {
+			// Load has ended; users finish the journeys they are in.
+			elapsed, planned = p.Total, "finishing"
+		}
+		// A second in which every user was thinking has no latency to show.
+		p95 := "-"
+		if t.Requests > 0 {
+			p95 = report.Ms(float64(t.Latency.Quantile(0.95)) / 1e6)
+		}
+		fmt.Fprintf(w, "  %6s/%-6s  %-14s vus %-5d rps %-7d p95 %-9s err %-7s dropped %d\n",
+			elapsed.Truncate(time.Second), p.Total.Truncate(time.Second), planned, p.Snapshot.VUs, t.Requests,
+			p95, report.Pct(errRate), p.Snapshot.Dropped)
 	}
+}
+
+// writeSummary prints the run summary, in colour when w is a terminal
+// (unless NO_COLOR is set).
+func writeSummary(w io.Writer, rep *report.Report) {
+	if colorTerminal(w) {
+		rep.WriteTextColor(w)
+		return
+	}
+	rep.WriteText(w)
+}
+
+func colorTerminal(w io.Writer) bool {
+	f, ok := w.(*os.File)
+	return ok && term.IsTerminal(int(f.Fd())) && os.Getenv("NO_COLOR") == "" && os.Getenv("TERM") != "dumb"
 }
 
 func newRunID() string {

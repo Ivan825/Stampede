@@ -178,7 +178,7 @@ func createRemoteRun(ctx context.Context, errw io.Writer, c *client.Client, f *r
 // an exit code.
 func followRun(ctx context.Context, cmd *cobra.Command, c *client.Client, runID, md string) error {
 	return followRunWith(ctx, cmd, c, runID, false, func(rep *report.Report) error {
-		rep.WriteText(cmd.OutOrStdout())
+		writeSummary(cmd.OutOrStdout(), rep)
 		return writeFile(cmd.OutOrStdout(), md, func(w io.Writer) error { rep.WriteMarkdown(w); return nil })
 	})
 }

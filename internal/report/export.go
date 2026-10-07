@@ -75,11 +75,56 @@ func VerdictLabel(v string) string {
 	}
 }
 
-// WriteText writes the terminal summary.
-func (r *Report) WriteText(w io.Writer) {
+// textStyle colours the terminal summary; the zero value prints plain text.
+type textStyle struct{ on bool }
+
+func (t textStyle) sgr(code, s string) string {
+	if !t.on || s == "" {
+		return s
+	}
+	return "\x1b[" + code + "m" + s + "\x1b[0m"
+}
+
+func (t textStyle) bold(s string) string { return t.sgr("1", s) }
+func (t textStyle) dim(s string) string  { return t.sgr("2", s) }
+func (t textStyle) good(s string) string { return t.sgr("32", s) }
+func (t textStyle) bad(s string) string  { return t.sgr("31", s) }
+
+// badIf colours s red when the value it shows is not zero.
+func (t textStyle) badIf(nonzero bool, s string) string {
+	if nonzero {
+		return t.bad(s)
+	}
+	return s
+}
+
+// verdict renders the verdict as a coloured badge.
+func (t textStyle) verdict(v string) string {
+	label := VerdictLabel(v)
+	if !t.on {
+		return label
+	}
+	switch v {
+	case VerdictPass:
+		return t.sgr("30;42", " "+label+" ")
+	case VerdictFail:
+		return t.sgr("1;97;41", " "+label+" ")
+	case VerdictGeneratorLimit:
+		return t.sgr("30;43", " "+label+" ")
+	}
+	return t.sgr("30;47", " "+label+" ")
+}
+
+// WriteText writes the terminal summary as plain text.
+func (r *Report) WriteText(w io.Writer) { r.writeText(w, textStyle{}) }
+
+// WriteTextColor writes the terminal summary with colours, for a terminal.
+func (r *Report) WriteTextColor(w io.Writer) { r.writeText(w, textStyle{on: true}) }
+
+func (r *Report) writeText(w io.Writer, t textStyle) {
 	o := r.Overall
-	fmt.Fprintf(w, "\n  %s  %s  (%s, %.0fs, stop: %s)\n\n", VerdictLabel(r.Verdict), r.Scenario, r.Load.Executor, r.Duration, r.StopReason)
-	fmt.Fprintf(w, "  requests     %d  (%.1f/s)   failed %d (%s)\n", o.Requests, o.RPS, o.Failed, Pct(o.ErrorRate))
+	fmt.Fprintf(w, "\n  %s  %s  %s\n\n", t.verdict(r.Verdict), t.bold(r.Scenario), t.dim(fmt.Sprintf("(%s, %.0fs, stop: %s)", r.Load.Executor, r.Duration, r.StopReason)))
+	fmt.Fprintf(w, "  requests     %d  (%.1f/s)   %s\n", o.Requests, o.RPS, t.badIf(o.Failed > 0, fmt.Sprintf("failed %d (%s)", o.Failed, Pct(o.ErrorRate))))
 	fmt.Fprintf(w, "  iterations   %d  failed %d  dropped %d\n", o.Iterations, o.IterationsFailed, o.Dropped)
 	fmt.Fprintf(w, "  latency      p50 %s  p90 %s  p95 %s  p99 %s  max %s\n",
 		Ms(o.Latency.P50), Ms(o.Latency.P90), Ms(o.Latency.P95), Ms(o.Latency.P99), Ms(o.Latency.Max))
@@ -90,11 +135,11 @@ func (r *Report) WriteText(w io.Writer) {
 	fmt.Fprintf(w, "  data         in %s  out %s   peak VUs %d\n", Bytes(o.BytesIn), Bytes(o.BytesOut), r.Load.PeakVUs)
 
 	if len(r.Thresholds) > 0 {
-		fmt.Fprintf(w, "\n  targets\n")
+		fmt.Fprintf(w, "\n  %s\n", t.bold("targets"))
 		for _, c := range r.Thresholds {
-			mark := "✓"
+			mark := t.good("✓")
 			if !c.Pass {
-				mark = "✗"
+				mark = t.bad("✗")
 			}
 			fmt.Fprintf(w, "    %s %-36s observed %s\n", mark, c.Source, c.ObservedText)
 		}
@@ -139,23 +184,23 @@ func (r *Report) WriteText(w io.Writer) {
 		}
 	}
 
-	fmt.Fprintf(w, "\n  %-44s %8s %8s %9s %9s %9s\n", "step", "reqs", "errors", "p50", "p95", "p99")
+	fmt.Fprintf(w, "\n  %s\n", t.bold(fmt.Sprintf("%-44s %8s %8s %9s %9s %9s", "step", "reqs", "errors", "p50", "p95", "p99")))
 	for _, j := range r.Journeys {
 		for _, s := range j.Steps {
 			name := j.Name + " › " + s.Name
 			if len(name) > 44 {
 				name = name[:43] + "…"
 			}
-			fmt.Fprintf(w, "  %-44s %8d %8s %9s %9s %9s\n", name, s.Stats.Requests, Pct(s.Stats.ErrorRate),
+			fmt.Fprintf(w, "  %-44s %8d %s %9s %9s %9s\n", name, s.Stats.Requests, t.badIf(s.Stats.ErrorRate > 0, fmt.Sprintf("%8s", Pct(s.Stats.ErrorRate))),
 				Ms(s.Stats.Latency.P50), Ms(s.Stats.Latency.P95), Ms(s.Stats.Latency.P99))
 		}
 	}
 	r.writeStreams(w)
 	r.writeBrowser(w)
-	r.writeSlowest(w)
+	r.writeSlowest(w, t)
 	r.writeTargetMetrics(w)
 	if len(r.Errors) > 0 {
-		fmt.Fprintf(w, "\n  top errors\n")
+		fmt.Fprintf(w, "\n  %s\n", t.bad("top errors"))
 		for i, e := range r.Errors {
 			if i == 8 {
 				break
@@ -207,12 +252,12 @@ func (r *Report) writeStreams(w io.Writer) {
 
 // writeSlowest lists the slowest requests of the run with their trace
 // IDs (or links), so a slow request can be found in the target's traces.
-func (r *Report) writeSlowest(w io.Writer) {
+func (r *Report) writeSlowest(w io.Writer, t textStyle) {
 	rows := r.SlowestOverall(5)
 	if len(rows) == 0 {
 		return
 	}
-	fmt.Fprintf(w, "\n  slowest requests\n")
+	fmt.Fprintf(w, "\n  %s\n", t.bold("slowest requests"))
 	for _, s := range rows {
 		name := s.Journey + " › " + s.Step
 		if len(name) > 36 {
@@ -229,7 +274,7 @@ func (r *Report) writeSlowest(w io.Writer) {
 		if trace == "" && s.TraceID != "" {
 			trace = "trace " + s.TraceID
 		}
-		fmt.Fprintf(w, "    %9s  %-36s t+%-7s %-6s %s\n", Ms(s.Latency), name, fmtOffset(s.T), status, trace)
+		fmt.Fprintf(w, "    %9s  %-36s t+%-7s %-6s %s\n", Ms(s.Latency), name, fmtOffset(s.T), status, t.dim(trace))
 	}
 }
 
