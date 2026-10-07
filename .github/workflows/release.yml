@@ -62,7 +62,7 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - uses: sigstore/cosign-installer@v4
+      - uses: sigstore/cosign-installer@v4.1.2   # publishes no moving major tag
       - uses: anchore/sbom-action/download-syft@v0
 
       - uses: goreleaser/goreleaser-action@v7
