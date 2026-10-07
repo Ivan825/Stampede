@@ -1174,7 +1174,10 @@ type StepStats struct {
 	Protocols map[string]uint64 `protobuf:"bytes,15,rep,name=protocols,proto3" json:"protocols,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"varint,2,opt,name=value"`
 	// slowest holds up to five of the step's slowest requests in the
 	// interval, slowest first. Added in protocol v1.2.
-	Slowest       []*SlowRequest `protobuf:"bytes,16,rep,name=slowest,proto3" json:"slowest,omitempty"`
+	Slowest []*SlowRequest `protobuf:"bytes,16,rep,name=slowest,proto3" json:"slowest,omitempty"`
+	// examples are failed requests kept as examples, up to three per error
+	// class. Added in protocol v1.5.
+	Examples      []*ErrorExample `protobuf:"bytes,17,rep,name=examples,proto3" json:"examples,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -1321,8 +1324,133 @@ func (x *StepStats) GetSlowest() []*SlowRequest {
 	return nil
 }
 
+func (x *StepStats) GetExamples() []*ErrorExample {
+	if x != nil {
+		return x.Examples
+	}
+	return nil
+}
+
 // SlowRequest is one of the slowest requests of a step, with the W3C
 // trace ID it was sent with so a report can link to the trace.
+// ErrorExample is one failed request, redacted by the worker.
+type ErrorExample struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// error is the error class it is an example of.
+	Error           string            `protobuf:"bytes,1,opt,name=error,proto3" json:"error,omitempty"`
+	AtUnixNano      int64             `protobuf:"varint,2,opt,name=at_unix_nano,json=atUnixNano,proto3" json:"at_unix_nano,omitempty"`
+	TraceId         []byte            `protobuf:"bytes,3,opt,name=trace_id,json=traceId,proto3" json:"trace_id,omitempty"`
+	Request         string            `protobuf:"bytes,4,opt,name=request,proto3" json:"request,omitempty"`
+	RequestHeaders  map[string]string `protobuf:"bytes,5,rep,name=request_headers,json=requestHeaders,proto3" json:"request_headers,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
+	RequestBody     string            `protobuf:"bytes,6,opt,name=request_body,json=requestBody,proto3" json:"request_body,omitempty"`
+	Status          int32             `protobuf:"varint,7,opt,name=status,proto3" json:"status,omitempty"`
+	ResponseHeaders map[string]string `protobuf:"bytes,8,rep,name=response_headers,json=responseHeaders,proto3" json:"response_headers,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
+	ResponseBody    string            `protobuf:"bytes,9,opt,name=response_body,json=responseBody,proto3" json:"response_body,omitempty"`
+	Detail          string            `protobuf:"bytes,10,opt,name=detail,proto3" json:"detail,omitempty"`
+	unknownFields   protoimpl.UnknownFields
+	sizeCache       protoimpl.SizeCache
+}
+
+func (x *ErrorExample) Reset() {
+	*x = ErrorExample{}
+	mi := &file_stampede_worker_v1_worker_proto_msgTypes[13]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ErrorExample) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ErrorExample) ProtoMessage() {}
+
+func (x *ErrorExample) ProtoReflect() protoreflect.Message {
+	mi := &file_stampede_worker_v1_worker_proto_msgTypes[13]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ErrorExample.ProtoReflect.Descriptor instead.
+func (*ErrorExample) Descriptor() ([]byte, []int) {
+	return file_stampede_worker_v1_worker_proto_rawDescGZIP(), []int{13}
+}
+
+func (x *ErrorExample) GetError() string {
+	if x != nil {
+		return x.Error
+	}
+	return ""
+}
+
+func (x *ErrorExample) GetAtUnixNano() int64 {
+	if x != nil {
+		return x.AtUnixNano
+	}
+	return 0
+}
+
+func (x *ErrorExample) GetTraceId() []byte {
+	if x != nil {
+		return x.TraceId
+	}
+	return nil
+}
+
+func (x *ErrorExample) GetRequest() string {
+	if x != nil {
+		return x.Request
+	}
+	return ""
+}
+
+func (x *ErrorExample) GetRequestHeaders() map[string]string {
+	if x != nil {
+		return x.RequestHeaders
+	}
+	return nil
+}
+
+func (x *ErrorExample) GetRequestBody() string {
+	if x != nil {
+		return x.RequestBody
+	}
+	return ""
+}
+
+func (x *ErrorExample) GetStatus() int32 {
+	if x != nil {
+		return x.Status
+	}
+	return 0
+}
+
+func (x *ErrorExample) GetResponseHeaders() map[string]string {
+	if x != nil {
+		return x.ResponseHeaders
+	}
+	return nil
+}
+
+func (x *ErrorExample) GetResponseBody() string {
+	if x != nil {
+		return x.ResponseBody
+	}
+	return ""
+}
+
+func (x *ErrorExample) GetDetail() string {
+	if x != nil {
+		return x.Detail
+	}
+	return ""
+}
+
 type SlowRequest struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	// latency_ns is measured from the intended send time.
@@ -1339,7 +1467,7 @@ type SlowRequest struct {
 
 func (x *SlowRequest) Reset() {
 	*x = SlowRequest{}
-	mi := &file_stampede_worker_v1_worker_proto_msgTypes[13]
+	mi := &file_stampede_worker_v1_worker_proto_msgTypes[14]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1351,7 +1479,7 @@ func (x *SlowRequest) String() string {
 func (*SlowRequest) ProtoMessage() {}
 
 func (x *SlowRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_stampede_worker_v1_worker_proto_msgTypes[13]
+	mi := &file_stampede_worker_v1_worker_proto_msgTypes[14]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1364,7 +1492,7 @@ func (x *SlowRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SlowRequest.ProtoReflect.Descriptor instead.
 func (*SlowRequest) Descriptor() ([]byte, []int) {
-	return file_stampede_worker_v1_worker_proto_rawDescGZIP(), []int{13}
+	return file_stampede_worker_v1_worker_proto_rawDescGZIP(), []int{14}
 }
 
 func (x *SlowRequest) GetLatencyNs() int64 {
@@ -1415,7 +1543,7 @@ type JourneyStats struct {
 
 func (x *JourneyStats) Reset() {
 	*x = JourneyStats{}
-	mi := &file_stampede_worker_v1_worker_proto_msgTypes[14]
+	mi := &file_stampede_worker_v1_worker_proto_msgTypes[15]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1427,7 +1555,7 @@ func (x *JourneyStats) String() string {
 func (*JourneyStats) ProtoMessage() {}
 
 func (x *JourneyStats) ProtoReflect() protoreflect.Message {
-	mi := &file_stampede_worker_v1_worker_proto_msgTypes[14]
+	mi := &file_stampede_worker_v1_worker_proto_msgTypes[15]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1440,7 +1568,7 @@ func (x *JourneyStats) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use JourneyStats.ProtoReflect.Descriptor instead.
 func (*JourneyStats) Descriptor() ([]byte, []int) {
-	return file_stampede_worker_v1_worker_proto_rawDescGZIP(), []int{14}
+	return file_stampede_worker_v1_worker_proto_rawDescGZIP(), []int{15}
 }
 
 func (x *JourneyStats) GetStarted() uint64 {
@@ -1482,7 +1610,7 @@ type PhaseHistograms struct {
 
 func (x *PhaseHistograms) Reset() {
 	*x = PhaseHistograms{}
-	mi := &file_stampede_worker_v1_worker_proto_msgTypes[15]
+	mi := &file_stampede_worker_v1_worker_proto_msgTypes[16]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1494,7 +1622,7 @@ func (x *PhaseHistograms) String() string {
 func (*PhaseHistograms) ProtoMessage() {}
 
 func (x *PhaseHistograms) ProtoReflect() protoreflect.Message {
-	mi := &file_stampede_worker_v1_worker_proto_msgTypes[15]
+	mi := &file_stampede_worker_v1_worker_proto_msgTypes[16]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1507,7 +1635,7 @@ func (x *PhaseHistograms) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PhaseHistograms.ProtoReflect.Descriptor instead.
 func (*PhaseHistograms) Descriptor() ([]byte, []int) {
-	return file_stampede_worker_v1_worker_proto_rawDescGZIP(), []int{15}
+	return file_stampede_worker_v1_worker_proto_rawDescGZIP(), []int{16}
 }
 
 func (x *PhaseHistograms) GetPhases() [][]byte {
@@ -1535,7 +1663,7 @@ type RunFinished struct {
 
 func (x *RunFinished) Reset() {
 	*x = RunFinished{}
-	mi := &file_stampede_worker_v1_worker_proto_msgTypes[16]
+	mi := &file_stampede_worker_v1_worker_proto_msgTypes[17]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1547,7 +1675,7 @@ func (x *RunFinished) String() string {
 func (*RunFinished) ProtoMessage() {}
 
 func (x *RunFinished) ProtoReflect() protoreflect.Message {
-	mi := &file_stampede_worker_v1_worker_proto_msgTypes[16]
+	mi := &file_stampede_worker_v1_worker_proto_msgTypes[17]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1560,7 +1688,7 @@ func (x *RunFinished) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RunFinished.ProtoReflect.Descriptor instead.
 func (*RunFinished) Descriptor() ([]byte, []int) {
-	return file_stampede_worker_v1_worker_proto_rawDescGZIP(), []int{16}
+	return file_stampede_worker_v1_worker_proto_rawDescGZIP(), []int{17}
 }
 
 func (x *RunFinished) GetRunId() string {
@@ -1623,7 +1751,7 @@ type RunFailed struct {
 
 func (x *RunFailed) Reset() {
 	*x = RunFailed{}
-	mi := &file_stampede_worker_v1_worker_proto_msgTypes[17]
+	mi := &file_stampede_worker_v1_worker_proto_msgTypes[18]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1635,7 +1763,7 @@ func (x *RunFailed) String() string {
 func (*RunFailed) ProtoMessage() {}
 
 func (x *RunFailed) ProtoReflect() protoreflect.Message {
-	mi := &file_stampede_worker_v1_worker_proto_msgTypes[17]
+	mi := &file_stampede_worker_v1_worker_proto_msgTypes[18]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1648,7 +1776,7 @@ func (x *RunFailed) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RunFailed.ProtoReflect.Descriptor instead.
 func (*RunFailed) Descriptor() ([]byte, []int) {
-	return file_stampede_worker_v1_worker_proto_rawDescGZIP(), []int{17}
+	return file_stampede_worker_v1_worker_proto_rawDescGZIP(), []int{18}
 }
 
 func (x *RunFailed) GetRunId() string {
@@ -1677,7 +1805,7 @@ type Welcome struct {
 
 func (x *Welcome) Reset() {
 	*x = Welcome{}
-	mi := &file_stampede_worker_v1_worker_proto_msgTypes[18]
+	mi := &file_stampede_worker_v1_worker_proto_msgTypes[19]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1689,7 +1817,7 @@ func (x *Welcome) String() string {
 func (*Welcome) ProtoMessage() {}
 
 func (x *Welcome) ProtoReflect() protoreflect.Message {
-	mi := &file_stampede_worker_v1_worker_proto_msgTypes[18]
+	mi := &file_stampede_worker_v1_worker_proto_msgTypes[19]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1702,7 +1830,7 @@ func (x *Welcome) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Welcome.ProtoReflect.Descriptor instead.
 func (*Welcome) Descriptor() ([]byte, []int) {
-	return file_stampede_worker_v1_worker_proto_rawDescGZIP(), []int{18}
+	return file_stampede_worker_v1_worker_proto_rawDescGZIP(), []int{19}
 }
 
 func (x *Welcome) GetWorkerId() string {
@@ -1736,7 +1864,7 @@ type ClockPing struct {
 
 func (x *ClockPing) Reset() {
 	*x = ClockPing{}
-	mi := &file_stampede_worker_v1_worker_proto_msgTypes[19]
+	mi := &file_stampede_worker_v1_worker_proto_msgTypes[20]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1748,7 +1876,7 @@ func (x *ClockPing) String() string {
 func (*ClockPing) ProtoMessage() {}
 
 func (x *ClockPing) ProtoReflect() protoreflect.Message {
-	mi := &file_stampede_worker_v1_worker_proto_msgTypes[19]
+	mi := &file_stampede_worker_v1_worker_proto_msgTypes[20]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1761,7 +1889,7 @@ func (x *ClockPing) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ClockPing.ProtoReflect.Descriptor instead.
 func (*ClockPing) Descriptor() ([]byte, []int) {
-	return file_stampede_worker_v1_worker_proto_rawDescGZIP(), []int{19}
+	return file_stampede_worker_v1_worker_proto_rawDescGZIP(), []int{20}
 }
 
 func (x *ClockPing) GetT1UnixNano() int64 {
@@ -1806,7 +1934,7 @@ type StartRun struct {
 
 func (x *StartRun) Reset() {
 	*x = StartRun{}
-	mi := &file_stampede_worker_v1_worker_proto_msgTypes[20]
+	mi := &file_stampede_worker_v1_worker_proto_msgTypes[21]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1818,7 +1946,7 @@ func (x *StartRun) String() string {
 func (*StartRun) ProtoMessage() {}
 
 func (x *StartRun) ProtoReflect() protoreflect.Message {
-	mi := &file_stampede_worker_v1_worker_proto_msgTypes[20]
+	mi := &file_stampede_worker_v1_worker_proto_msgTypes[21]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1831,7 +1959,7 @@ func (x *StartRun) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use StartRun.ProtoReflect.Descriptor instead.
 func (*StartRun) Descriptor() ([]byte, []int) {
-	return file_stampede_worker_v1_worker_proto_rawDescGZIP(), []int{20}
+	return file_stampede_worker_v1_worker_proto_rawDescGZIP(), []int{21}
 }
 
 func (x *StartRun) GetRunId() string {
@@ -1938,7 +2066,7 @@ type StopRun struct {
 
 func (x *StopRun) Reset() {
 	*x = StopRun{}
-	mi := &file_stampede_worker_v1_worker_proto_msgTypes[21]
+	mi := &file_stampede_worker_v1_worker_proto_msgTypes[22]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1950,7 +2078,7 @@ func (x *StopRun) String() string {
 func (*StopRun) ProtoMessage() {}
 
 func (x *StopRun) ProtoReflect() protoreflect.Message {
-	mi := &file_stampede_worker_v1_worker_proto_msgTypes[21]
+	mi := &file_stampede_worker_v1_worker_proto_msgTypes[22]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1963,7 +2091,7 @@ func (x *StopRun) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use StopRun.ProtoReflect.Descriptor instead.
 func (*StopRun) Descriptor() ([]byte, []int) {
-	return file_stampede_worker_v1_worker_proto_rawDescGZIP(), []int{21}
+	return file_stampede_worker_v1_worker_proto_rawDescGZIP(), []int{22}
 }
 
 func (x *StopRun) GetRunId() string {
@@ -2000,7 +2128,7 @@ type Ack struct {
 
 func (x *Ack) Reset() {
 	*x = Ack{}
-	mi := &file_stampede_worker_v1_worker_proto_msgTypes[22]
+	mi := &file_stampede_worker_v1_worker_proto_msgTypes[23]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2012,7 +2140,7 @@ func (x *Ack) String() string {
 func (*Ack) ProtoMessage() {}
 
 func (x *Ack) ProtoReflect() protoreflect.Message {
-	mi := &file_stampede_worker_v1_worker_proto_msgTypes[22]
+	mi := &file_stampede_worker_v1_worker_proto_msgTypes[23]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2025,7 +2153,7 @@ func (x *Ack) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Ack.ProtoReflect.Descriptor instead.
 func (*Ack) Descriptor() ([]byte, []int) {
-	return file_stampede_worker_v1_worker_proto_rawDescGZIP(), []int{22}
+	return file_stampede_worker_v1_worker_proto_rawDescGZIP(), []int{23}
 }
 
 func (x *Ack) GetRunId() string {
@@ -2060,7 +2188,7 @@ type ServerHeartbeat struct {
 
 func (x *ServerHeartbeat) Reset() {
 	*x = ServerHeartbeat{}
-	mi := &file_stampede_worker_v1_worker_proto_msgTypes[23]
+	mi := &file_stampede_worker_v1_worker_proto_msgTypes[24]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2072,7 +2200,7 @@ func (x *ServerHeartbeat) String() string {
 func (*ServerHeartbeat) ProtoMessage() {}
 
 func (x *ServerHeartbeat) ProtoReflect() protoreflect.Message {
-	mi := &file_stampede_worker_v1_worker_proto_msgTypes[23]
+	mi := &file_stampede_worker_v1_worker_proto_msgTypes[24]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2085,7 +2213,7 @@ func (x *ServerHeartbeat) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ServerHeartbeat.ProtoReflect.Descriptor instead.
 func (*ServerHeartbeat) Descriptor() ([]byte, []int) {
-	return file_stampede_worker_v1_worker_proto_rawDescGZIP(), []int{23}
+	return file_stampede_worker_v1_worker_proto_rawDescGZIP(), []int{24}
 }
 
 func (x *ServerHeartbeat) GetServerTimeUnixNano() int64 {
@@ -2198,7 +2326,7 @@ const file_stampede_worker_v1_worker_proto_rawDesc = "" +
 	"\x05value\x18\x02 \x01(\v2\x1d.stampede.worker.v1.StepStatsR\x05value:\x028\x01\x1a]\n" +
 	"\rJourneysEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\x05R\x03key\x126\n" +
-	"\x05value\x18\x02 \x01(\v2 .stampede.worker.v1.JourneyStatsR\x05value:\x028\x01\"\xa2\x06\n" +
+	"\x05value\x18\x02 \x01(\v2 .stampede.worker.v1.JourneyStatsR\x05value:\x028\x01\"\xe0\x06\n" +
 	"\tStepStats\x12\x1a\n" +
 	"\brequests\x18\x01 \x01(\x04R\brequests\x12\x16\n" +
 	"\x06failed\x18\x02 \x01(\x04R\x06failed\x12A\n" +
@@ -2216,7 +2344,8 @@ const file_stampede_worker_v1_worker_proto_rawDesc = "" +
 	"\x06events\x18\r \x01(\x04R\x06events\x12\x1b\n" +
 	"\tstream_us\x18\x0e \x01(\x04R\bstreamUs\x12J\n" +
 	"\tprotocols\x18\x0f \x03(\v2,.stampede.worker.v1.StepStats.ProtocolsEntryR\tprotocols\x129\n" +
-	"\aslowest\x18\x10 \x03(\v2\x1f.stampede.worker.v1.SlowRequestR\aslowest\x1a9\n" +
+	"\aslowest\x18\x10 \x03(\v2\x1f.stampede.worker.v1.SlowRequestR\aslowest\x12<\n" +
+	"\bexamples\x18\x11 \x03(\v2 .stampede.worker.v1.ErrorExampleR\bexamples\x1a9\n" +
 	"\vErrorsEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
 	"\x05value\x18\x02 \x01(\x04R\x05value:\x028\x01\x1a9\n" +
@@ -2225,7 +2354,26 @@ const file_stampede_worker_v1_worker_proto_rawDesc = "" +
 	"\x05value\x18\x02 \x01(\x04R\x05value:\x028\x01\x1a<\n" +
 	"\x0eProtocolsEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
-	"\x05value\x18\x02 \x01(\x04R\x05value:\x028\x01\"\x9d\x01\n" +
+	"\x05value\x18\x02 \x01(\x04R\x05value:\x028\x01\"\xbb\x04\n" +
+	"\fErrorExample\x12\x14\n" +
+	"\x05error\x18\x01 \x01(\tR\x05error\x12 \n" +
+	"\fat_unix_nano\x18\x02 \x01(\x03R\n" +
+	"atUnixNano\x12\x19\n" +
+	"\btrace_id\x18\x03 \x01(\fR\atraceId\x12\x18\n" +
+	"\arequest\x18\x04 \x01(\tR\arequest\x12]\n" +
+	"\x0frequest_headers\x18\x05 \x03(\v24.stampede.worker.v1.ErrorExample.RequestHeadersEntryR\x0erequestHeaders\x12!\n" +
+	"\frequest_body\x18\x06 \x01(\tR\vrequestBody\x12\x16\n" +
+	"\x06status\x18\a \x01(\x05R\x06status\x12`\n" +
+	"\x10response_headers\x18\b \x03(\v25.stampede.worker.v1.ErrorExample.ResponseHeadersEntryR\x0fresponseHeaders\x12#\n" +
+	"\rresponse_body\x18\t \x01(\tR\fresponseBody\x12\x16\n" +
+	"\x06detail\x18\n" +
+	" \x01(\tR\x06detail\x1aA\n" +
+	"\x13RequestHeadersEntry\x12\x10\n" +
+	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
+	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\x1aB\n" +
+	"\x14ResponseHeadersEntry\x12\x10\n" +
+	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
+	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"\x9d\x01\n" +
 	"\vSlowRequest\x12\x1d\n" +
 	"\n" +
 	"latency_ns\x18\x01 \x01(\x03R\tlatencyNs\x12&\n" +
@@ -2313,7 +2461,7 @@ func file_stampede_worker_v1_worker_proto_rawDescGZIP() []byte {
 	return file_stampede_worker_v1_worker_proto_rawDescData
 }
 
-var file_stampede_worker_v1_worker_proto_msgTypes = make([]protoimpl.MessageInfo, 33)
+var file_stampede_worker_v1_worker_proto_msgTypes = make([]protoimpl.MessageInfo, 36)
 var file_stampede_worker_v1_worker_proto_goTypes = []any{
 	(*EnrollRequest)(nil),   // 0: stampede.worker.v1.EnrollRequest
 	(*EnrollResponse)(nil),  // 1: stampede.worker.v1.EnrollResponse
@@ -2328,26 +2476,29 @@ var file_stampede_worker_v1_worker_proto_goTypes = []any{
 	(*RunAccepted)(nil),     // 10: stampede.worker.v1.RunAccepted
 	(*Snapshot)(nil),        // 11: stampede.worker.v1.Snapshot
 	(*StepStats)(nil),       // 12: stampede.worker.v1.StepStats
-	(*SlowRequest)(nil),     // 13: stampede.worker.v1.SlowRequest
-	(*JourneyStats)(nil),    // 14: stampede.worker.v1.JourneyStats
-	(*PhaseHistograms)(nil), // 15: stampede.worker.v1.PhaseHistograms
-	(*RunFinished)(nil),     // 16: stampede.worker.v1.RunFinished
-	(*RunFailed)(nil),       // 17: stampede.worker.v1.RunFailed
-	(*Welcome)(nil),         // 18: stampede.worker.v1.Welcome
-	(*ClockPing)(nil),       // 19: stampede.worker.v1.ClockPing
-	(*StartRun)(nil),        // 20: stampede.worker.v1.StartRun
-	(*StopRun)(nil),         // 21: stampede.worker.v1.StopRun
-	(*Ack)(nil),             // 22: stampede.worker.v1.Ack
-	(*ServerHeartbeat)(nil), // 23: stampede.worker.v1.ServerHeartbeat
-	nil,                     // 24: stampede.worker.v1.Hello.LabelsEntry
-	nil,                     // 25: stampede.worker.v1.Snapshot.StepsEntry
-	nil,                     // 26: stampede.worker.v1.Snapshot.JourneysEntry
-	nil,                     // 27: stampede.worker.v1.StepStats.ErrorsEntry
-	nil,                     // 28: stampede.worker.v1.StepStats.StatusEntry
-	nil,                     // 29: stampede.worker.v1.StepStats.ProtocolsEntry
-	nil,                     // 30: stampede.worker.v1.RunFinished.PhasesEntry
-	nil,                     // 31: stampede.worker.v1.StartRun.EnvEntry
-	nil,                     // 32: stampede.worker.v1.StartRun.SecretsEntry
+	(*ErrorExample)(nil),    // 13: stampede.worker.v1.ErrorExample
+	(*SlowRequest)(nil),     // 14: stampede.worker.v1.SlowRequest
+	(*JourneyStats)(nil),    // 15: stampede.worker.v1.JourneyStats
+	(*PhaseHistograms)(nil), // 16: stampede.worker.v1.PhaseHistograms
+	(*RunFinished)(nil),     // 17: stampede.worker.v1.RunFinished
+	(*RunFailed)(nil),       // 18: stampede.worker.v1.RunFailed
+	(*Welcome)(nil),         // 19: stampede.worker.v1.Welcome
+	(*ClockPing)(nil),       // 20: stampede.worker.v1.ClockPing
+	(*StartRun)(nil),        // 21: stampede.worker.v1.StartRun
+	(*StopRun)(nil),         // 22: stampede.worker.v1.StopRun
+	(*Ack)(nil),             // 23: stampede.worker.v1.Ack
+	(*ServerHeartbeat)(nil), // 24: stampede.worker.v1.ServerHeartbeat
+	nil,                     // 25: stampede.worker.v1.Hello.LabelsEntry
+	nil,                     // 26: stampede.worker.v1.Snapshot.StepsEntry
+	nil,                     // 27: stampede.worker.v1.Snapshot.JourneysEntry
+	nil,                     // 28: stampede.worker.v1.StepStats.ErrorsEntry
+	nil,                     // 29: stampede.worker.v1.StepStats.StatusEntry
+	nil,                     // 30: stampede.worker.v1.StepStats.ProtocolsEntry
+	nil,                     // 31: stampede.worker.v1.ErrorExample.RequestHeadersEntry
+	nil,                     // 32: stampede.worker.v1.ErrorExample.ResponseHeadersEntry
+	nil,                     // 33: stampede.worker.v1.RunFinished.PhasesEntry
+	nil,                     // 34: stampede.worker.v1.StartRun.EnvEntry
+	nil,                     // 35: stampede.worker.v1.StartRun.SecretsEntry
 }
 var file_stampede_worker_v1_worker_proto_depIdxs = []int32{
 	5,  // 0: stampede.worker.v1.WorkerMessage.hello:type_name -> stampede.worker.v1.Hello
@@ -2355,41 +2506,44 @@ var file_stampede_worker_v1_worker_proto_depIdxs = []int32{
 	9,  // 2: stampede.worker.v1.WorkerMessage.clock_pong:type_name -> stampede.worker.v1.ClockPong
 	10, // 3: stampede.worker.v1.WorkerMessage.run_accepted:type_name -> stampede.worker.v1.RunAccepted
 	11, // 4: stampede.worker.v1.WorkerMessage.snapshot:type_name -> stampede.worker.v1.Snapshot
-	16, // 5: stampede.worker.v1.WorkerMessage.run_finished:type_name -> stampede.worker.v1.RunFinished
-	17, // 6: stampede.worker.v1.WorkerMessage.run_failed:type_name -> stampede.worker.v1.RunFailed
-	18, // 7: stampede.worker.v1.ServerMessage.welcome:type_name -> stampede.worker.v1.Welcome
-	19, // 8: stampede.worker.v1.ServerMessage.clock_ping:type_name -> stampede.worker.v1.ClockPing
-	20, // 9: stampede.worker.v1.ServerMessage.start_run:type_name -> stampede.worker.v1.StartRun
-	21, // 10: stampede.worker.v1.ServerMessage.stop_run:type_name -> stampede.worker.v1.StopRun
-	22, // 11: stampede.worker.v1.ServerMessage.ack:type_name -> stampede.worker.v1.Ack
-	23, // 12: stampede.worker.v1.ServerMessage.heartbeat:type_name -> stampede.worker.v1.ServerHeartbeat
+	17, // 5: stampede.worker.v1.WorkerMessage.run_finished:type_name -> stampede.worker.v1.RunFinished
+	18, // 6: stampede.worker.v1.WorkerMessage.run_failed:type_name -> stampede.worker.v1.RunFailed
+	19, // 7: stampede.worker.v1.ServerMessage.welcome:type_name -> stampede.worker.v1.Welcome
+	20, // 8: stampede.worker.v1.ServerMessage.clock_ping:type_name -> stampede.worker.v1.ClockPing
+	21, // 9: stampede.worker.v1.ServerMessage.start_run:type_name -> stampede.worker.v1.StartRun
+	22, // 10: stampede.worker.v1.ServerMessage.stop_run:type_name -> stampede.worker.v1.StopRun
+	23, // 11: stampede.worker.v1.ServerMessage.ack:type_name -> stampede.worker.v1.Ack
+	24, // 12: stampede.worker.v1.ServerMessage.heartbeat:type_name -> stampede.worker.v1.ServerHeartbeat
 	4,  // 13: stampede.worker.v1.Hello.protocol:type_name -> stampede.worker.v1.ProtocolVersion
-	24, // 14: stampede.worker.v1.Hello.labels:type_name -> stampede.worker.v1.Hello.LabelsEntry
+	25, // 14: stampede.worker.v1.Hello.labels:type_name -> stampede.worker.v1.Hello.LabelsEntry
 	6,  // 15: stampede.worker.v1.Hello.capacity:type_name -> stampede.worker.v1.Capacity
 	7,  // 16: stampede.worker.v1.Heartbeat.health:type_name -> stampede.worker.v1.Health
-	25, // 17: stampede.worker.v1.Snapshot.steps:type_name -> stampede.worker.v1.Snapshot.StepsEntry
-	26, // 18: stampede.worker.v1.Snapshot.journeys:type_name -> stampede.worker.v1.Snapshot.JourneysEntry
+	26, // 17: stampede.worker.v1.Snapshot.steps:type_name -> stampede.worker.v1.Snapshot.StepsEntry
+	27, // 18: stampede.worker.v1.Snapshot.journeys:type_name -> stampede.worker.v1.Snapshot.JourneysEntry
 	7,  // 19: stampede.worker.v1.Snapshot.health:type_name -> stampede.worker.v1.Health
-	27, // 20: stampede.worker.v1.StepStats.errors:type_name -> stampede.worker.v1.StepStats.ErrorsEntry
-	28, // 21: stampede.worker.v1.StepStats.status:type_name -> stampede.worker.v1.StepStats.StatusEntry
-	29, // 22: stampede.worker.v1.StepStats.protocols:type_name -> stampede.worker.v1.StepStats.ProtocolsEntry
-	13, // 23: stampede.worker.v1.StepStats.slowest:type_name -> stampede.worker.v1.SlowRequest
-	30, // 24: stampede.worker.v1.RunFinished.phases:type_name -> stampede.worker.v1.RunFinished.PhasesEntry
-	4,  // 25: stampede.worker.v1.Welcome.protocol:type_name -> stampede.worker.v1.ProtocolVersion
-	31, // 26: stampede.worker.v1.StartRun.env:type_name -> stampede.worker.v1.StartRun.EnvEntry
-	32, // 27: stampede.worker.v1.StartRun.secrets:type_name -> stampede.worker.v1.StartRun.SecretsEntry
-	12, // 28: stampede.worker.v1.Snapshot.StepsEntry.value:type_name -> stampede.worker.v1.StepStats
-	14, // 29: stampede.worker.v1.Snapshot.JourneysEntry.value:type_name -> stampede.worker.v1.JourneyStats
-	15, // 30: stampede.worker.v1.RunFinished.PhasesEntry.value:type_name -> stampede.worker.v1.PhaseHistograms
-	2,  // 31: stampede.worker.v1.WorkerService.Connect:input_type -> stampede.worker.v1.WorkerMessage
-	0,  // 32: stampede.worker.v1.WorkerService.Enroll:input_type -> stampede.worker.v1.EnrollRequest
-	3,  // 33: stampede.worker.v1.WorkerService.Connect:output_type -> stampede.worker.v1.ServerMessage
-	1,  // 34: stampede.worker.v1.WorkerService.Enroll:output_type -> stampede.worker.v1.EnrollResponse
-	33, // [33:35] is the sub-list for method output_type
-	31, // [31:33] is the sub-list for method input_type
-	31, // [31:31] is the sub-list for extension type_name
-	31, // [31:31] is the sub-list for extension extendee
-	0,  // [0:31] is the sub-list for field type_name
+	28, // 20: stampede.worker.v1.StepStats.errors:type_name -> stampede.worker.v1.StepStats.ErrorsEntry
+	29, // 21: stampede.worker.v1.StepStats.status:type_name -> stampede.worker.v1.StepStats.StatusEntry
+	30, // 22: stampede.worker.v1.StepStats.protocols:type_name -> stampede.worker.v1.StepStats.ProtocolsEntry
+	14, // 23: stampede.worker.v1.StepStats.slowest:type_name -> stampede.worker.v1.SlowRequest
+	13, // 24: stampede.worker.v1.StepStats.examples:type_name -> stampede.worker.v1.ErrorExample
+	31, // 25: stampede.worker.v1.ErrorExample.request_headers:type_name -> stampede.worker.v1.ErrorExample.RequestHeadersEntry
+	32, // 26: stampede.worker.v1.ErrorExample.response_headers:type_name -> stampede.worker.v1.ErrorExample.ResponseHeadersEntry
+	33, // 27: stampede.worker.v1.RunFinished.phases:type_name -> stampede.worker.v1.RunFinished.PhasesEntry
+	4,  // 28: stampede.worker.v1.Welcome.protocol:type_name -> stampede.worker.v1.ProtocolVersion
+	34, // 29: stampede.worker.v1.StartRun.env:type_name -> stampede.worker.v1.StartRun.EnvEntry
+	35, // 30: stampede.worker.v1.StartRun.secrets:type_name -> stampede.worker.v1.StartRun.SecretsEntry
+	12, // 31: stampede.worker.v1.Snapshot.StepsEntry.value:type_name -> stampede.worker.v1.StepStats
+	15, // 32: stampede.worker.v1.Snapshot.JourneysEntry.value:type_name -> stampede.worker.v1.JourneyStats
+	16, // 33: stampede.worker.v1.RunFinished.PhasesEntry.value:type_name -> stampede.worker.v1.PhaseHistograms
+	2,  // 34: stampede.worker.v1.WorkerService.Connect:input_type -> stampede.worker.v1.WorkerMessage
+	0,  // 35: stampede.worker.v1.WorkerService.Enroll:input_type -> stampede.worker.v1.EnrollRequest
+	3,  // 36: stampede.worker.v1.WorkerService.Connect:output_type -> stampede.worker.v1.ServerMessage
+	1,  // 37: stampede.worker.v1.WorkerService.Enroll:output_type -> stampede.worker.v1.EnrollResponse
+	36, // [36:38] is the sub-list for method output_type
+	34, // [34:36] is the sub-list for method input_type
+	34, // [34:34] is the sub-list for extension type_name
+	34, // [34:34] is the sub-list for extension extendee
+	0,  // [0:34] is the sub-list for field type_name
 }
 
 func init() { file_stampede_worker_v1_worker_proto_init() }
@@ -2420,7 +2574,7 @@ func file_stampede_worker_v1_worker_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_stampede_worker_v1_worker_proto_rawDesc), len(file_stampede_worker_v1_worker_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   33,
+			NumMessages:   36,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

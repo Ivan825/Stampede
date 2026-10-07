@@ -2,6 +2,7 @@ package wire
 
 import (
 	"encoding/json"
+	"fmt"
 	"reflect"
 	"strings"
 	"testing"
@@ -201,5 +202,28 @@ func TestCheckVersion(t *testing.T) {
 				t.Errorf("unclear error %q", err)
 			}
 		})
+	}
+}
+
+func TestSnapshotCarriesErrorExamples(t *testing.T) {
+	s := metrics.NewSnapshot(4)
+	at := time.Unix(1_700_000_000, 5)
+	for i := range 5 {
+		s.Step(0).Add(&metrics.Sample{Start: at, End: at.Add(time.Millisecond), Status: 500, Err: "HTTP 500", Failed: true,
+			Exchange: &metrics.ErrorExample{At: at, Request: fmt.Sprintf("GET /x?i=%d", i), Status: 500,
+				RequestHeaders: map[string]string{"Authorization": "[redacted]"}, ResponseBody: "boom", TraceID: "0102030405060708090a0b0c0d0e0f10"}})
+	}
+	p, err := SnapshotToProto("run", s, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	back, _, err := SnapshotFromProto("w", p)
+	if err != nil {
+		t.Fatal(err)
+	}
+	exs := back.Steps[0].Examples["HTTP 500"]
+	if len(exs) != metrics.MaxErrorExamples || exs[0].Request != "GET /x?i=0" || exs[2].TraceID != "0102030405060708090a0b0c0d0e0f10" ||
+		exs[0].RequestHeaders["Authorization"] != "[redacted]" || !exs[0].At.Equal(at) || exs[1].ResponseBody != "boom" {
+		t.Fatalf("%+v", exs)
 	}
 }

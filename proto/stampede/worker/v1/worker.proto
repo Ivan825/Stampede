@@ -206,10 +206,28 @@ message StepStats {
   // slowest holds up to five of the step's slowest requests in the
   // interval, slowest first. Added in protocol v1.2.
   repeated SlowRequest slowest = 16;
+  // examples are failed requests kept as examples, up to three per error
+  // class. Added in protocol v1.5.
+  repeated ErrorExample examples = 17;
 }
 
 // SlowRequest is one of the slowest requests of a step, with the W3C
 // trace ID it was sent with so a report can link to the trace.
+// ErrorExample is one failed request, redacted by the worker.
+message ErrorExample {
+  // error is the error class it is an example of.
+  string error = 1;
+  int64 at_unix_nano = 2;
+  bytes trace_id = 3;
+  string request = 4;
+  map<string, string> request_headers = 5;
+  string request_body = 6;
+  int32 status = 7;
+  map<string, string> response_headers = 8;
+  string response_body = 9;
+  string detail = 10;
+}
+
 message SlowRequest {
   // latency_ns is measured from the intended send time.
   int64 latency_ns = 1;

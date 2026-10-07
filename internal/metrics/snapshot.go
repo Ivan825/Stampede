@@ -66,6 +66,32 @@ type Sample struct {
 	// TraceID is the W3C trace ID sent with the request (all zero when
 	// none was sent).
 	TraceID [16]byte
+	// Exchange, set on some failed samples, is an example of the failure
+	// for the report (see MaxErrorExamples).
+	Exchange *ErrorExample
+}
+
+// MaxErrorExamples is how many examples a step keeps for each error.
+const MaxErrorExamples = 3
+
+// MaxExampleBody bounds the request and response bodies of an example.
+const MaxExampleBody = 512
+
+// ErrorExample shows one failed request: what was sent and what came
+// back, with credentials and the run's secrets redacted.
+type ErrorExample struct {
+	At      time.Time `json:"at"`
+	TraceID string    `json:"traceId,omitempty"`
+	// Request is "METHOD URL"; RequestBody its first MaxExampleBody bytes.
+	Request         string            `json:"request"`
+	RequestHeaders  map[string]string `json:"requestHeaders,omitempty"`
+	RequestBody     string            `json:"requestBody,omitempty"`
+	Status          int               `json:"status,omitempty"`
+	ResponseHeaders map[string]string `json:"responseHeaders,omitempty"`
+	ResponseBody    string            `json:"responseBody,omitempty"`
+	// Detail is the error message, such as a check's mismatch or a
+	// connection error.
+	Detail string `json:"detail,omitempty"`
 }
 
 // Snapshot holds everything recorded during one interval (normally one
@@ -118,6 +144,19 @@ type StepStats struct {
 	// Slowest holds up to MaxSlowest of the slowest requests, slowest
 	// first, with their trace IDs.
 	Slowest []SlowRequest `json:"slowest,omitempty"`
+	// Examples holds up to MaxErrorExamples failed requests per error.
+	Examples map[string][]ErrorExample `json:"examples,omitempty"`
+}
+
+// addExample keeps e if its error has fewer than MaxErrorExamples.
+func (st *StepStats) addExample(err string, e ErrorExample) {
+	if len(st.Examples[err]) >= MaxErrorExamples {
+		return
+	}
+	if st.Examples == nil {
+		st.Examples = map[string][]ErrorExample{}
+	}
+	st.Examples[err] = append(st.Examples[err], e)
 }
 
 // MaxSlowest is how many of the slowest requests a step keeps per
@@ -208,6 +247,9 @@ func (st *StepStats) Add(s *Sample) {
 			st.Errors = map[string]uint64{}
 		}
 		st.Errors[s.Err]++
+		if s.Exchange != nil {
+			st.addExample(s.Err, *s.Exchange)
+		}
 	}
 	if s.Status > 0 {
 		if st.Status == nil {
@@ -283,6 +325,16 @@ func (st *StepStats) Merge(o *StepStats) {
 	}
 	for _, r := range o.Slowest {
 		st.addSlow(r)
+	}
+	errs := make([]string, 0, len(o.Examples))
+	for k := range o.Examples {
+		errs = append(errs, k)
+	}
+	sort.Strings(errs)
+	for _, k := range errs {
+		for _, e := range o.Examples[k] {
+			st.addExample(k, e)
+		}
 	}
 }
 

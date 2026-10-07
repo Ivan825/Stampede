@@ -20,7 +20,8 @@ const (
 	ProtocolMajor = 1
 	// 1.3: browser phases (fcp, lcp, cls, inp, load). 1.4: busy_elsewhere
 	// heartbeats and mid-run takeover (StartRun resume_ns and attempt).
-	ProtocolMinor = 4
+	// 1.5: error examples in step snapshots.
+	ProtocolMinor = 5
 )
 
 // Version is the protocol version as a message.
@@ -128,6 +129,16 @@ func SnapshotToProto(runID string, s *metrics.Snapshot, h *Health) (*workerv1.Sn
 		for _, r := range st.Slowest {
 			ps.Slowest = append(ps.Slowest, slowToProto(r))
 		}
+		errs := make([]string, 0, len(st.Examples))
+		for k := range st.Examples {
+			errs = append(errs, k)
+		}
+		sort.Strings(errs)
+		for _, k := range errs {
+			for _, e := range st.Examples[k] {
+				ps.Examples = append(ps.Examples, exampleToProto(k, e))
+			}
+		}
 		if len(st.Errors) > 0 {
 			ps.Errors = make(map[string]uint64, len(st.Errors))
 			for k, v := range st.Errors {
@@ -209,6 +220,15 @@ func SnapshotFromProto(worker string, p *workerv1.Snapshot) (*metrics.Snapshot, 
 				return nil, nil, fmt.Errorf("step %d: %w", id, err)
 			}
 			st.Slowest = append(st.Slowest, sr)
+		}
+		for _, p := range ps.GetExamples() {
+			if len(st.Examples[p.GetError()]) >= metrics.MaxErrorExamples {
+				return nil, nil, fmt.Errorf("step %d: more than %d examples of %q", id, metrics.MaxErrorExamples, p.GetError())
+			}
+			if st.Examples == nil {
+				st.Examples = map[string][]metrics.ErrorExample{}
+			}
+			st.Examples[p.GetError()] = append(st.Examples[p.GetError()], exampleFromProto(p))
 		}
 		if err := st.Latency.UnmarshalBinary(ps.GetLatency()); err != nil {
 			return nil, nil, fmt.Errorf("step %d latency: %w", id, err)
@@ -300,6 +320,30 @@ func slowToProto(r metrics.SlowRequest) *workerv1.SlowRequest {
 		p.TraceId = id
 	}
 	return p
+}
+
+func exampleToProto(err string, e metrics.ErrorExample) *workerv1.ErrorExample {
+	p := &workerv1.ErrorExample{
+		Error: err, AtUnixNano: e.At.UnixNano(), Request: e.Request, RequestHeaders: e.RequestHeaders,
+		RequestBody: e.RequestBody, Status: int32(e.Status), ResponseHeaders: e.ResponseHeaders, //nolint:gosec // HTTP status codes fit
+		ResponseBody: e.ResponseBody, Detail: e.Detail,
+	}
+	if id, err := hex.DecodeString(e.TraceID); err == nil && len(id) == 16 {
+		p.TraceId = id
+	}
+	return p
+}
+
+func exampleFromProto(p *workerv1.ErrorExample) metrics.ErrorExample {
+	e := metrics.ErrorExample{
+		At: time.Unix(0, p.GetAtUnixNano()), Request: p.GetRequest(), RequestHeaders: p.GetRequestHeaders(),
+		RequestBody: p.GetRequestBody(), Status: int(p.GetStatus()), ResponseHeaders: p.GetResponseHeaders(),
+		ResponseBody: p.GetResponseBody(), Detail: p.GetDetail(),
+	}
+	if id := p.GetTraceId(); len(id) == 16 {
+		e.TraceID = metrics.TraceIDString([16]byte(id))
+	}
+	return e
 }
 
 func slowFromProto(p *workerv1.SlowRequest) (metrics.SlowRequest, error) {
