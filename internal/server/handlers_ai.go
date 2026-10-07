@@ -451,9 +451,23 @@ func (h *handlers) CreateAIJob(ctx context.Context, req gen.CreateAIJobRequestOb
 		Description: strings.TrimSpace(str(b.Description)),
 		OpenAPI:     []byte(str(b.Openapi)), HAR: []byte(str(b.Har)), AccessLog: []byte(str(b.AccessLog)),
 	}
+	protoSize := 0
+	if b.Proto != nil && len(*b.Proto) > 0 {
+		in.Proto = map[string][]byte{}
+		for name, src := range *b.Proto {
+			name = strings.TrimSpace(name)
+			if name == "" || strings.Contains(name, "..") || strings.HasPrefix(name, "/") {
+				return nil, errInvalid(fmt.Sprintf("proto file name %q must be a relative path such as shop/v1/orders.proto", name))
+			}
+			in.Proto[name] = []byte(src)
+			protoSize += len(src)
+		}
+	}
 	switch {
-	case in.Description == "" && len(in.OpenAPI) == 0 && len(in.HAR) == 0 && len(in.AccessLog) == 0:
-		return nil, errInvalid("give at least one input: description, openapi, har or accessLog")
+	case in.Description == "" && len(in.OpenAPI) == 0 && len(in.HAR) == 0 && len(in.AccessLog) == 0 && len(in.Proto) == 0:
+		return nil, errInvalid("give at least one input: description, openapi, proto, har or accessLog")
+	case protoSize > maxAISpec:
+		return nil, errInvalid("proto files are larger than 5 MiB in all")
 	case len(in.Description) > maxAIDescription:
 		return nil, errInvalid("description is longer than 20,000 characters")
 	case len(in.OpenAPI) > maxAISpec:
@@ -461,13 +475,36 @@ func (h *handlers) CreateAIJob(ctx context.Context, req gen.CreateAIJobRequestOb
 	case len(in.HAR) > maxAITraffic || len(in.AccessLog) > maxAITraffic:
 		return nil, errInvalid("har and accessLog are limited to 20 MiB each")
 	}
-	dryRun := b.DryRun == nil || *b.DryRun
+	jr := aiJobRequest{inputs: in, providerID: b.ProviderId, targetID: b.TargetId, scenarioID: b.ScenarioId, dryRun: b.DryRun == nil || *b.DryRun, maxRepairs: b.MaxRepairs}
+	row, err := h.launchAIJob(ctx, p, pr, jr)
+	if err != nil {
+		return nil, err
+	}
+	return gen.CreateAIJob202JSONResponse(aiJobOf(row, h.creators(ctx, p.OrgID))), nil
+}
+
+// aiJobRequest is a generation job to start: from POST
+// /projects/{id}/ai/jobs or a drift repair.
+type aiJobRequest struct {
+	inputs                           ai.Inputs
+	providerID, targetID, scenarioID *uuid.UUID
+	dryRun                           bool
+	// maxRepairs is as given to the API (0 to 3); nil means the default.
+	maxRepairs *int
+	// purpose is recorded in the audit log ("" for a generation).
+	purpose string
+}
+
+// launchAIJob checks a job's target, scenario, provider and token budget,
+// records it and starts it in the background.
+func (h *handlers) launchAIJob(ctx context.Context, p *auth.Principal, pr db.Project, jr aiJobRequest) (db.AiJob, error) {
+	in, dryRun := jr.inputs, jr.dryRun
 	maxRepairs := ai.DefaultMaxRepairs
-	if b.MaxRepairs != nil {
-		if *b.MaxRepairs < 0 || *b.MaxRepairs > 3 {
-			return nil, errInvalid("maxRepairs must be between 0 and 3")
+	if jr.maxRepairs != nil {
+		if *jr.maxRepairs < 0 || *jr.maxRepairs > 3 {
+			return db.AiJob{}, errInvalid("maxRepairs must be between 0 and 3")
 		}
-		maxRepairs = *b.MaxRepairs
+		maxRepairs = *jr.maxRepairs
 	}
 	if maxRepairs == 0 {
 		maxRepairs = -1 // the pipeline reads 0 as the default
@@ -475,59 +512,63 @@ func (h *handlers) CreateAIJob(ctx context.Context, req gen.CreateAIJobRequestOb
 
 	opts := ai.Options{DryRun: dryRun, MaxRepairs: maxRepairs, OmitBaseURL: true, DataDir: h.cfg.DataDir, ConfineData: true, Transport: h.cfg.AI.Transport}
 	var targetID *uuid.UUID
-	if b.TargetId != nil {
-		tg, err := h.st.GetTarget(ctx, db.GetTargetParams{ID: *b.TargetId, OrgID: p.OrgID})
+	if jr.targetID != nil {
+		tg, err := h.st.GetTarget(ctx, db.GetTargetParams{ID: *jr.targetID, OrgID: p.OrgID})
 		if err != nil || tg.ProjectID != pr.ID {
-			return nil, errInvalid("target not found in this project")
+			return db.AiJob{}, errInvalid("target not found in this project")
 		}
 		opts.Target, opts.AllowHosts = tg.BaseUrl, tg.AllowHosts
 		targetID = &tg.ID
 	} else if dryRun {
-		return nil, errInvalid("targetId is required for the dry run (or set dryRun to false)")
+		return db.AiJob{}, errInvalid("targetId is required for the dry run (or set dryRun to false)")
 	}
 	var scenarioID *uuid.UUID
-	if b.ScenarioId != nil {
-		sc, err := h.st.GetScenario(ctx, db.GetScenarioParams{ID: *b.ScenarioId, OrgID: p.OrgID})
+	if jr.scenarioID != nil {
+		sc, err := h.st.GetScenario(ctx, db.GetScenarioParams{ID: *jr.scenarioID, OrgID: p.OrgID})
 		if err != nil || sc.ProjectID != pr.ID {
-			return nil, errInvalid("scenario not found in this project")
+			return db.AiJob{}, errInvalid("scenario not found in this project")
 		}
 		v, err := h.st.GetLatestScenarioVersion(ctx, sc.ID)
 		if err != nil {
-			return nil, err
+			return db.AiJob{}, err
 		}
 		in.Existing = []byte(v.Yaml)
 		scenarioID = &sc.ID
 	}
 
-	prow, err := h.pickProvider(ctx, p.OrgID, b.ProviderId)
+	prow, err := h.pickProvider(ctx, p.OrgID, jr.providerID)
 	if err != nil {
-		return nil, err
+		return db.AiJob{}, err
 	}
 	used, err := h.aiTokensThisMonth(ctx, p.OrgID)
 	if err != nil {
-		return nil, err
+		return db.AiJob{}, err
 	}
 	if used >= prow.MonthlyTokenCap {
-		return nil, &apiError{status: 429, code: "ai_token_cap", msg: fmt.Sprintf("the organisation used %d AI tokens this month, which reaches the cap of %d for provider %s", used, prow.MonthlyTokenCap, prow.Name)}
+		return db.AiJob{}, &apiError{status: 429, code: "ai_token_cap", msg: fmt.Sprintf("the organisation used %d AI tokens this month, which reaches the cap of %d for provider %s", used, prow.MonthlyTokenCap, prow.Name)}
 	}
 	if h.ai.queued.Load() >= int64(h.cfg.AI.MaxQueued) {
-		return nil, &apiError{status: 429, code: "ai_queue_full", msg: "too many AI generation jobs are waiting; try again shortly"}
+		return db.AiJob{}, &apiError{status: 429, code: "ai_queue_full", msg: "too many AI generation jobs are waiting; try again shortly"}
 	}
 	client, err := h.providerClient(prow)
 	if err != nil {
-		return nil, err
+		return db.AiJob{}, err
 	}
 	opts.Provider = client
 	opts.TokenBudget = prow.MonthlyTokenCap - used
 	if dryRun {
 		if opts.Secrets, err = h.projectSecrets(ctx, pr.ID); err != nil {
-			return nil, err
+			return db.AiJob{}, err
 		}
 	}
 
 	// Record what was given, never the contents.
 	sizes := map[string]int{}
-	for k, v := range map[string]int{"description": len(in.Description), "openapi": len(in.OpenAPI), "har": len(in.HAR), "accessLog": len(in.AccessLog)} {
+	protoSize := 0
+	for _, src := range in.Proto {
+		protoSize += len(src)
+	}
+	for k, v := range map[string]int{"description": len(in.Description), "openapi": len(in.OpenAPI), "har": len(in.HAR), "accessLog": len(in.AccessLog), "proto": protoSize} {
 		if v > 0 {
 			sizes[k] = v
 		}
@@ -540,19 +581,19 @@ func (h *handlers) CreateAIJob(ctx context.Context, req gen.CreateAIJobRequestOb
 		TargetID: targetID, ScenarioID: scenarioID, DryRun: dryRun, Inputs: inputsJSON, CreatedBy: &uid,
 	})
 	if err != nil {
-		return nil, err
+		return db.AiJob{}, err
 	}
 	if err := h.st.SetAIJobOwner(ctx, db.SetAIJobOwnerParams{ID: id, OwnerReplica: &h.replica.id}); err != nil {
-		return nil, err
+		return db.AiJob{}, err
 	}
-	h.audit(ctx, "ai.job.create", pr.Name, map[string]any{"job": id, "provider": prow.Name, "model": client.Model(), "inputs": sizes, "dryRun": dryRun, "target": opts.Target})
+	details := map[string]any{"job": id, "provider": prow.Name, "model": client.Model(), "inputs": sizes, "dryRun": dryRun, "target": opts.Target}
+	if jr.purpose != "" {
+		details["purpose"] = jr.purpose
+	}
+	h.audit(ctx, "ai.job.create", pr.Name, details)
 	h.ai.launch(aiJobSpec{id: id, inputs: in, opts: opts})
 
-	row, err := h.st.GetAIJob(ctx, db.GetAIJobParams{ID: id, OrgID: p.OrgID})
-	if err != nil {
-		return nil, err
-	}
-	return gen.CreateAIJob202JSONResponse(aiJobOf(row, h.creators(ctx, p.OrgID))), nil
+	return h.st.GetAIJob(ctx, db.GetAIJobParams{ID: id, OrgID: p.OrgID})
 }
 
 func aiJobSummaryOf(r db.ListAIJobsRow, creators map[uuid.UUID]string) gen.AIJobSummary {
@@ -647,13 +688,16 @@ func (h *handlers) GetAIJob(ctx context.Context, req gen.GetAIJobRequestObject) 
 }
 
 func (h *handlers) ApproveAIJob(ctx context.Context, req gen.ApproveAIJobRequestObject) (gen.ApproveAIJobResponseObject, error) {
-	p, err := need(ctx, auth.PermEditScenarios)
+	p, err := need(ctx, auth.PermView)
 	if err != nil {
 		return nil, err
 	}
 	job, err := h.st.GetAIJob(ctx, db.GetAIJobParams{ID: req.JobId, OrgID: p.OrgID})
 	if err != nil {
 		return nil, notFoundOr(err, "AI job")
+	}
+	if _, err := h.needIn(ctx, job.ProjectID, auth.PermEditScenarios); err != nil {
+		return nil, err
 	}
 	b := req.Body
 	allow := b.AllowUnvalidated != nil && *b.AllowUnvalidated

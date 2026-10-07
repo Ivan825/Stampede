@@ -3,7 +3,7 @@ import { useState } from 'react';
 import type { RunOverrides } from '@/api/types';
 import { shapes } from '@/api/types';
 import { Button, Field, Input, Select } from '@/components/ui';
-import type { EnvRow, OverridesForm, overrideErrors } from './runForm';
+import type { EnvRow, OverridesForm, overrideErrors, RegionRow } from './runForm';
 
 // Form pieces shared by the new run and schedule dialogs.
 
@@ -149,6 +149,78 @@ export function EnvFields({
       <div>
         <Button size="sm" onClick={() => setEnv((rows) => [...rows, { key: '', value: '' }])}>
           <Plus className="size-3.5" aria-hidden /> Add variable
+        </Button>
+      </div>
+    </fieldset>
+  );
+}
+
+/**
+ * Splits a run's load across worker regions. Regions the connected workers
+ * report are offered; the server refuses a region with no connected worker.
+ */
+export function RegionFields({
+  rows,
+  setRows,
+  known,
+  error,
+}: {
+  rows: RegionRow[];
+  setRows: (f: (rows: RegionRow[]) => RegionRow[]) => void;
+  known: string[];
+  error?: string;
+}) {
+  const set = (i: number, k: keyof RegionRow, v: string) =>
+    setRows((rs) => rs.map((r, j) => (j === i ? { ...r, [k]: v } : r)));
+  return (
+    <fieldset className="flex flex-col gap-2">
+      <legend className="mb-1 text-[13px] font-medium">Region split</legend>
+      {rows.length === 0 && (
+        <p className="text-xs text-muted">
+          Optional. Split the load across worker regions, for example 50% from mumbai and 50% from
+          frankfurt; replaces the scenario&apos;s <code className="font-mono">load.regions</code>.
+          {known.length > 0
+            ? ` Connected regions: ${known.join(', ')}.`
+            : ' No connected worker reports a region.'}
+        </p>
+      )}
+      <datalist id="worker-regions">
+        {known.map((r) => (
+          <option key={r} value={r} />
+        ))}
+      </datalist>
+      {rows.map((row, i) => (
+        <div key={i} className="flex items-center gap-2">
+          <Input
+            aria-label={`Region ${i + 1}`}
+            placeholder="mumbai"
+            list="worker-regions"
+            className="font-mono"
+            value={row.region}
+            onChange={(e) => set(i, 'region', e.target.value)}
+          />
+          <Input
+            aria-label={`Region ${i + 1} share`}
+            placeholder="50%"
+            inputMode="decimal"
+            className="w-28"
+            value={row.percent}
+            onChange={(e) => set(i, 'percent', e.target.value)}
+          />
+          <Button
+            variant="ghost"
+            size="sm"
+            aria-label={`Remove region ${i + 1}`}
+            onClick={() => setRows((rs) => rs.filter((_, j) => j !== i))}
+          >
+            <X className="size-3.5" aria-hidden />
+          </Button>
+        </div>
+      ))}
+      {error && <p className="text-xs text-fail">{error}</p>}
+      <div>
+        <Button size="sm" onClick={() => setRows((rs) => [...rs, { region: '', percent: '' }])}>
+          <Plus className="size-3.5" aria-hidden /> Add region
         </Button>
       </div>
     </fieldset>

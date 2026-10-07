@@ -167,6 +167,12 @@ func compileProtos(ctx context.Context, protos, importPaths []string) (*protoreg
 	if err != nil {
 		return nil, err
 	}
+	return registerFiles(compiled)
+}
+
+// registerFiles puts compiled files and their imports in a registry,
+// imports first.
+func registerFiles[F protoreflect.FileDescriptor](compiled []F) (*protoregistry.Files, error) {
 	files := &protoregistry.Files{}
 	var register func(fd protoreflect.FileDescriptor) error
 	register = func(fd protoreflect.FileDescriptor) error {

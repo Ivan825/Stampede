@@ -26,15 +26,15 @@ Operations marked **no authentication** can be called without either.
 - [Auth](#auth): [`POST /auth/login`](#post-authlogin), [`GET /auth/config`](#get-authconfig), [`POST /auth/logout`](#post-authlogout), [`GET /me`](#get-me), [`PUT /me/password`](#put-mepassword)
 - [Users](#users): [`GET /users`](#get-users), [`POST /users`](#post-users), [`PATCH /users/{userId}`](#patch-usersuserid), [`DELETE /users/{userId}`](#delete-usersuserid)
 - [Tokens](#tokens): [`GET /tokens`](#get-tokens), [`POST /tokens`](#post-tokens), [`DELETE /tokens/{tokenId}`](#delete-tokenstokenid)
-- [Projects](#projects): [`GET /projects`](#get-projects), [`POST /projects`](#post-projects), [`GET /projects/{projectId}`](#get-projectsprojectid), [`PATCH /projects/{projectId}`](#patch-projectsprojectid), [`DELETE /projects/{projectId}`](#delete-projectsprojectid)
+- [Projects](#projects): [`GET /projects`](#get-projects), [`POST /projects`](#post-projects), [`GET /projects/{projectId}`](#get-projectsprojectid), [`PATCH /projects/{projectId}`](#patch-projectsprojectid), [`DELETE /projects/{projectId}`](#delete-projectsprojectid), [`GET /organisation/caps`](#get-organisationcaps), [`PUT /organisation/caps`](#put-organisationcaps), [`GET /projects/{projectId}/settings`](#get-projectsprojectidsettings), [`PUT /projects/{projectId}/settings`](#put-projectsprojectidsettings), [`GET /projects/{projectId}/roles`](#get-projectsprojectidroles), [`PUT /projects/{projectId}/roles/{userId}`](#put-projectsprojectidrolesuserid), [`DELETE /projects/{projectId}/roles/{userId}`](#delete-projectsprojectidrolesuserid)
 - [Targets](#targets): [`GET /projects/{projectId}/targets`](#get-projectsprojectidtargets), [`POST /projects/{projectId}/targets`](#post-projectsprojectidtargets), [`GET /targets/{targetId}`](#get-targetstargetid), [`PATCH /targets/{targetId}`](#patch-targetstargetid), [`DELETE /targets/{targetId}`](#delete-targetstargetid), [`POST /targets/{targetId}/verify`](#post-targetstargetidverify)
 - [Secrets](#secrets): [`GET /projects/{projectId}/secrets`](#get-projectsprojectidsecrets), [`PUT /projects/{projectId}/secrets`](#put-projectsprojectidsecrets), [`DELETE /projects/{projectId}/secrets/{name}`](#delete-projectsprojectidsecretsname)
 - [Scenarios](#scenarios): [`POST /scenarios/validate`](#post-scenariosvalidate), [`GET /projects/{projectId}/scenarios`](#get-projectsprojectidscenarios), [`POST /projects/{projectId}/scenarios`](#post-projectsprojectidscenarios), [`GET /scenarios/{scenarioId}`](#get-scenariosscenarioid), [`DELETE /scenarios/{scenarioId}`](#delete-scenariosscenarioid), [`GET /scenarios/{scenarioId}/versions`](#get-scenariosscenarioidversions), [`POST /scenarios/{scenarioId}/versions`](#post-scenariosscenarioidversions), [`GET /scenarios/{scenarioId}/versions/{version}`](#get-scenariosscenarioidversionsversion)
-- [Runs](#runs): [`GET /projects/{projectId}/runs`](#get-projectsprojectidruns), [`POST /projects/{projectId}/runs`](#post-projectsprojectidruns), [`GET /runs/{runId}`](#get-runsrunid), [`POST /runs/{runId}/stop`](#post-runsrunidstop), [`POST /runs/{runId}/kill`](#post-runsrunidkill), [`POST /runs/kill-all`](#post-runskill-all), [`GET /runs/{runId}/live`](#get-runsrunidlive), [`GET /runs/{runId}/timeline`](#get-runsrunidtimeline), [`GET /runs/{runId}/report`](#get-runsrunidreport), [`POST /compare`](#post-compare)
-- [Schedules](#schedules): [`GET /projects/{projectId}/schedules`](#get-projectsprojectidschedules), [`POST /projects/{projectId}/schedules`](#post-projectsprojectidschedules), [`GET /schedules/preview`](#get-schedulespreview), [`GET /schedules/{scheduleId}`](#get-schedulesscheduleid), [`PATCH /schedules/{scheduleId}`](#patch-schedulesscheduleid), [`DELETE /schedules/{scheduleId}`](#delete-schedulesscheduleid), [`POST /schedules/{scheduleId}/run`](#post-schedulesscheduleidrun)
+- [Runs](#runs): [`GET /projects/{projectId}/runs`](#get-projectsprojectidruns), [`POST /projects/{projectId}/runs`](#post-projectsprojectidruns), [`GET /runs/{runId}`](#get-runsrunid), [`POST /runs/{runId}/stop`](#post-runsrunidstop), [`POST /runs/{runId}/kill`](#post-runsrunidkill), [`POST /runs/kill-all`](#post-runskill-all), [`GET /runs/{runId}/live`](#get-runsrunidlive), [`GET /runs/{runId}/timeline`](#get-runsrunidtimeline), [`GET /runs/{runId}/events`](#get-runsrunidevents), [`GET /runs/{runId}/report`](#get-runsrunidreport), [`POST /compare`](#post-compare)
+- [Schedules](#schedules): [`GET /projects/{projectId}/schedules`](#get-projectsprojectidschedules), [`POST /projects/{projectId}/schedules`](#post-projectsprojectidschedules), [`GET /schedules/preview`](#get-schedulespreview), [`GET /schedules/{scheduleId}`](#get-schedulesscheduleid), [`PATCH /schedules/{scheduleId}`](#patch-schedulesscheduleid), [`DELETE /schedules/{scheduleId}`](#delete-schedulesscheduleid), [`POST /schedules/{scheduleId}/run`](#post-schedulesscheduleidrun), [`GET /projects/{projectId}/drift-results`](#get-projectsprojectiddrift-results), [`GET /drift-results/{driftId}`](#get-drift-resultsdriftid)
 - [Workers](#workers): [`GET /workers`](#get-workers)
 - [Audit](#audit): [`GET /audit`](#get-audit)
-- [AI](#ai): [`GET /ai/providers`](#get-aiproviders), [`POST /ai/providers`](#post-aiproviders), [`DELETE /ai/providers/{providerId}`](#delete-aiprovidersproviderid), [`GET /projects/{projectId}/ai/jobs`](#get-projectsprojectidaijobs), [`POST /projects/{projectId}/ai/jobs`](#post-projectsprojectidaijobs), [`POST /runs/{runId}/narrative`](#post-runsrunidnarrative), [`GET /ai/jobs/{jobId}`](#get-aijobsjobid), [`POST /ai/jobs/{jobId}/approve`](#post-aijobsjobidapprove)
+- [AI](#ai): [`POST /drift-results/{driftId}/repair`](#post-drift-resultsdriftidrepair), [`GET /ai/providers`](#get-aiproviders), [`POST /ai/providers`](#post-aiproviders), [`DELETE /ai/providers/{providerId}`](#delete-aiprovidersproviderid), [`GET /projects/{projectId}/ai/jobs`](#get-projectsprojectidaijobs), [`POST /projects/{projectId}/ai/jobs`](#post-projectsprojectidaijobs), [`POST /runs/{runId}/narrative`](#post-runsrunidnarrative), [`GET /ai/jobs/{jobId}`](#get-aijobsjobid), [`POST /ai/jobs/{jobId}/approve`](#post-aijobsjobidapprove)
 - [Integrations](#integrations): [`GET /integrations`](#get-integrations), [`POST /integrations`](#post-integrations), [`DELETE /integrations/{integrationId}`](#delete-integrationsintegrationid), [`GET /notifications/channels`](#get-notificationschannels), [`POST /notifications/channels`](#post-notificationschannels), [`DELETE /notifications/channels/{channelId}`](#delete-notificationschannelschannelid), [`POST /notifications/channels/{channelId}/test`](#post-notificationschannelschannelidtest), [`GET /notifications/channels/{channelId}/deliveries`](#get-notificationschannelschanneliddeliveries)
 
 ## System
@@ -276,6 +276,130 @@ Operation `deleteProject`.
 | Status | Description | Body |
 |---|---|---|
 | 204 | Deleted with everything in it | — |
+| 404 | Not found | `application/json` [Error](#error) |
+
+### GET /organisation/caps
+
+The organisation's hard caps on every run.
+
+Operation `getOrgCaps`.
+
+| Status | Description | Body |
+|---|---|---|
+| 200 | Caps; unset fields mean no cap at this level | `application/json` [Caps](#caps) |
+
+### PUT /organisation/caps
+
+Set the organisation's hard caps (admin).
+
+Every run in the organisation must fit within these caps, as well
+as the server's, its project's and its target's. Send an empty
+object to remove them. Audited.
+
+Operation `putOrgCaps`.
+
+**Request body** (required): `application/json` [Caps](#caps)
+
+| Status | Description | Body |
+|---|---|---|
+| 200 | Saved | `application/json` [Caps](#caps) |
+| 403 | The caller's role does not allow this | `application/json` [Error](#error) |
+| 422 | The request is well-formed but invalid | `application/json` [Error](#error) |
+
+### GET /projects/{projectId}/settings
+
+Operation `getProjectSettings`.
+
+| Parameter | In | Type | Required | Description |
+|---|---|---|---|---|
+| `projectId` | path | string (uuid) | yes |  |
+
+| Status | Description | Body |
+|---|---|---|
+| 200 | The project's caps and run gate | `application/json` [ProjectSettings](#projectsettings) |
+| 404 | Not found | `application/json` [Error](#error) |
+
+### PUT /projects/{projectId}/settings
+
+Set the project's caps and dry-run gate (admin).
+
+Caps bound every run in the project, together with the server's,
+the organisation's and the target's. With requireDryRun, starting a
+run first runs each journey once with one user; the run fails
+before any load when a journey fails. Needs the admin role in the
+project. Audited.
+
+Operation `putProjectSettings`.
+
+| Parameter | In | Type | Required | Description |
+|---|---|---|---|---|
+| `projectId` | path | string (uuid) | yes |  |
+
+**Request body** (required): `application/json` [ProjectSettings](#projectsettings)
+
+| Status | Description | Body |
+|---|---|---|
+| 200 | Saved | `application/json` [ProjectSettings](#projectsettings) |
+| 403 | The caller's role does not allow this | `application/json` [Error](#error) |
+| 404 | Not found | `application/json` [Error](#error) |
+| 422 | The request is well-formed but invalid | `application/json` [Error](#error) |
+
+### GET /projects/{projectId}/roles
+
+Per-project role overrides.
+
+A member's organisation role applies in every project unless an
+override here sets another role for this project, higher or lower.
+Owners are owners everywhere.
+
+Operation `listProjectRoles`.
+
+| Parameter | In | Type | Required | Description |
+|---|---|---|---|---|
+| `projectId` | path | string (uuid) | yes |  |
+
+| Status | Description | Body |
+|---|---|---|
+| 200 | Overrides, by email | `application/json` array of [ProjectRole](#projectrole) |
+| 404 | Not found | `application/json` [Error](#error) |
+
+### PUT /projects/{projectId}/roles/{userId}
+
+Give a member a different role in this project (admin).
+
+Needs the admin role in the project. Owners cannot be overridden. Audited.
+
+Operation `putProjectRole`.
+
+| Parameter | In | Type | Required | Description |
+|---|---|---|---|---|
+| `projectId` | path | string (uuid) | yes |  |
+| `userId` | path | string (uuid) | yes |  |
+
+**Request body** (required): `application/json` [ProjectRoleSet](#projectroleset)
+
+| Status | Description | Body |
+|---|---|---|
+| 200 | Saved | `application/json` [ProjectRole](#projectrole) |
+| 403 | The caller's role does not allow this | `application/json` [Error](#error) |
+| 404 | Not found | `application/json` [Error](#error) |
+| 422 | The request is well-formed but invalid | `application/json` [Error](#error) |
+
+### DELETE /projects/{projectId}/roles/{userId}
+
+Remove an override, so the organisation role applies again (admin).
+
+Operation `deleteProjectRole`.
+
+| Parameter | In | Type | Required | Description |
+|---|---|---|---|---|
+| `projectId` | path | string (uuid) | yes |  |
+| `userId` | path | string (uuid) | yes |  |
+
+| Status | Description | Body |
+|---|---|---|
+| 204 | Removed | — |
+| 403 | The caller's role does not allow this | `application/json` [Error](#error) |
 | 404 | Not found | `application/json` [Error](#error) |
 
 ## Targets
@@ -638,10 +762,31 @@ Operation `getRunTimeline`.
 | Parameter | In | Type | Required | Description |
 |---|---|---|---|---|
 | `runId` | path | string (uuid) | yes |  |
+| `resolution` | query | string: `1s`, `10s`, `1m` | no | 1s (default) returns the per-second points. 10s and 1m return rollups: requests summed, rps averaged, p50 the mean and p95/p99 the worst per-second value in each bucket. With TimescaleDB the rollups are continuous aggregates kept after per-second points expire (stampede server --metrics-retention). Default `1s`. |
 
 | Status | Description | Body |
 |---|---|---|
 | 200 | Per-interval points recorded so far | `application/json` array of [Point](#point) |
+| 404 | Not found | `application/json` [Error](#error) |
+
+### GET /runs/{runId}/events
+
+Events recorded for a run.
+
+Workers joining or being lost, safety stops, breakpoint
+confirmations and, when the project requires one, the dry run
+before load (dryrun.started, one dryrun.journey per journey, then
+dryrun.passed or dryrun.failed). Oldest first.
+
+Operation `listRunEvents`.
+
+| Parameter | In | Type | Required | Description |
+|---|---|---|---|---|
+| `runId` | path | string (uuid) | yes |  |
+
+| Status | Description | Body |
+|---|---|---|
+| 200 | Events | `application/json` array of [RunEvent](#runevent) |
 | 404 | Not found | `application/json` [Error](#error) |
 
 ### GET /runs/{runId}/report
@@ -795,6 +940,8 @@ Start the schedule's run now.
 
 Starts a run as the caller without changing when the schedule next
 fires. Refused while the schedule's previous run is still active.
+For a drift schedule, runs its drift check now instead and returns
+the result (200).
 
 Operation `runSchedule`.
 
@@ -804,11 +951,44 @@ Operation `runSchedule`.
 
 | Status | Description | Body |
 |---|---|---|
+| 200 | Drift schedules only, the check's result | `application/json` [DriftResult](#driftresult) |
 | 201 | Run accepted and scheduled | `application/json` [Run](#run) |
 | 403 | The caller's role does not allow this | `application/json` [Error](#error) |
 | 404 | Not found | `application/json` [Error](#error) |
 | 409 | Conflicts with the current state | `application/json` [Error](#error) |
 | 422 | The request is well-formed but invalid | `application/json` [Error](#error) |
+
+### GET /projects/{projectId}/drift-results
+
+Results of scheduled drift checks, newest first.
+
+Operation `listDriftResults`.
+
+| Parameter | In | Type | Required | Description |
+|---|---|---|---|---|
+| `projectId` | path | string (uuid) | yes |  |
+| `scheduleId` | query | string (uuid) | no |  |
+| `limit` | query | integer | no | Default `50`. |
+
+| Status | Description | Body |
+|---|---|---|
+| 200 | Results without traces | `application/json` array of [DriftResult](#driftresult) |
+| 404 | Not found | `application/json` [Error](#error) |
+
+### GET /drift-results/{driftId}
+
+One drift check with its redacted dry-run traces and spec diff.
+
+Operation `getDriftResult`.
+
+| Parameter | In | Type | Required | Description |
+|---|---|---|---|---|
+| `driftId` | path | string (uuid) | yes |  |
+
+| Status | Description | Body |
+|---|---|---|
+| 200 | The result | `application/json` [DriftResult](#driftresult) |
+| 404 | Not found | `application/json` [Error](#error) |
 
 ## Workers
 
@@ -839,6 +1019,34 @@ Operation `listAudit`.
 ## AI
 
 Optional AI journey generation (bring your own key). Runs before load, never during.
+
+### POST /drift-results/{driftId}/repair
+
+Ask the AI generator to repair the broken journeys (asynchronous).
+
+Starts an AI generation job with the scenario as the starting point,
+the broken journeys and their dry-run evidence (redacted) as the
+task, and the spec the check fetched, if any. The job dry-runs and
+repairs as usual; its result is a proposed new version with a diff
+against the current one. Nothing is saved until the job is approved
+with POST /ai/jobs/{jobId}/approve. Needs the editor role.
+
+Operation `repairDrift`.
+
+| Parameter | In | Type | Required | Description |
+|---|---|---|---|---|
+| `driftId` | path | string (uuid) | yes |  |
+
+**Request body** (optional): `application/json` [DriftRepair](#driftrepair)
+
+| Status | Description | Body |
+|---|---|---|
+| 202 | Repair job accepted | `application/json` [AIJob](#aijob) |
+| 403 | The caller's role does not allow this | `application/json` [Error](#error) |
+| 404 | Not found | `application/json` [Error](#error) |
+| 409 | Conflicts with the current state | `application/json` [Error](#error) |
+| 422 | The request is well-formed but invalid | `application/json` [Error](#error) |
+| 429 | Monthly AI token cap reached, or too many jobs queued | `application/json` [Error](#error) |
 
 ### GET /ai/providers
 
@@ -1242,6 +1450,7 @@ Every field of [Token](#token), plus:
 | `slug` | string | yes |  |
 | `description` | string | no |  |
 | `createdAt` | string (date-time) | yes |  |
+| `role` | [Role](#role) | no | The caller's role in this project (the organisation role, or a per-project override) |
 
 ### ProjectCreate
 
@@ -1257,6 +1466,79 @@ Every field of [Token](#token), plus:
 | `maxRate` | number (double) | no | Iterations per second |
 | `maxVUs` | integer | no |  |
 | `maxDurationSeconds` | integer | no |  |
+
+### DriftResult
+
+| Field | Type | Required | Description |
+|---|---|---|---|
+| `id` | string (uuid) | yes |  |
+| `projectId` | string (uuid) | yes |  |
+| `scheduleId` | string (uuid), nullable | no |  |
+| `scheduleName` | string | no |  |
+| `scenarioId` | string (uuid) | yes |  |
+| `scenarioName` | string | no |  |
+| `scenarioVersion` | integer | yes |  |
+| `targetId` | string (uuid) | yes |  |
+| `targetURL` | string | no |  |
+| `status` | string: `ok`, `drifted`, `error` | yes | drifted when a journey failed its dry run or calls an endpoint the API no longer has; error when the check could not run |
+| `error` | string | no |  |
+| `broken` | array of string | yes | Names of the broken journeys |
+| `journeys` | array of [DriftJourney](#driftjourney) | no | Dry-run outcome per journey (with redacted traces on GET /drift-results/{driftId}) |
+| `removedEndpoints` | array of string | no | Endpoints in the previous check's spec that the current spec no longer has |
+| `addedEndpoints` | array of string | no |  |
+| `unmatched` | array of string | no | Requests that match no endpoint of the current spec |
+| `repairJobId` | string (uuid), nullable | no |  |
+| `createdAt` | string (date-time) | yes |  |
+
+### DriftJourney
+
+| Field | Type | Required | Description |
+|---|---|---|---|
+| `journey` | string | yes |  |
+| `ok` | boolean | yes |  |
+| `problem` | string | no |  |
+| `traces` | array of [AITrace](#aitrace) | no |  |
+
+### DriftRepair
+
+| Field | Type | Required | Description |
+|---|---|---|---|
+| `providerId` | string (uuid) | no | Defaults to the organisation's only provider |
+| `maxRepairs` | integer | no | Default `3`. |
+
+### RunEvent
+
+| Field | Type | Required | Description |
+|---|---|---|---|
+| `at` | string (date-time) | yes |  |
+| `type` | string | yes |  |
+| `message` | string | yes |  |
+| `worker` | string | no |  |
+| `details` | object | no |  |
+
+### ProjectSettings
+
+| Field | Type | Required | Description |
+|---|---|---|---|
+| `caps` | [Caps](#caps) | yes |  |
+| `requireDryRun` | boolean | yes | Before load, run each journey once with one user and fail the run if any journey fails. |
+
+### ProjectRole
+
+| Field | Type | Required | Description |
+|---|---|---|---|
+| `userId` | string (uuid) | yes |  |
+| `email` | string | yes |  |
+| `name` | string | no |  |
+| `role` | [Role](#role) | yes |  |
+| `orgRole` | [Role](#role) | no |  |
+| `createdAt` | string (date-time) | no |  |
+
+### ProjectRoleSet
+
+| Field | Type | Required | Description |
+|---|---|---|---|
+| `role` | [Role](#role) | yes |  |
 
 ### Target
 
@@ -1365,6 +1647,7 @@ string: `scheduling`, `starting`, `running`, `stopping`, `analyzing`, `completed
 | `duration` | string | no |  |
 | `start` | string | no |  |
 | `max` | string | no |  |
+| `regions` | map of number (double) | no | Percent of the load per worker region, such as {"mumbai": 50, "frankfurt": 30, "virginia": 20}. The shares add up to 100 and replace the scenario's load.regions. A run is refused when a region has no connected worker. |
 
 ### RunCreate
 
@@ -1432,6 +1715,11 @@ string: `scheduling`, `starting`, `running`, `stopping`, `analyzing`, `completed
 | `lastRunStatus` | [RunStatus](#runstatus) | no |  |
 | `lastRunVerdict` | string, nullable | no | pass, fail, generator-limited or no-targets, once the last run has finished |
 | `lastSkipReason` | string | yes | Why the last firing started no run; empty when it did |
+| `kind` | [ScheduleKind](#schedulekind) | no |  |
+| `specURL` | string | no | Drift schedules: OpenAPI document fetched on each check (on the target's host or an allowed host) |
+| `lastDriftId` | string (uuid), nullable | no |  |
+| `lastDriftStatus` | string, nullable | no | Drift schedules: ok, drifted or error |
+| `lastDriftBroken` | array of string | no | Drift schedules, the journeys the last check found broken |
 
 ### ScheduleCreate
 
@@ -1447,6 +1735,17 @@ string: `scheduling`, `starting`, `running`, `stopping`, `analyzing`, `completed
 | `workers` | integer | no | 0 uses every connected worker |
 | `enabled` | boolean | no | Default `true`. |
 | `note` | string | no |  |
+| `kind` | [ScheduleKind](#schedulekind) | no |  |
+| `specURL` | string | no | Drift schedules only: an OpenAPI document to compare the scenario with on each check |
+
+### ScheduleKind
+
+run starts a load test on the cron. drift starts no load: it dry-runs
+each journey once with one user against the target (and compares the
+scenario with specURL when set), records a drift result and notifies
+drift.detected subscribers when journeys broke.
+
+string: `run`, `drift` Default `run`.
 
 ### ScheduleUpdate
 
@@ -1462,6 +1761,7 @@ string: `scheduling`, `starting`, `running`, `stopping`, `analyzing`, `completed
 | `workers` | integer | no |  |
 | `enabled` | boolean | no |  |
 | `note` | string | no |  |
+| `specURL` | string | no |  |
 
 ### SchedulePreview
 
@@ -1629,6 +1929,7 @@ string: `anthropic`, `openai`, `gemini`, `ollama`, `openai-compatible`
 | `openapi` | string | no | OpenAPI 3.x document (YAML or JSON) |
 | `har` | string | no | HAR recording (JSON) |
 | `accessLog` | string | no | Web server access log |
+| `proto` | map of string | no | .proto sources by file name (the name imports use), at most 5 MiB in all. Their services' unary and server streaming methods become grpc steps, dry-run against the target with these descriptors. The steps leave proto out, so runs use the target's gRPC reflection service. |
 | `targetId` | string (uuid) | no | Required for the dry run. |
 | `scenarioId` | string (uuid) | no | Existing scenario to compare the proposal with. |
 | `dryRun` | boolean | no | Default `true`. |
@@ -1832,7 +2133,7 @@ string: `webhook`, `slack`, `discord`
 
 ### NotificationEvent
 
-string: `run.finished`, `run.target_failed`, `run.killed`
+string: `run.finished`, `run.target_failed`, `run.killed`, `drift.detected`
 
 ### NotificationChannel
 

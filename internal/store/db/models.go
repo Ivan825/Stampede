@@ -94,6 +94,23 @@ type AuditLog struct {
 	Ip      string
 }
 
+type DriftResult struct {
+	ID              uuid.UUID
+	ProjectID       uuid.UUID
+	ScheduleID      *uuid.UUID
+	ScenarioID      uuid.UUID
+	ScenarioVersion int32
+	TargetID        uuid.UUID
+	Status          string
+	Error           string
+	Broken          []string
+	Result          json.RawMessage
+	Spec            json.RawMessage
+	RepairJobID     *uuid.UUID
+	CreatedBy       *uuid.UUID
+	CreatedAt       time.Time
+}
+
 type Integration struct {
 	ID         uuid.UUID
 	OrgID      uuid.UUID
@@ -152,6 +169,15 @@ type Org struct {
 	CreatedAt time.Time
 }
 
+type OrgCap struct {
+	OrgID        uuid.UUID
+	MaxRate      *float64
+	MaxVus       *int32
+	MaxDurationS *int32
+	UpdatedBy    *uuid.UUID
+	UpdatedAt    time.Time
+}
+
 type Project struct {
 	ID          uuid.UUID
 	OrgID       uuid.UUID
@@ -159,6 +185,24 @@ type Project struct {
 	Slug        string
 	Description string
 	CreatedAt   time.Time
+}
+
+type ProjectRole struct {
+	ProjectID uuid.UUID
+	UserID    uuid.UUID
+	Role      string
+	CreatedBy *uuid.UUID
+	CreatedAt time.Time
+}
+
+type ProjectSetting struct {
+	ProjectID     uuid.UUID
+	MaxRate       *float64
+	MaxVus        *int32
+	MaxDurationS  *int32
+	RequireDryRun bool
+	UpdatedBy     *uuid.UUID
+	UpdatedAt     time.Time
 }
 
 type Replica struct {
@@ -267,6 +311,9 @@ type Schedule struct {
 	LastFiredAt    *time.Time
 	LastRunID      *uuid.UUID
 	LastSkipReason string
+	Kind           string
+	SpecUrl        string
+	LastDriftID    *uuid.UUID
 }
 
 type Secret struct {

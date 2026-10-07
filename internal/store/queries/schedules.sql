@@ -1,34 +1,38 @@
 -- name: CreateSchedule :exec
-INSERT INTO schedules (id, project_id, name, scenario_id, target_id, cron, timezone, overrides, env, workers, enabled, note, owner_id, next_run_at)
-VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14);
+INSERT INTO schedules (id, project_id, name, scenario_id, target_id, cron, timezone, overrides, env, workers, enabled, note, owner_id, next_run_at, kind, spec_url)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16);
 
 -- name: GetSchedule :one
 SELECT sc.*, p.org_id, s.name AS scenario_name, t.name AS target_name,
-       u.email AS owner_email, r.status AS last_run_status, r.verdict AS last_run_verdict, r.created_at AS last_run_at
+       u.email AS owner_email, r.status AS last_run_status, r.verdict AS last_run_verdict, r.created_at AS last_run_at,
+       d.status AS last_drift_status, d.broken AS last_drift_broken
 FROM schedules sc
 JOIN projects p ON p.id = sc.project_id
 JOIN scenarios s ON s.id = sc.scenario_id
 JOIN targets t ON t.id = sc.target_id
 LEFT JOIN users u ON u.id = sc.owner_id
 LEFT JOIN runs r ON r.id = sc.last_run_id
+LEFT JOIN drift_results d ON d.id = sc.last_drift_id
 WHERE sc.id = $1 AND p.org_id = $2;
 
 -- name: ListSchedules :many
 SELECT sc.*, p.org_id, s.name AS scenario_name, t.name AS target_name,
-       u.email AS owner_email, r.status AS last_run_status, r.verdict AS last_run_verdict, r.created_at AS last_run_at
+       u.email AS owner_email, r.status AS last_run_status, r.verdict AS last_run_verdict, r.created_at AS last_run_at,
+       d.status AS last_drift_status, d.broken AS last_drift_broken
 FROM schedules sc
 JOIN projects p ON p.id = sc.project_id
 JOIN scenarios s ON s.id = sc.scenario_id
 JOIN targets t ON t.id = sc.target_id
 LEFT JOIN users u ON u.id = sc.owner_id
 LEFT JOIN runs r ON r.id = sc.last_run_id
+LEFT JOIN drift_results d ON d.id = sc.last_drift_id
 WHERE sc.project_id = $1
 ORDER BY sc.name;
 
 -- name: UpdateSchedule :exec
 UPDATE schedules
 SET name = $2, scenario_id = $3, target_id = $4, cron = $5, timezone = $6, overrides = $7, env = $8,
-    workers = $9, enabled = $10, note = $11, owner_id = $12, next_run_at = $13, updated_at = now()
+    workers = $9, enabled = $10, note = $11, owner_id = $12, next_run_at = $13, spec_url = $14, updated_at = now()
 WHERE id = $1;
 
 -- name: DeleteSchedule :execrows
@@ -53,3 +57,6 @@ UPDATE schedules SET last_run_id = $2, last_fired_at = $3, last_skip_reason = ''
 
 -- name: RecordScheduleSkip :exec
 UPDATE schedules SET last_skip_reason = $2 WHERE id = $1;
+
+-- name: RecordScheduleDrift :exec
+UPDATE schedules SET last_drift_id = $2, last_fired_at = $3, last_skip_reason = '' WHERE id = $1;

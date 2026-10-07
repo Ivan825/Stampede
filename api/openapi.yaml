@@ -305,6 +305,130 @@ paths:
         "204": { description: Deleted with everything in it }
         "404": { $ref: "#/components/responses/NotFound" }
 
+  /organisation/caps:
+    get:
+      tags: [projects]
+      operationId: getOrgCaps
+      summary: The organisation's hard caps on every run
+      responses:
+        "200":
+          description: Caps; unset fields mean no cap at this level
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Caps" }
+    put:
+      tags: [projects]
+      operationId: putOrgCaps
+      summary: Set the organisation's hard caps (admin)
+      description: |
+        Every run in the organisation must fit within these caps, as well
+        as the server's, its project's and its target's. Send an empty
+        object to remove them. Audited.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/Caps" }
+      responses:
+        "200":
+          description: Saved
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Caps" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "422": { $ref: "#/components/responses/Invalid" }
+
+  /projects/{projectId}/settings:
+    parameters:
+      - $ref: "#/components/parameters/projectId"
+    get:
+      tags: [projects]
+      operationId: getProjectSettings
+      responses:
+        "200":
+          description: The project's caps and run gate
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ProjectSettings" }
+        "404": { $ref: "#/components/responses/NotFound" }
+    put:
+      tags: [projects]
+      operationId: putProjectSettings
+      summary: Set the project's caps and dry-run gate (admin)
+      description: |
+        Caps bound every run in the project, together with the server's,
+        the organisation's and the target's. With requireDryRun, starting a
+        run first runs each journey once with one user; the run fails
+        before any load when a journey fails. Needs the admin role in the
+        project. Audited.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ProjectSettings" }
+      responses:
+        "200":
+          description: Saved
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ProjectSettings" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "422": { $ref: "#/components/responses/Invalid" }
+
+  /projects/{projectId}/roles:
+    parameters:
+      - $ref: "#/components/parameters/projectId"
+    get:
+      tags: [projects]
+      operationId: listProjectRoles
+      summary: Per-project role overrides
+      description: |
+        A member's organisation role applies in every project unless an
+        override here sets another role for this project, higher or lower.
+        Owners are owners everywhere.
+      responses:
+        "200":
+          description: Overrides, by email
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/ProjectRole" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /projects/{projectId}/roles/{userId}:
+    parameters:
+      - $ref: "#/components/parameters/projectId"
+      - $ref: "#/components/parameters/userId"
+    put:
+      tags: [projects]
+      operationId: putProjectRole
+      summary: Give a member a different role in this project (admin)
+      description: Needs the admin role in the project. Owners cannot be overridden. Audited.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ProjectRoleSet" }
+      responses:
+        "200":
+          description: Saved
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ProjectRole" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "422": { $ref: "#/components/responses/Invalid" }
+    delete:
+      tags: [projects]
+      operationId: deleteProjectRole
+      summary: Remove an override, so the organisation role applies again (admin)
+      responses:
+        "204": { description: Removed }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
   /projects/{projectId}/targets:
     parameters:
       - $ref: "#/components/parameters/projectId"
@@ -675,6 +799,16 @@ paths:
     get:
       tags: [runs]
       operationId: getRunTimeline
+      parameters:
+        - name: resolution
+          in: query
+          description: |
+            1s (default) returns the per-second points. 10s and 1m return
+            rollups: requests summed, rps averaged, p50 the mean and p95/p99
+            the worst per-second value in each bucket. With TimescaleDB the
+            rollups are continuous aggregates kept after per-second points
+            expire (stampede server --metrics-retention).
+          schema: { type: string, enum: [1s, 10s, 1m], default: 1s, x-enum-varnames: [Resolution1s, Resolution10s, Resolution1m] }
       responses:
         "200":
           description: Per-interval points recorded so far
@@ -683,6 +817,28 @@ paths:
               schema:
                 type: array
                 items: { $ref: "#/components/schemas/Point" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /runs/{runId}/events:
+    parameters:
+      - $ref: "#/components/parameters/runId"
+    get:
+      tags: [runs]
+      operationId: listRunEvents
+      summary: Events recorded for a run
+      description: |
+        Workers joining or being lost, safety stops, breakpoint
+        confirmations and, when the project requires one, the dry run
+        before load (dryrun.started, one dryrun.journey per journey, then
+        dryrun.passed or dryrun.failed). Oldest first.
+      responses:
+        "200":
+          description: Events
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/RunEvent" }
         "404": { $ref: "#/components/responses/NotFound" }
 
   /runs/{runId}/report:
@@ -862,7 +1018,14 @@ paths:
       description: |
         Starts a run as the caller without changing when the schedule next
         fires. Refused while the schedule's previous run is still active.
+        For a drift schedule, runs its drift check now instead and returns
+        the result (200).
       responses:
+        "200":
+          description: Drift schedules only, the check's result
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/DriftResult" }
         "201":
           description: Run accepted and scheduled
           content:
@@ -872,6 +1035,80 @@ paths:
         "404": { $ref: "#/components/responses/NotFound" }
         "409": { $ref: "#/components/responses/Conflict" }
         "422": { $ref: "#/components/responses/Invalid" }
+
+  /projects/{projectId}/drift-results:
+    parameters:
+      - $ref: "#/components/parameters/projectId"
+    get:
+      tags: [schedules]
+      operationId: listDriftResults
+      summary: Results of scheduled drift checks, newest first
+      parameters:
+        - name: scheduleId
+          in: query
+          schema: { type: string, format: uuid }
+        - name: limit
+          in: query
+          schema: { type: integer, minimum: 1, maximum: 200, default: 50 }
+      responses:
+        "200":
+          description: Results without traces
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/DriftResult" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /drift-results/{driftId}:
+    parameters:
+      - $ref: "#/components/parameters/driftId"
+    get:
+      tags: [schedules]
+      operationId: getDriftResult
+      summary: One drift check with its redacted dry-run traces and spec diff
+      responses:
+        "200":
+          description: The result
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/DriftResult" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /drift-results/{driftId}/repair:
+    parameters:
+      - $ref: "#/components/parameters/driftId"
+    post:
+      tags: [ai]
+      operationId: repairDrift
+      summary: Ask the AI generator to repair the broken journeys (asynchronous)
+      description: |
+        Starts an AI generation job with the scenario as the starting point,
+        the broken journeys and their dry-run evidence (redacted) as the
+        task, and the spec the check fetched, if any. The job dry-runs and
+        repairs as usual; its result is a proposed new version with a diff
+        against the current one. Nothing is saved until the job is approved
+        with POST /ai/jobs/{jobId}/approve. Needs the editor role.
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/DriftRepair" }
+      responses:
+        "202":
+          description: Repair job accepted
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AIJob" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "422": { $ref: "#/components/responses/Invalid" }
+        "429":
+          description: Monthly AI token cap reached, or too many jobs queued
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
 
   /workers:
     get:
@@ -1259,6 +1496,11 @@ components:
       name: stampede_session
 
   parameters:
+    driftId:
+      name: driftId
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
     userId:
       name: userId
       in: path
@@ -1451,6 +1693,9 @@ components:
         slug: { type: string }
         description: { type: string }
         createdAt: { type: string, format: date-time }
+        role:
+          allOf: [{ $ref: "#/components/schemas/Role" }]
+          description: The caller's role in this project (the organisation role, or a per-project override)
 
     ProjectCreate:
       type: object
@@ -1465,6 +1710,102 @@ components:
         maxRate: { type: number, format: double, description: Iterations per second }
         maxVUs: { type: integer }
         maxDurationSeconds: { type: integer }
+
+    DriftResult:
+      type: object
+      required: [id, projectId, scenarioId, scenarioVersion, targetId, status, broken, createdAt]
+      properties:
+        id: { type: string, format: uuid }
+        projectId: { type: string, format: uuid }
+        scheduleId: { type: string, format: uuid, nullable: true }
+        scheduleName: { type: string }
+        scenarioId: { type: string, format: uuid }
+        scenarioName: { type: string }
+        scenarioVersion: { type: integer }
+        targetId: { type: string, format: uuid }
+        targetURL: { type: string }
+        status:
+          type: string
+          enum: [ok, drifted, error]
+          x-enum-varnames: [DriftOK, DriftDrifted, DriftError]
+          description: drifted when a journey failed its dry run or calls an endpoint the API no longer has; error when the check could not run
+        error: { type: string }
+        broken:
+          type: array
+          items: { type: string }
+          description: Names of the broken journeys
+        journeys:
+          type: array
+          description: Dry-run outcome per journey (with redacted traces on GET /drift-results/{driftId})
+          items: { $ref: "#/components/schemas/DriftJourney" }
+        removedEndpoints:
+          type: array
+          description: Endpoints in the previous check's spec that the current spec no longer has
+          items: { type: string, example: GET /api/v1/orders }
+        addedEndpoints:
+          type: array
+          items: { type: string }
+        unmatched:
+          type: array
+          description: Requests that match no endpoint of the current spec
+          items: { type: string, example: "checkout: POST /api/cart" }
+        repairJobId: { type: string, format: uuid, nullable: true }
+        createdAt: { type: string, format: date-time }
+
+    DriftJourney:
+      type: object
+      required: [journey, ok]
+      properties:
+        journey: { type: string }
+        ok: { type: boolean }
+        problem: { type: string }
+        traces:
+          type: array
+          items: { $ref: "#/components/schemas/AITrace" }
+
+    DriftRepair:
+      type: object
+      properties:
+        providerId: { type: string, format: uuid, description: Defaults to the organisation's only provider, or the one named "default". }
+        maxRepairs: { type: integer, minimum: 0, maximum: 3, default: 3 }
+
+    RunEvent:
+      type: object
+      required: [at, type, message]
+      properties:
+        at: { type: string, format: date-time }
+        type: { type: string, example: dryrun.journey }
+        message: { type: string }
+        worker: { type: string }
+        details:
+          type: object
+          additionalProperties: true
+
+    ProjectSettings:
+      type: object
+      required: [caps, requireDryRun]
+      properties:
+        caps: { $ref: "#/components/schemas/Caps" }
+        requireDryRun:
+          type: boolean
+          description: Before load, run each journey once with one user and fail the run if any journey fails.
+
+    ProjectRole:
+      type: object
+      required: [userId, email, role]
+      properties:
+        userId: { type: string, format: uuid }
+        email: { type: string }
+        name: { type: string }
+        role: { $ref: "#/components/schemas/Role" }
+        orgRole: { $ref: "#/components/schemas/Role" }
+        createdAt: { type: string, format: date-time }
+
+    ProjectRoleSet:
+      type: object
+      required: [role]
+      properties:
+        role: { $ref: "#/components/schemas/Role" }
 
     Target:
       type: object
@@ -1584,6 +1925,14 @@ components:
         duration: { type: string, example: 5m }
         start: { type: string }
         max: { type: string }
+        regions:
+          type: object
+          description: |
+            Percent of the load per worker region, such as
+            {"mumbai": 50, "frankfurt": 30, "virginia": 20}. The shares add
+            up to 100 and replace the scenario's load.regions. A run is
+            refused when a region has no connected worker.
+          additionalProperties: { type: number, format: double, minimum: 0, maximum: 100 }
 
     RunCreate:
       type: object
@@ -1659,6 +2008,14 @@ components:
         lastRunStatus: { $ref: "#/components/schemas/RunStatus" }
         lastRunVerdict: { type: string, nullable: true, description: "pass, fail, generator-limited or no-targets, once the last run has finished" }
         lastSkipReason: { type: string, description: Why the last firing started no run; empty when it did }
+        kind: { $ref: "#/components/schemas/ScheduleKind" }
+        specURL: { type: string, description: "Drift schedules: OpenAPI document fetched on each check (on the target's host or an allowed host)" }
+        lastDriftId: { type: string, format: uuid, nullable: true }
+        lastDriftStatus: { type: string, nullable: true, description: "Drift schedules: ok, drifted or error" }
+        lastDriftBroken:
+          type: array
+          items: { type: string }
+          description: Drift schedules, the journeys the last check found broken
 
     ScheduleCreate:
       type: object
@@ -1676,6 +2033,19 @@ components:
         workers: { type: integer, minimum: 0, description: 0 uses every connected worker }
         enabled: { type: boolean, default: true }
         note: { type: string, maxLength: 500 }
+        kind: { $ref: "#/components/schemas/ScheduleKind" }
+        specURL: { type: string, description: "Drift schedules only: an OpenAPI document to compare the scenario with on each check" }
+
+    ScheduleKind:
+      type: string
+      enum: [run, drift]
+      default: run
+      x-enum-varnames: [ScheduleKindRun, ScheduleKindDrift]
+      description: |
+        run starts a load test on the cron. drift starts no load: it dry-runs
+        each journey once with one user against the target (and compares the
+        scenario with specURL when set), records a drift result and notifies
+        drift.detected subscribers when journeys broke.
 
     ScheduleUpdate:
       type: object
@@ -1692,6 +2062,7 @@ components:
         workers: { type: integer, minimum: 0 }
         enabled: { type: boolean }
         note: { type: string, maxLength: 500 }
+        specURL: { type: string }
 
     SchedulePreview:
       type: object
@@ -1906,6 +2277,15 @@ components:
         openapi: { type: string, description: OpenAPI 3.x document (YAML or JSON) }
         har: { type: string, description: HAR recording (JSON) }
         accessLog: { type: string, description: Web server access log }
+        proto:
+          type: object
+          description: |
+            .proto sources by file name (the name imports use), at most 5 MiB
+            in all. Their services' unary and server streaming methods
+            become grpc steps, dry-run against the target with these
+            descriptors. The steps leave proto out, so runs use the
+            target's gRPC reflection service.
+          additionalProperties: { type: string }
         targetId: { type: string, format: uuid, description: Required for the dry run. }
         scenarioId: { type: string, format: uuid, description: Existing scenario to compare the proposal with. }
         dryRun: { type: boolean, default: true }
@@ -2153,8 +2533,8 @@ components:
 
     NotificationEvent:
       type: string
-      enum: [run.finished, run.target_failed, run.killed]
-      x-enum-varnames: [EventRunFinished, EventRunTargetFailed, EventRunKilled]
+      enum: [run.finished, run.target_failed, run.killed, drift.detected]
+      x-enum-varnames: [EventRunFinished, EventRunTargetFailed, EventRunKilled, EventDriftDetected]
 
     NotificationChannel:
       type: object

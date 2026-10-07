@@ -11,7 +11,7 @@ import (
 )
 
 // clusterOnly are the run flags that only mean something with --cluster.
-var clusterOnly = []string{"project", "target", "workers", "note", "detach"}
+var clusterOnly = []string{"project", "target", "workers", "note", "detach", "region"}
 
 // localOnly are the run flags a server run cannot honour.
 var localOnly = []string{"iterations", "repeat", "pause", "allow-host", "verbose"}
@@ -51,7 +51,7 @@ func runCluster(cmd *cobra.Command, path string, f *runFlags) error {
 	rf := &remoteRunFlags{
 		project: f.cluster.project, file: path, target: target, note: f.cluster.note,
 		shape: f.shape, rate: f.rate, duration: f.duration, vus: f.vus,
-		workers: f.cluster.workers, env: f.env, detach: f.cluster.detach,
+		workers: f.cluster.workers, env: f.env, detach: f.cluster.detach, regions: f.cluster.regions,
 	}
 	ctx := cmd.Context()
 	run, err := createRemoteRun(ctx, cmd.ErrOrStderr(), c, rf, "pushed by stampede run --cluster")

@@ -2,7 +2,9 @@ package cli
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"io"
 	"strings"
 	"text/tabwriter"
 	"time"
@@ -57,13 +59,17 @@ func newSchedulesListCmd(project *string) *cobra.Command {
 				return nil
 			}
 			tw := tabwriter.NewWriter(out, 0, 4, 2, ' ', 0)
-			fmt.Fprintln(tw, "NAME\tCRON\tTIMEZONE\tSCENARIO\tTARGET\tNEXT RUN\tLAST RUN")
+			fmt.Fprintln(tw, "NAME\tKIND\tCRON\tTIMEZONE\tSCENARIO\tTARGET\tNEXT RUN\tLAST RUN")
 			for _, s := range ss {
 				next := "disabled"
 				if s.NextRunAt != nil {
 					next = s.NextRunAt.Local().Format("Jan 2 15:04")
 				}
-				fmt.Fprintf(tw, "%s\t%s\t%s\t%s\t%s\t%s\t%s\n", s.Name, s.Cron, s.Timezone, deref0(s.ScenarioName), deref0(s.TargetName), next, lastRun(s))
+				kind := "run"
+				if s.Kind != nil {
+					kind = string(*s.Kind)
+				}
+				fmt.Fprintf(tw, "%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n", s.Name, kind, s.Cron, s.Timezone, deref0(s.ScenarioName), deref0(s.TargetName), next, lastRun(s))
 			}
 			return tw.Flush()
 		},
@@ -82,6 +88,19 @@ func lastRun(s gen.Schedule) string {
 	if s.LastSkipReason != "" {
 		return "skipped: " + s.LastSkipReason
 	}
+	if s.Kind != nil && *s.Kind == gen.ScheduleKindDrift {
+		if s.LastDriftStatus == nil {
+			return "-"
+		}
+		out := *s.LastDriftStatus
+		if s.LastDriftBroken != nil && len(*s.LastDriftBroken) > 0 {
+			out += " (" + strings.Join(*s.LastDriftBroken, ", ") + ")"
+		}
+		if s.LastFiredAt != nil {
+			out += " " + s.LastFiredAt.Local().Format("Jan 2 15:04")
+		}
+		return out
+	}
 	if s.LastRunStatus == nil {
 		return "-"
 	}
@@ -99,8 +118,9 @@ type scheduleFlags struct {
 	scenarioRef, target, cron, timezone, note string
 	shape, rate, duration, start, max         string
 	vus, workers                              int
-	env                                       []string
+	env, regions                              []string
 	disabled                                  bool
+	kind, specURL                             string
 }
 
 func newSchedulesCreateCmd(project *string) *cobra.Command {
@@ -110,7 +130,9 @@ func newSchedulesCreateCmd(project *string) *cobra.Command {
 		Short: "Create a schedule",
 		Example: `  stampede schedules create nightly --scenario checkout --target staging --cron "0 2 * * *"
   stampede schedules create weekday-soak --scenario browse --target staging \
-    --cron "30 6 * * MON-FRI" --timezone Europe/London --shape soak --duration 30m`,
+    --cron "30 6 * * MON-FRI" --timezone Europe/London --shape soak --duration 30m
+  stampede schedules create api-drift --kind drift --scenario checkout --target staging \
+    --cron "0 6 * * *" --spec-url https://staging.example.com/openapi.json`,
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			ctx := cmd.Context()
@@ -133,7 +155,21 @@ func newSchedulesCreateCmd(project *string) *cobra.Command {
 			if f.timezone != "" {
 				body["timezone"] = f.timezone
 			}
-			if ov := overridesFrom(f.shape, f.rate, f.duration, f.start, f.max, f.vus); len(ov) > 0 {
+			if f.kind != "" {
+				body["kind"] = f.kind
+			}
+			if f.specURL != "" {
+				body["specURL"] = f.specURL
+			}
+			regions, err := regionsFrom(f.regions)
+			if err != nil {
+				return err
+			}
+			ov := overridesFrom(f.shape, f.rate, f.duration, f.start, f.max, f.vus)
+			if regions != nil {
+				ov["regions"] = regions
+			}
+			if len(ov) > 0 {
 				body["overrides"] = ov
 			}
 			env, err := envFrom(f.env)
@@ -175,6 +211,9 @@ func newSchedulesCreateCmd(project *string) *cobra.Command {
 	fl.StringArrayVarP(&f.env, "env", "e", nil, "KEY=VALUE for ${env.KEY} (repeatable; stored with the schedule, so use secrets for sensitive values)")
 	fl.StringVar(&f.note, "note", "", "description of the schedule")
 	fl.BoolVar(&f.disabled, "disabled", false, "create it disabled")
+	fl.StringArrayVar(&f.regions, "region", nil, regionFlagHelp)
+	fl.StringVar(&f.kind, "kind", "run", "run (start a load test) or drift (dry-run each journey once and record what broke; no load)")
+	fl.StringVar(&f.specURL, "spec-url", "", "with --kind drift: OpenAPI document on the target to compare the scenario with on each check")
 	return cmd
 }
 
@@ -233,13 +272,24 @@ func newSchedulesRunCmd(project *string) *cobra.Command {
 		Use:   "run <schedule>",
 		Short: "Start a schedule's run now, as you",
 		Long: `Start a schedule's run now, without changing when it next fires. Prints
-the run id; with --follow, follows it live and exits like stampede start.`,
+the run id; with --follow, follows it live and exits like stampede start.
+
+For a drift schedule, runs its drift check now and prints the result:
+each journey's dry run, endpoints removed from the spec and requests that
+match no endpoint. Exit code 4 when something drifted.`,
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			ctx := cmd.Context()
 			c, s, err := findSchedule(ctx, *project, args[0])
 			if err != nil {
 				return err
+			}
+			if s.Kind != nil && *s.Kind == gen.ScheduleKindDrift {
+				var res gen.DriftResult
+				if err := c.Do(ctx, "POST", "/schedules/"+s.Id.String()+"/run", nil, &res); err != nil {
+					return err
+				}
+				return writeDriftResult(cmd.OutOrStdout(), res)
 			}
 			var run gen.Run
 			if err := c.Do(ctx, "POST", "/schedules/"+s.Id.String()+"/run", nil, &run); err != nil {
@@ -313,4 +363,40 @@ func envFrom(kvs []string) (map[string]string, error) {
 		env[k] = v
 	}
 	return env, nil
+}
+
+// writeDriftResult prints a server drift check and maps it to the exit
+// code of stampede drift.
+func writeDriftResult(w io.Writer, r gen.DriftResult) error {
+	fmt.Fprintf(w, "Drift check %s of %s against %s: %s\n", r.Id, deref0(r.ScenarioName), deref0(r.TargetURL), r.Status)
+	if r.Journeys != nil {
+		for _, j := range *r.Journeys {
+			if j.Ok {
+				fmt.Fprintf(w, "  ✓ %s passes its dry run\n", j.Journey)
+			} else {
+				fmt.Fprintf(w, "  ✗ %s fails its dry run: %s\n", j.Journey, deref0(j.Problem))
+			}
+		}
+	}
+	if r.RemovedEndpoints != nil {
+		for _, e := range *r.RemovedEndpoints {
+			fmt.Fprintf(w, "  - %s was removed from the API\n", e)
+		}
+	}
+	if r.Unmatched != nil {
+		for _, u := range *r.Unmatched {
+			fmt.Fprintf(w, "  ✗ %s is not an endpoint of the current API\n", u)
+		}
+	}
+	if r.Error != nil {
+		fmt.Fprintf(w, "  ! %s\n", *r.Error)
+	}
+	switch r.Status {
+	case gen.DriftDrifted:
+		fmt.Fprintf(w, "Propose a repair with POST /api/v1/drift-results/%s/repair (an AI provider is needed).\n", r.Id)
+		return &exitError{code: ExitDrift, msg: "the scenario drifted from the API: " + strings.Join(r.Broken, ", ")}
+	case gen.DriftError:
+		return errors.New("the drift check could not run")
+	}
+	return nil
 }

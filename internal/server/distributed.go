@@ -27,7 +27,7 @@ func (d *DistributedExecutor) Start(ctx context.Context, spec ExecSpec) (Executi
 	allow := append([]string{spec.TargetHost}, spec.AllowHosts...)
 	run, err := d.Coordinator.Start(ctx, coordinator.RunSpec{
 		ID: spec.RunID, Scenario: spec.YAML, Env: spec.Env, Secrets: spec.Secrets,
-		AllowHosts: allow, Workers: spec.Workers,
+		AllowHosts: allow, Workers: spec.Workers, Regions: spec.Regions,
 	})
 	if err != nil {
 		return nil, err
@@ -80,6 +80,11 @@ type AutoExecutor struct {
 // Start picks an executor for this run.
 func (a *AutoExecutor) Start(ctx context.Context, spec ExecSpec) (Execution, error) {
 	if a.Distributed != nil {
+		if len(spec.Regions) > 0 {
+			// Only workers can split load by region; the coordinator
+			// names any region without an idle worker.
+			return a.Distributed.Start(ctx, spec)
+		}
 		for _, w := range a.Distributed.Coordinator.Workers() {
 			if w.Connected && w.CurrentRun == "" {
 				return a.Distributed.Start(ctx, spec)

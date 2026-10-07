@@ -2,15 +2,49 @@ package scenario
 
 import (
 	"fmt"
+	"math"
 	"net/url"
 	"regexp"
+	"sort"
 	"strings"
 
 	"github.com/Ivan825/Stampede/internal/feed"
 	"github.com/Ivan825/Stampede/internal/protocol/netem"
 )
 
-var nameRe = regexp.MustCompile(`^[a-z0-9]([a-z0-9._-]{0,98}[a-z0-9])?$`)
+var (
+	nameRe   = regexp.MustCompile(`^[a-z0-9]([a-z0-9._-]{0,98}[a-z0-9])?$`)
+	regionRe = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._-]{0,62}$`)
+)
+
+// ValidateRegions checks a region split: known-looking names, every share
+// above zero and a total of 100%.
+func ValidateRegions(regions map[string]Percent) []string {
+	if len(regions) == 0 {
+		return nil
+	}
+	names := make([]string, 0, len(regions))
+	for r := range regions {
+		names = append(names, r)
+	}
+	sort.Strings(names)
+	var out []string
+	total := 0.0
+	for _, r := range names {
+		f := float64(regions[r])
+		if !regionRe.MatchString(r) {
+			out = append(out, fmt.Sprintf("load.regions.%s: region names are letters, digits, '.', '_' or '-'", r))
+		}
+		if f <= 0 {
+			out = append(out, fmt.Sprintf("load.regions.%s: must be more than 0%%", r))
+		}
+		total += f
+	}
+	if math.Abs(total-1) > 0.001 {
+		out = append(out, fmt.Sprintf("load.regions: the shares must add up to 100%% (they add up to %s)", Percent(math.Round(total*10000)/10000)))
+	}
+	return out
+}
 
 // Validate checks the scenario's structure, then compiles every template
 // and expression so problems surface before a run starts.
@@ -135,6 +169,7 @@ func (s *Scenario) Validate() error {
 	} else if s.Load.Replay != nil {
 		add("load.replay", "set load.mode to replay to replay a recording")
 	}
+	errs = append(errs, ValidateRegions(s.Load.Regions)...)
 	if len(s.Journeys) == 0 && !replay {
 		add("journeys", "at least one journey is required")
 	}
@@ -218,6 +253,20 @@ func stepURL(st Step) (string, bool) {
 	}
 	return "", false
 }
+
+// StepURL returns where a step sends traffic as written (templates not
+// rendered): the URL of an HTTP, GraphQL, SSE, WebSocket or browser step
+// or a goto action, or a gRPC step's target. ok is false for steps that
+// send nothing or use the target's base URL implicitly.
+func StepURL(st Step) (u string, ok bool) {
+	if st.Kind == StepGRPC && st.GRPC != nil {
+		return st.GRPC.Target, st.GRPC.Target != ""
+	}
+	return stepURL(st)
+}
+
+// WalkSteps calls fn for every step in steps, nested ones included.
+func WalkSteps(steps []Step, fn func(Step)) { walkSteps(steps, fn) }
 
 // EachStep calls fn for every step of every journey, nested ones included.
 func (s *Scenario) EachStep(fn func(Step)) {

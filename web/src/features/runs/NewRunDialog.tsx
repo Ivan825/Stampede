@@ -12,14 +12,17 @@ import type { RunCreate, Target } from '@/api/types';
 import { Modal } from '@/components/dialog';
 import { Button, ErrorAlert, Field, Input, Notice, Select, Textarea } from '@/components/ui';
 import { humanDuration, load, num } from '@/lib/format';
-import { EnvFields, OverridesFields } from './RunFields';
+import { EnvFields, OverridesFields, RegionFields } from './RunFields';
 import {
   envError,
   overrideErrors,
   overridesForm,
+  regionsError,
   toEnv,
   toOverrides,
+  toRegions,
   type EnvRow,
+  type RegionRow,
 } from './runForm';
 
 export function CapsSummary({ target }: { target: Target }) {
@@ -95,6 +98,7 @@ export function NewRunDialog({
   const [targetChoice, setTargetId] = useState('');
   const [ov, setOv] = useState(overridesForm);
   const [env, setEnv] = useState<EnvRow[]>([]);
+  const [regions, setRegions] = useState<RegionRow[]>([]);
   const [workerCount, setWorkerCount] = useState('0');
   const [note, setNote] = useState('');
   const [touched, setTouched] = useState(false);
@@ -111,7 +115,9 @@ export function NewRunDialog({
     return versions.data?.find((v) => String(v.version) === version)?.plan;
   }, [scenario, versions.data, version]);
 
-  const connected = (workers.data ?? []).filter((w) => w.status !== 'lost').length;
+  const live = (workers.data ?? []).filter((w) => w.status !== 'lost');
+  const connected = live.length;
+  const knownRegions = [...new Set(live.map((w) => w.region).filter(Boolean))].sort();
 
   const errors = {
     scenario: scenarioId ? undefined : 'Pick a scenario.',
@@ -121,6 +127,7 @@ export function NewRunDialog({
       ? 'A whole number, 0 or more.'
       : undefined,
     env: envError(env),
+    regions: regionsError(regions),
   };
   const valid = Object.values(errors).every((e) => !e);
   const show = (k: keyof typeof errors) => (touched ? errors[k] : undefined);
@@ -129,7 +136,8 @@ export function NewRunDialog({
     e.preventDefault();
     setTouched(true);
     if (!valid) return;
-    const overrides = toOverrides(ov);
+    const split = toRegions(regions);
+    const overrides = { ...toOverrides(ov), ...(split ? { regions: split } : {}) };
     const envObj = toEnv(env);
     const body: RunCreate = {
       scenarioId,
@@ -229,6 +237,13 @@ export function NewRunDialog({
           ov={ov}
           setOv={setOv}
           errors={{ vus: show('vus'), rate: show('rate'), duration: show('duration') }}
+        />
+
+        <RegionFields
+          rows={regions}
+          setRows={setRegions}
+          known={knownRegions}
+          error={show('regions')}
         />
 
         <EnvFields env={env} setEnv={setEnv} error={show('env')} />

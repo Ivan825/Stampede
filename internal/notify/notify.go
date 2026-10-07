@@ -39,12 +39,15 @@ const (
 	EventRunFinished     = "run.finished"
 	EventRunTargetFailed = "run.target_failed"
 	EventRunKilled       = "run.killed"
+	// EventDriftDetected is sent when a scheduled drift check finds broken
+	// journeys.
+	EventDriftDetected = "drift.detected"
 	// EventTest is sent by "send test" and ignores subscriptions.
 	EventTest = "test"
 )
 
 // Events lists the event types a channel can subscribe to.
-var Events = []string{EventRunFinished, EventRunTargetFailed, EventRunKilled}
+var Events = []string{EventRunFinished, EventRunTargetFailed, EventRunKilled, EventDriftDetected}
 
 // Signature headers of the generic webhook.
 const (
@@ -74,6 +77,8 @@ type Event struct {
 	At   time.Time `json:"at"`
 	Org  string    `json:"organisation,omitempty"`
 	Run  *Run      `json:"run,omitempty"`
+	// Drift is set for drift.detected.
+	Drift *Drift `json:"drift,omitempty"`
 	// Message is a one-line human summary.
 	Message string `json:"message"`
 }
@@ -93,6 +98,21 @@ type Run struct {
 	FailedTargets []string `json:"failedTargets,omitempty"`
 	// KilledBy is set for run.killed.
 	KilledBy string `json:"killedBy,omitempty"`
+}
+
+// Drift describes a drift check that found broken journeys.
+type Drift struct {
+	ID       string `json:"id"`
+	Project  string `json:"project,omitempty"`
+	Schedule string `json:"schedule,omitempty"`
+	Scenario string `json:"scenario"`
+	Target   string `json:"target,omitempty"`
+	// Broken lists the journeys that failed their dry run or call
+	// endpoints the API no longer has.
+	Broken []string `json:"broken"`
+	// URL opens the result's API resource (when the server knows its
+	// public URL).
+	URL string `json:"url,omitempty"`
 }
 
 // Summary holds the headline numbers of a finished run.
@@ -286,6 +306,8 @@ func headline(ev Event) string {
 		return "Targets failed"
 	case EventRunKilled:
 		return "Run killed"
+	case EventDriftDetected:
+		return "Drift detected"
 	case EventTest:
 		return "Test notification"
 	}
@@ -311,6 +333,23 @@ func lines(ev Event, bold func(string) string, code func(string) string, link fu
 	out := []string{bold("Stampede · " + headline(ev))}
 	if ev.Message != "" {
 		out = append(out, ev.Message)
+	}
+	if d := ev.Drift; d != nil {
+		head := code(d.Scenario)
+		if d.Target != "" {
+			head += " against " + d.Target
+		}
+		out = append(out, head)
+		if len(d.Broken) > 0 {
+			bs := make([]string, len(d.Broken))
+			for i, b := range d.Broken {
+				bs[i] = code(b)
+			}
+			out = append(out, "Broken: "+strings.Join(bs, ", "))
+		}
+		if d.URL != "" {
+			out = append(out, link("Open the drift result", d.URL))
+		}
 	}
 	r := ev.Run
 	if r == nil {

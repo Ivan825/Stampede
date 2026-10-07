@@ -14,6 +14,7 @@ import (
 
 	"github.com/getkin/kin-openapi/openapi3"
 	"github.com/tidwall/gjson"
+	"google.golang.org/protobuf/reflect/protoregistry"
 )
 
 // Inputs are what a user gives the generator. At least one is required.
@@ -33,6 +34,17 @@ type Inputs struct {
 	AccessLog []byte
 	// Existing is a scenario to compare the proposal with.
 	Existing []byte
+	// Proto holds .proto sources by file name (the name imports use). The
+	// generator writes grpc steps for their services' methods.
+	Proto map[string][]byte
+	// ProtoPaths, when set, are the paths grpc steps name in proto: so a
+	// run loads the same descriptors (the CLI passes the files it read).
+	// Without them steps rely on the server's reflection service.
+	ProtoPaths []string
+	// ProtoImportPaths are directories where imports of the .proto files
+	// that are not in Proto are found (CLI only; steps name them in
+	// importPaths).
+	ProtoImportPaths []string
 }
 
 // Endpoint is one operation of the system under test.
@@ -87,6 +99,10 @@ type Understanding struct {
 	// BasePath is the path of the spec's first server URL ("/api/v1"),
 	// which prefixes every spec path on the wire.
 	BasePath string `json:"basePath,omitempty"`
+	// GRPCMethods are the methods of the .proto inputs; ProtoFiles their
+	// compiled descriptors, which the dry run uses.
+	GRPCMethods []GRPCMethod         `json:"grpcMethods,omitempty"`
+	ProtoFiles  *protoregistry.Files `json:"-"`
 	// Context is the redacted text the model sees.
 	Context string `json:"-"`
 }
@@ -106,8 +122,8 @@ const (
 // Understand builds the dependency map and the model's context from the
 // inputs. Traffic is redacted with red; documents lose credentials only.
 func Understand(in Inputs, red *Redactor) (*Understanding, error) {
-	if strings.TrimSpace(in.Description) == "" && len(in.OpenAPI) == 0 && len(in.HAR) == 0 && len(in.AccessLog) == 0 && len(in.GraphQL) == 0 {
-		return nil, errors.New("give at least one input: a description, an OpenAPI spec, a GraphQL schema, a HAR file or an access log")
+	if strings.TrimSpace(in.Description) == "" && len(in.OpenAPI) == 0 && len(in.HAR) == 0 && len(in.AccessLog) == 0 && len(in.GraphQL) == 0 && len(in.Proto) == 0 {
+		return nil, errors.New("give at least one input: a description, an OpenAPI spec, a GraphQL schema, .proto files, a HAR file or an access log")
 	}
 	u := &Understanding{}
 	var ctx strings.Builder
@@ -125,6 +141,13 @@ func Understand(in Inputs, red *Redactor) (*Understanding, error) {
 	}
 	if len(in.GraphQL) > 0 {
 		digest, err := u.fromGraphQL(in.GraphQL, in.GraphQLPath)
+		if err != nil {
+			return nil, err
+		}
+		ctx.WriteString(digest)
+	}
+	if len(in.Proto) > 0 {
+		digest, err := u.fromProto(in.Proto, in.ProtoPaths, in.ProtoImportPaths)
 		if err != nil {
 			return nil, err
 		}

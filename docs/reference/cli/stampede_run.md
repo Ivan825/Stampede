@@ -57,6 +57,7 @@ stampede run <scenario.yaml> [flags]
       --provider string       model provider for --narrative: anthropic, openai, gemini, ollama or openai-compatible (default "anthropic")
   -q, --quiet                 no live progress
       --rate string           override the arrival rate, e.g. 100/s (switches to rate mode)
+      --region stringArray    with --cluster: split the load by worker region, REGION=PERCENT (repeatable, adds up to 100%), e.g. --region mumbai=50% --region frankfurt=50%; replaces load.regions
       --repeat int            run the scenario this many times (for stampede compare); report files get -1, -2 ... suffixes (default 1)
       --shape string          apply a traffic shape: smoke, baseline, stress, spike, soak, breakpoint, steps, recovery, wave
       --target string         with --cluster: target name, base URL or id saved on the server

@@ -198,7 +198,7 @@ func (h *handlers) CreateScenario(ctx context.Context, req gen.CreateScenarioReq
 }
 
 func (h *handlers) scenario(ctx context.Context, id uuid.UUID, min auth.Role) (*auth.Principal, db.Scenario, error) {
-	p, err := need(ctx, min)
+	p, err := need(ctx, auth.PermView)
 	if err != nil {
 		return nil, db.Scenario{}, err
 	}
@@ -206,7 +206,11 @@ func (h *handlers) scenario(ctx context.Context, id uuid.UUID, min auth.Role) (*
 	if err != nil {
 		return nil, db.Scenario{}, notFoundOr(err, "scenario")
 	}
-	return p, sc, nil
+	pp, err := h.needIn(ctx, sc.ProjectID, min)
+	if err != nil {
+		return nil, db.Scenario{}, err
+	}
+	return pp, sc, nil
 }
 
 func (h *handlers) GetScenario(ctx context.Context, req gen.GetScenarioRequestObject) (gen.GetScenarioResponseObject, error) {

@@ -17,10 +17,12 @@ import (
 	"time"
 
 	"github.com/go-chi/chi/v5/middleware"
+	"github.com/google/uuid"
 
 	"github.com/Ivan825/Stampede/internal/api/gen"
 	"github.com/Ivan825/Stampede/internal/auth"
 	"github.com/Ivan825/Stampede/internal/store"
+	"github.com/Ivan825/Stampede/internal/store/db"
 )
 
 // apiError is returned by handlers and rendered as the standard error body.
@@ -204,6 +206,7 @@ func (s *Server) principal(r *http.Request) (*auth.Principal, error) {
 		return &auth.Principal{
 			UserID: row.UserID, OrgID: row.OrgID, Email: row.Email, Name: row.UserName, OrgName: row.OrgName,
 			Role: auth.Lower(auth.Role(row.TokenRole), auth.Role(row.UserRole)), Via: "token:" + row.Name,
+			OrgRole: auth.Role(row.UserRole), TokenRole: auth.Role(row.TokenRole),
 		}, nil
 	}
 	c, err := r.Cookie(SessionCookie)
@@ -220,7 +223,7 @@ func (s *Server) principal(r *http.Request) (*auth.Principal, error) {
 	}
 	return &auth.Principal{
 		UserID: row.UserID, OrgID: row.OrgID, Email: row.Email, Name: row.Name, OrgName: row.OrgName,
-		Role: auth.Role(row.Role), Via: "session", SessionHash: hash,
+		Role: auth.Role(row.Role), OrgRole: auth.Role(row.Role), Via: "session", SessionHash: hash,
 	}, nil
 }
 
@@ -242,7 +245,38 @@ func (s *Server) csrf(next http.Handler) http.Handler {
 	})
 }
 
-// need returns the principal when it holds at least role min.
+// needIn returns the caller acting in a project (their role there: the
+// organisation role or the project's override) when that role is at least
+// min. Every project-scoped permission check goes through it.
+func (s *Server) needIn(ctx context.Context, project uuid.UUID, min auth.Role) (*auth.Principal, error) {
+	p := auth.FromContext(ctx)
+	if p == nil {
+		return nil, errUnauthorized("sign in first")
+	}
+	pp, err := s.inProject(ctx, p, project)
+	if err != nil {
+		return nil, err
+	}
+	if !pp.Can(min) {
+		if pp.Role != p.Role {
+			return nil, errForbidden(fmt.Sprintf("this needs the %s role or higher in this project; you are %s here", min, pp.Role))
+		}
+		return nil, errForbidden(fmt.Sprintf("this needs the %s role or higher; you are %s", min, pp.Role))
+	}
+	return pp, nil
+}
+
+// inProject applies the project's role override for p, if any.
+func (s *Server) inProject(ctx context.Context, p *auth.Principal, project uuid.UUID) (*auth.Principal, error) {
+	role, err := s.st.GetProjectRole(ctx, db.GetProjectRoleParams{ProjectID: project, UserID: p.UserID})
+	if err != nil && !store.IsNotFound(err) {
+		return nil, err
+	}
+	return p.InProject(auth.Role(role)), nil
+}
+
+// need returns the principal when it holds at least role min in the
+// organisation. Project-scoped checks use needIn.
 func need(ctx context.Context, min auth.Role) (*auth.Principal, error) {
 	p := auth.FromContext(ctx)
 	if p == nil {

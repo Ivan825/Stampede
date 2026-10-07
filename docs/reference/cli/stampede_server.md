@@ -42,6 +42,7 @@ stampede server [flags]
       --max-duration duration         hard cap on run duration (0 = none)
       --max-rate float                hard cap on arrival rate for every run (0 = none)
       --max-vus int                   hard cap on virtual users for every run (0 = none)
+      --metrics-retention string      how long to keep per-second run metrics, e.g. 30d (0 keeps them forever; at least 1d). Reports, and with TimescaleDB the 10s and 1m rollups, are kept (default "0")
       --migrate-dry-run               report pending migrations and exit
       --migrate-only                  apply migrations and exit
       --oidc-allowed-domain strings   email domain allowed to sign in with SSO (repeatable; default any)

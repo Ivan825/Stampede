@@ -14,6 +14,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"cel.dev/cel-go/interpreter"
@@ -21,8 +22,10 @@ import (
 	"github.com/andybalholm/cascadia"
 	"github.com/tidwall/gjson"
 	"golang.org/x/net/html"
+	"google.golang.org/protobuf/reflect/protoregistry"
 
 	"github.com/Ivan825/Stampede/internal/feed"
+	"github.com/Ivan825/Stampede/internal/protocol/grpcx"
 	"github.com/Ivan825/Stampede/internal/protocol/httpx"
 	"github.com/Ivan825/Stampede/internal/scenario"
 	"github.com/Ivan825/Stampede/internal/script"
@@ -92,6 +95,14 @@ type DryRunner struct {
 	BodyLimit int
 	// MaxRequests bounds requests per pass (default 100).
 	MaxRequests int
+	// GRPCFiles are descriptors for grpc steps (from the generator's .proto
+	// inputs). Steps whose method is not there load their own proto or
+	// protoset files, or ask the server's reflection service.
+	GRPCFiles *protoregistry.Files
+
+	grpcOnce  sync.Once
+	grpcPool  *grpcx.Pool
+	grpcDescs *grpcx.Descriptors
 }
 
 const (
@@ -194,6 +205,8 @@ func (p *pass) step(ctx context.Context, st *scenario.CStep) error {
 	switch st.Kind {
 	case scenario.StepRequest:
 		return p.request(ctx, st)
+	case scenario.StepGRPC:
+		return p.grpcCall(ctx, st)
 	case scenario.StepThink:
 		// Think times are not slept in a dry run.
 		return nil
@@ -301,7 +314,18 @@ func (p *pass) request(ctx context.Context, st *scenario.CStep) error {
 	}
 	tr.Status = res.Status
 	tr.ResponseHeaders = red.Headers(res.Header)
+	return p.verify(tr, r, res)
+}
 
+// verify runs a response's extractors and checks and records the step.
+func (p *pass) verify(tr StepTrace, r *scenario.CRequest, res *httpx.Result) error {
+	d := p.d
+	red := d.Redactor
+	fail := func(msg string) error {
+		tr.Error = msg
+		p.trace.Steps = append(p.trace.Steps, tr)
+		return errStop
+	}
 	// Extract first so secrets in the response are registered before the
 	// body is redacted and recorded.
 	extracted := map[string]any{}

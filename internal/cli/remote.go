@@ -75,7 +75,7 @@ type remoteRunFlags struct {
 	project, scenarioRef, target, file, note string
 	shape, rate, duration, start, max        string
 	vus, workers                             int
-	env                                      []string
+	env, regions                             []string
 	detach                                   bool
 	md                                       string
 }
@@ -90,7 +90,8 @@ scenario already saved on the server (--scenario) or a local file (--file),
 which is saved as a new version first. Exits like stampede run: 0 pass,
 3 targets failed.`,
 		Example: `  stampede start --project shop --file checkout.yaml --target staging --shape spike
-  stampede start --scenario shoplab-mix --target shoplab --duration 2m --detach`,
+  stampede start --scenario shoplab-mix --target shoplab --duration 2m --detach
+  stampede start --scenario checkout --target staging --region mumbai=50% --region frankfurt=30% --region virginia=20%`,
 		RunE: func(cmd *cobra.Command, _ []string) error { return startRemote(cmd, f) },
 	}
 	fl := cmd.Flags()
@@ -105,6 +106,7 @@ which is saved as a new version first. Exits like stampede run: 0 pass,
 	fl.StringVar(&f.start, "start", "", "shape start level override")
 	fl.StringVar(&f.max, "max", "", "shape max level override")
 	fl.IntVar(&f.workers, "workers", 0, "number of workers (0 = all)")
+	fl.StringArrayVar(&f.regions, "region", nil, regionFlagHelp)
 	fl.StringArrayVarP(&f.env, "env", "e", nil, "KEY=VALUE for ${env.KEY} (repeatable)")
 	fl.StringVar(&f.note, "note", "", "note recorded with the run")
 	fl.BoolVarP(&f.detach, "detach", "d", false, "print the run id and return without following")
@@ -133,6 +135,10 @@ func startRemote(cmd *cobra.Command, f *remoteRunFlags) error {
 // f.scenarioRef, or f.file saved as a new version first, against the
 // target named by f.target. It reports the start on errw.
 func createRemoteRun(ctx context.Context, errw io.Writer, c *client.Client, f *remoteRunFlags, pushMsg string) (gen.Run, error) {
+	regions, err := regionsFrom(f.regions)
+	if err != nil {
+		return gen.Run{}, err
+	}
 	proj, err := c.FindProject(ctx, f.project)
 	if err != nil {
 		return gen.Run{}, err
@@ -152,7 +158,11 @@ func createRemoteRun(ctx context.Context, errw io.Writer, c *client.Client, f *r
 		return gen.Run{}, err
 	}
 	body := map[string]any{"scenarioId": sc.Id, "targetId": tgt.Id, "workers": f.workers}
-	if ov := overridesFrom(f.shape, f.rate, f.duration, f.start, f.max, f.vus); len(ov) > 0 {
+	ov := overridesFrom(f.shape, f.rate, f.duration, f.start, f.max, f.vus)
+	if regions != nil {
+		ov["regions"] = regions
+	}
+	if len(ov) > 0 {
 		body["overrides"] = ov
 	}
 	env, err := envFrom(f.env)

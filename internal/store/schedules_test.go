@@ -39,7 +39,7 @@ func TestClaimScheduleOnce(t *testing.T) {
 	id := uuid.New()
 	must(t, a.CreateSchedule(ctx, db.CreateScheduleParams{
 		ID: id, ProjectID: project, Name: "nightly", ScenarioID: scenario, TargetID: target,
-		Cron: "* * * * *", Timezone: "UTC", Overrides: []byte("{}"), Env: []byte("{}"), Enabled: true, NextRunAt: &due,
+		Cron: "* * * * *", Timezone: "UTC", Overrides: []byte("{}"), Env: []byte("{}"), Enabled: true, NextRunAt: &due, Kind: "run",
 	}))
 
 	rows, err := a.ListDueSchedules(ctx, now)

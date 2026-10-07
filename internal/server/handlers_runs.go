@@ -8,12 +8,14 @@ import (
 	"fmt"
 	"net/url"
 	"path/filepath"
+	"sort"
 	"strings"
 	"time"
 
 	"github.com/google/uuid"
 	"go.opentelemetry.io/otel/trace"
 
+	"github.com/Ivan825/Stampede/internal/ai"
 	"github.com/Ivan825/Stampede/internal/api/gen"
 	"github.com/Ivan825/Stampede/internal/auth"
 	"github.com/Ivan825/Stampede/internal/observe"
@@ -21,6 +23,7 @@ import (
 	"github.com/Ivan825/Stampede/internal/runner"
 	"github.com/Ivan825/Stampede/internal/safety"
 	"github.com/Ivan825/Stampede/internal/scenario"
+	"github.com/Ivan825/Stampede/internal/store"
 	"github.com/Ivan825/Stampede/internal/store/db"
 )
 
@@ -114,6 +117,13 @@ type preparedRun struct {
 	obs     *observe.Config
 	faults  *runner.FaultPlan
 	secrets map[string]string
+	// regions is the load split by worker region (scenario or override).
+	regions map[string]scenario.Percent
+}
+
+func regionFractions(r map[string]scenario.Percent) map[string]float64 {
+	l := scenario.Load{Regions: r}
+	return l.RegionFractions()
 }
 
 // prepareRun loads and checks everything a run needs (scenario, target,
@@ -161,6 +171,9 @@ func (h *handlers) prepareRun(ctx context.Context, org uuid.UUID, pr db.Project,
 		}
 		return nil, errInvalid(err.Error())
 	}
+	if err := guardThirdParties(s, tg); err != nil {
+		return nil, err
+	}
 	prog, err := scenario.Compile(s)
 	if err != nil {
 		return nil, errInvalid(err.Error())
@@ -172,7 +185,7 @@ func (h *handlers) prepareRun(ctx context.Context, org uuid.UUID, pr db.Project,
 	if plan.StopOnFail && len(prog.Thresholds) == 0 {
 		return nil, errInvalid("the breakpoint shape needs at least one target, such as \"http.p95 < 500ms\"")
 	}
-	if err := h.checkCaps(tg, plan); err != nil {
+	if err := h.checkCaps(ctx, org, pr, tg, plan); err != nil {
 		return nil, err
 	}
 	obs, err := h.observeFor(ctx, org, s.Observe)
@@ -196,13 +209,17 @@ func (h *handlers) prepareRun(ctx context.Context, org uuid.UUID, pr db.Project,
 	if in.env == nil {
 		in.env = map[string]string{}
 	}
+	// The coordinator splits load by region; workers never see the split,
+	// so workers that predate it still accept the scenario.
+	regions := s.Load.Regions
+	s.Load.Regions = nil
 	yamlOut, err := s.Marshal()
 	if err != nil {
 		return nil, err
 	}
 	return &preparedRun{
 		in: in, sc: sc, tg: tg, version: ver.Version, s: s, yaml: yamlOut, prog: prog, plan: plan,
-		ov: ov, obs: obs, faults: faults, secrets: secrets,
+		ov: ov, obs: obs, faults: faults, secrets: secrets, regions: regions,
 	}, nil
 }
 
@@ -232,17 +249,98 @@ func applyOverrides(s *scenario.Scenario, ov gen.RunOverrides) error {
 	if err := o.Apply(s); err != nil {
 		return errInvalid("overrides: " + err.Error())
 	}
+	if ov.Regions != nil {
+		regions := map[string]scenario.Percent{}
+		for r, pct := range *ov.Regions {
+			regions[r] = scenario.Percent(pct / 100)
+		}
+		if probs := scenario.ValidateRegions(regions); len(probs) > 0 {
+			return errInvalid("overrides: regions", probs...)
+		}
+		s.Load.Regions = regions
+		if len(regions) == 0 {
+			s.Load.Regions = nil
+		}
+	}
 	return nil
+}
+
+// guardThirdParties refuses a run whose scenario sends requests to a
+// payment, SMS, email or CAPTCHA provider (the AI generator's guard list)
+// unless that host is one of the target's allowed hosts.
+func guardThirdParties(s *scenario.Scenario, tg db.Target) error {
+	allowed := map[string]bool{}
+	for _, h := range tg.AllowHosts {
+		allowed[strings.ToLower(h)] = true
+	}
+	var refused []string
+	for _, c := range ai.ThirdPartyCalls(s) {
+		if !allowed[c.Host] {
+			refused = append(refused, c.String())
+		}
+	}
+	if len(refused) == 0 {
+		return nil
+	}
+	return &apiError{status: 403, code: "third_party", details: refused,
+		msg: "the scenario sends requests to third-party services that must not receive load (payment, SMS, email or CAPTCHA providers); " +
+			"remove those steps or point them at a test-mode host, or, if you have permission to load test that service, add its host to the target's allowed hosts"}
+}
+
+// checkRegions refuses a run split by region when a region has no
+// connected worker, before anything is recorded.
+func (h *handlers) checkRegions(regions map[string]scenario.Percent) error {
+	if len(regions) == 0 {
+		return nil
+	}
+	if h.cfg.Workers == nil {
+		return errInvalid("load.regions needs distributed workers, but this server runs load in-process; connect workers (stampede server --worker-addr, stampede worker --region) or remove the region split")
+	}
+	have := map[string]int{}
+	for _, w := range h.cfg.Workers() {
+		if w.Status != "lost" {
+			have[w.Region]++
+		}
+	}
+	var missing []string
+	for r := range regions {
+		if have[r] == 0 {
+			missing = append(missing, r)
+		}
+	}
+	if len(missing) == 0 {
+		return nil
+	}
+	sort.Strings(missing)
+	var known []string
+	for r := range have {
+		if r != "" {
+			known = append(known, r)
+		}
+	}
+	sort.Strings(known)
+	connected := "none of the connected workers has a region"
+	if len(known) > 0 {
+		connected = "connected workers are in " + strings.Join(known, ", ")
+	}
+	return errInvalid(fmt.Sprintf("no connected worker is in region %s (%s); start one with stampede worker --region %s", strings.Join(missing, ", "), connected, missing[0]))
 }
 
 // startRun records a prepared run as started by p, audits it and launches
 // it in the background.
 func (h *handlers) startRun(ctx context.Context, p *auth.Principal, pr db.Project, r *preparedRun) (db.GetRunRow, error) {
+	if err := h.checkRegions(r.regions); err != nil {
+		return db.GetRunRow{}, err
+	}
+	settings, err := h.projectSettings(ctx, pr)
+	if err != nil {
+		return db.GetRunRow{}, err
+	}
 	ovJSON, _ := json.Marshal(r.ov)
 	planJSON, _ := json.Marshal(planSummary(r.s))
 	envJSON, _ := json.Marshal(redactedEnv(r.in.env))
 	id, uid := uuid.New(), p.UserID
-	err := h.st.CreateRun(ctx, db.CreateRunParams{
+	err = h.st.CreateRun(ctx, db.CreateRunParams{
 		ID: id, ProjectID: pr.ID, ScenarioID: r.sc.ID, ScenarioVersion: r.version, TargetID: r.tg.ID,
 		Overrides: ovJSON, Plan: planJSON, Env: envJSON, Workers: int32(r.in.workers), Note: r.in.note, CreatedBy: &uid, //nolint:gosec // small
 	})
@@ -253,10 +351,11 @@ func (h *handlers) startRun(ctx context.Context, p *auth.Principal, pr db.Projec
 		"run": id, "version": r.version, "peak": r.plan.Peak(), "mode": r.plan.Mode, "duration": r.plan.TotalDuration().String(),
 	})
 
-	h.runs.launch(&activeRun{id: id, org: p.OrgID, project: pr.ID, target: r.tg.ID, scenario: r.sc.ID, obs: r.obs, faults: r.faults, link: trace.LinkFromContext(ctx)},
+	h.runs.launch(&activeRun{id: id, org: p.OrgID, project: pr.ID, target: r.tg.ID, scenario: r.sc.ID, obs: r.obs, faults: r.faults, link: trace.LinkFromContext(ctx), dryRun: settings.RequireDryRun},
 		ExecSpec{
 			RunID: id.String(), Scenario: r.s, YAML: r.yaml, Env: r.in.env, Secrets: r.secrets,
 			AllowHosts: r.tg.AllowHosts, TargetHost: r.tg.Host, Workers: r.in.workers,
+			Regions: regionFractions(r.regions),
 		}, r.prog, r.plan)
 
 	return h.st.GetRun(ctx, db.GetRunParams{ID: id, OrgID: p.OrgID})
@@ -272,41 +371,53 @@ func redactedEnv(env map[string]string) map[string]string {
 	return out
 }
 
-// checkCaps applies, in order: the server's hard caps, the low caps for
-// unverified public targets, and the target's own caps.
-func (h *handlers) checkCaps(tg db.Target, plan *scenario.Plan) error {
+// checkCaps applies, in order: the server's hard caps, the organisation's
+// and the project's caps, the low caps for unverified public targets, and
+// the target's own caps. A run must fit within all of them.
+func (h *handlers) checkCaps(ctx context.Context, org uuid.UUID, pr db.Project, tg db.Target, plan *scenario.Plan) error {
 	if err := safety.CheckPlan(plan, h.cfg.HardCaps); err != nil {
 		return errForbidden("over the server's limits: " + err.Error())
+	}
+	oc, err := h.st.GetOrgCaps(ctx, org)
+	switch {
+	case err == nil:
+		if err := safety.CheckPlan(plan, safetyCaps(oc.MaxRate, oc.MaxVus, oc.MaxDurationS)); err != nil {
+			return errForbidden("over the organisation's caps: " + err.Error())
+		}
+	case !store.IsNotFound(err):
+		return err
+	}
+	ps, err := h.st.GetProjectSettings(ctx, pr.ID)
+	switch {
+	case err == nil:
+		if err := safety.CheckPlan(plan, safetyCaps(ps.MaxRate, ps.MaxVus, ps.MaxDurationS)); err != nil {
+			return errForbidden(fmt.Sprintf("over project %s's caps: %v", pr.Name, err))
+		}
+	case !store.IsNotFound(err):
+		return err
 	}
 	if !tg.Private && tg.VerifiedAt == nil {
 		if err := safety.CheckPlan(plan, safety.UnverifiedPublicCaps); err != nil {
 			return errForbidden(fmt.Sprintf("%s is public and its ownership is not verified, so load is capped: %v. Verify the target to lift this", tg.Host, err))
 		}
 	}
-	c := safety.Caps{}
-	if tg.MaxRate != nil {
-		c.MaxRate = *tg.MaxRate
-	}
-	if tg.MaxVus != nil {
-		c.MaxVUs = int(*tg.MaxVus)
-	}
-	if tg.MaxDurationS != nil {
-		c.MaxDuration = time.Duration(*tg.MaxDurationS) * time.Second
-	}
-	if err := safety.CheckPlan(plan, c); err != nil {
+	if err := safety.CheckPlan(plan, safetyCaps(tg.MaxRate, tg.MaxVus, tg.MaxDurationS)); err != nil {
 		return errForbidden("over this target's caps: " + err.Error())
 	}
 	return nil
 }
 
 func (h *handlers) run(ctx context.Context, id uuid.UUID, min auth.Role) (db.GetRunRow, error) {
-	p, err := need(ctx, min)
+	p, err := need(ctx, auth.PermView)
 	if err != nil {
 		return db.GetRunRow{}, err
 	}
 	r, err := h.st.GetRun(ctx, db.GetRunParams{ID: id, OrgID: p.OrgID})
 	if err != nil {
 		return db.GetRunRow{}, notFoundOr(err, "run")
+	}
+	if _, err := h.needIn(ctx, r.ProjectID, min); err != nil {
+		return db.GetRunRow{}, err
 	}
 	return r, nil
 }
@@ -400,6 +511,9 @@ func (h *handlers) GetRunTimeline(ctx context.Context, req gen.GetRunTimelineReq
 	r, err := h.run(ctx, req.RunId, auth.PermView)
 	if err != nil {
 		return nil, err
+	}
+	if res := req.Params.Resolution; res != nil && *res != gen.Resolution1s {
+		return h.rolledUpTimeline(ctx, r, string(*res))
 	}
 	rows, err := h.st.ListRunPoints(ctx, r.ID)
 	if err != nil {

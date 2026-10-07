@@ -39,6 +39,42 @@ would refuse the run is reported straight away rather than at 02:00.
 
 A schedule always runs the scenario's latest version.
 
+## Drift checks
+
+A schedule of kind `drift` starts no load. On its cron it runs each journey
+of the scenario once with one user against the target (the dry run of
+`stampede drift --target`) and records a drift result. With a spec URL
+(`--spec-url`, or `specURL` in the API) it also fetches that OpenAPI
+document and reports requests that match no endpoint of it, and endpoints
+removed since the schedule's previous check, with the journeys that call
+them. The spec URL must be on the target's host or one of its allowed hosts.
+
+```sh
+stampede schedules create api-drift --project shop --kind drift \
+  --scenario checkout --target staging --cron "0 6 * * *" \
+  --spec-url https://staging.example.com/openapi.json
+stampede schedules run api-drift --project shop   # check now; exit 4 when drifted
+```
+
+A result is `ok`, `drifted` (a journey failed its dry run or calls an
+endpoint the API no longer has) or `error` (the check could not run).
+`GET /api/v1/projects/{projectId}/drift-results` lists results and
+`GET /api/v1/drift-results/{driftId}` returns one with its redacted dry-run
+traces. When journeys broke, the server sends a `drift.detected`
+notification to channels subscribed to it (new channels subscribe to every
+event; existing ones keep their list).
+
+`POST /api/v1/drift-results/{driftId}/repair` hands the broken journeys to
+[AI generation](../ai.md): the scenario is the starting point, the check's
+findings are the brief, the spec is fetched again when the schedule has
+one, and the job dry-runs and repairs as usual. The job's result is a
+proposed new version with a diff; nothing is saved until someone approves
+the job (`POST /api/v1/ai/jobs/{jobId}/approve`). It needs an AI provider
+and the editor role.
+
+In the web UI, drift schedules show their last check and a **Check now**
+button; creating one is done from the CLI or the API.
+
 ## Cron expressions
 
 Five fields, separated by spaces:

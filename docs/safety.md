@@ -16,15 +16,45 @@ scenario file cannot turn them off.
   report as `blocked by safety`. Plugin steps go through the same check for
   the address setting the plugin marks (a broker, a DSN); see
   [plugins](plugins.md#in-a-scenario).
-- **AI-generated scenarios** are rejected when they call known payment, SMS,
-  email or CAPTCHA services (see [AI generation](ai.md)).
+- **Third-party services.** Scenarios must not send load to payment, SMS,
+  email or CAPTCHA providers (the list in [AI generation](ai.md#third-party-guard)).
+  AI-generated scenarios that call one are rejected; `stampede validate`
+  warns about every step that does; and a server refuses to start a run
+  whose scenario calls one (`403`, code `third_party`, one detail per
+  step) unless that host is one of the target's allowed hosts. Hosts written
+  as templates (`https://${env.PAY_HOST}/...`) cannot be checked before the
+  run; the host policy above still applies to them.
 
 ## Caps
 
 Every run is checked before it starts against, in order: the server's hard
-caps (`--max-rate`, `--max-vus`, `--max-duration`), the low caps for
-unverified public targets, and the target's own caps. The request is refused
-with the reason if any is exceeded.
+caps (`--max-rate`, `--max-vus`, `--max-duration`), the organisation's caps,
+the project's caps, the low caps for unverified public targets, and the
+target's own caps. A run must fit within all of them; the request is refused
+(`403`) with the level and the reason if any is exceeded.
+
+Organisation caps are set by admins with `PUT /api/v1/organisation/caps`;
+project caps with `PUT /api/v1/projects/{projectId}/settings` (organisation
+admins, or members with the admin role in that project). Each takes
+`maxRate` (iterations per second), `maxVUs` and `maxDurationSeconds`; an
+empty object removes them. Changes are audited. There is no CLI command for
+them yet.
+
+Bandwidth and open-connection caps are not implemented.
+
+## Dry run before load
+
+A project can require a passing dry run before any load
+(`requireDryRun` in `PUT /api/v1/projects/{projectId}/settings`). Every
+run in the project then starts by running each journey once with one user
+against the target, the same dry run as `stampede validate --dry-run` and
+AI generation, under the same host policy and third-party guard. The run
+stays `starting` meanwhile. If a journey fails, the run ends `failed` with
+the failing journeys and their first error, and no load is sent. The
+outcome is recorded as run events (`dryrun.started`, one `dryrun.journey`
+per journey, then `dryrun.passed` or `dryrun.failed`), listed by
+`GET /api/v1/runs/{runId}/events`. Stopping or killing a run during its dry
+run ends it `aborted` before any load. The dry run is bounded to 2 minutes.
 
 ## Stopping
 
@@ -43,6 +73,23 @@ with the reason if any is exceeded.
   every run, by default errors at or above 90% for 30 seconds
   (`--abort-errors`, `--abort-for`; `0` disables it), so a target that has
   fallen over is not hammered for the rest of a test.
+
+## Roles
+
+Members have one organisation role: viewer (read), runner (also start,
+stop and kill runs), editor (also scenarios, targets, secrets and
+schedules), admin (also users, integrations, caps and settings) or owner.
+An admin can give a member a different role in one project with
+`PUT /api/v1/projects/{projectId}/roles/{userId}` (`{"role": "editor"}`),
+higher or lower than their organisation role, and remove it with `DELETE`;
+`GET /api/v1/projects/{projectId}/roles` lists the overrides. Every check
+on a project's targets, scenarios, runs, schedules, AI jobs and drift
+results uses the role in that project; `GET /projects` reports it as
+`role`. Owners keep the owner role everywhere and nobody can be made owner
+of one project. An API token never grants more than the role it was
+created with. Organisation admins can always manage a project's roles and
+settings, even when an override lowers them there; deleting a project and
+the organisation-wide kill switch need the organisation role.
 
 ## Record
 
