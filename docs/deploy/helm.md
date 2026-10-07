@@ -34,7 +34,9 @@ helm test stampede -n stampede
 kubectl -n stampede port-forward svc/stampede 8080:8080   # then open http://localhost:8080
 ```
 
-The first visit to the web UI creates the owner account.
+Create the organisation and the owner account with `stampede setup`; until
+then the web UI shows a page saying to run it. Everything else is done with
+the `stampede` CLI too; the web UI is for analysis and reporting.
 
 ### Local image
 

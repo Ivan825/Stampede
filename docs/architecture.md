@@ -3,7 +3,7 @@
 One Go binary in several roles.
 
 ```
- CLI / terminal console / web UI / CI
+ CLI / terminal console / CI / web UI (read only)
               │  REST + server-sent events (/api/v1)
               ▼
  ┌──────────────────────── stampede server ────────────────────────┐

@@ -102,8 +102,8 @@ spec:
 
 What the controller does:
 
-1. Reads the API token from the Secret (create one under Settings > API
-   tokens). Role **runner** is enough when the project, target and
+1. Reads the API token from the Secret (create one with
+   `stampede tokens create`). Role **runner** is enough when the project, target and
    scenario already exist; **editor** is needed when the operator creates
    any of them.
 2. Resolves the project (by ID, slug or name, creating it when missing),

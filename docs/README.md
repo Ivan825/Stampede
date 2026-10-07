@@ -11,6 +11,10 @@ not built yet are marked **planned**.
 - [Installation](install.md): binary, Docker Compose, Kubernetes
 - [Your first real target](guides/first-target.md)
 
+Everything is done with the `stampede` CLI. A server's web UI is read only,
+for analysis and reporting, apart from the Stop, Kill and Kill all safety
+controls.
+
 ## Concepts
 
 - [Scenarios and journeys](concepts/scenarios.md)
