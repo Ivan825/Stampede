@@ -77,6 +77,7 @@ type clusterFlags struct {
 	workers         int
 	note            string
 	detach          bool
+	regions         []string
 }
 
 func newRunCmd() *cobra.Command {
@@ -135,6 +136,7 @@ fails, 1 on any other error.`,
 	fl.StringVar(&f.cluster.project, "project", "", "with --cluster: project name, slug or id (default: the only project)")
 	fl.StringVar(&f.cluster.target, "target", "", "with --cluster: target name, base URL or id saved on the server")
 	fl.IntVar(&f.cluster.workers, "workers", 0, "with --cluster: number of workers (0 = all)")
+	fl.StringArrayVar(&f.cluster.regions, "region", nil, "with --cluster: "+regionFlagHelp)
 	fl.StringVar(&f.cluster.note, "note", "", "with --cluster: note recorded with the run")
 	fl.BoolVarP(&f.cluster.detach, "detach", "d", false, "with --cluster: print the run id and return without following")
 	return cmd
@@ -153,6 +155,9 @@ func runScenario(ctx context.Context, stdout, stderr io.Writer, path string, f *
 	}
 	if err := s.Validate(); err != nil {
 		return err
+	}
+	if len(s.Load.Regions) > 0 && !f.quiet {
+		fmt.Fprintln(stderr, "stampede: load.regions is ignored in-process; use --cluster to split the load across regional workers")
 	}
 	narrator, err := f.ai.provider()
 	if err != nil {
