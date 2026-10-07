@@ -88,7 +88,7 @@ describe('WorkerHealthGrid', () => {
 
 function Live({ runId, active }: { runId: string; active: boolean }) {
   const q = useRunWorkers(runId, active);
-  return <WorkerHealthGrid data={q.data} error={q.error} now={Date.now()} />;
+  return <WorkerHealthGrid data={q.data} error={q.error} now={now} />;
 }
 
 describe('useRunWorkers', () => {
