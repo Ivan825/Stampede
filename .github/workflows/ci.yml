@@ -189,6 +189,22 @@ jobs:
         run: |
           echo "outcome=$OUTCOME exit-code=$CODE verdict=$VERDICT"
           test "$OUTCOME" = failure && test "$CODE" = 3 && test "$VERDICT" = fail
+      - id: released
+        # What users get by default: the latest published release, downloaded
+        # and checked against the release checksums.
+        uses: ./action
+        with:
+          scenario: action/testdata/smoke.yaml
+          extra-args: -e TARGET_URL=http://127.0.0.1:9099
+          version: latest
+          output-dir: stampede-released
+          artifact-name: ""
+      - name: the released binary passes too
+        env:
+          VERDICT: ${{ steps.released.outputs.verdict }}
+        run: |
+          stampede version | tee /dev/stderr | grep -Eq '^stampede [0-9]+\.[0-9]+\.[0-9]+ '
+          test "$VERDICT" = pass
 
   web:
     runs-on: ubuntu-latest
