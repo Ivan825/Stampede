@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"net/url"
 	"path/filepath"
+	"sort"
 	"strings"
 	"time"
 
@@ -114,6 +115,13 @@ type preparedRun struct {
 	obs     *observe.Config
 	faults  *runner.FaultPlan
 	secrets map[string]string
+	// regions is the load split by worker region (scenario or override).
+	regions map[string]scenario.Percent
+}
+
+func regionFractions(r map[string]scenario.Percent) map[string]float64 {
+	l := scenario.Load{Regions: r}
+	return l.RegionFractions()
 }
 
 // prepareRun loads and checks everything a run needs (scenario, target,
@@ -196,13 +204,17 @@ func (h *handlers) prepareRun(ctx context.Context, org uuid.UUID, pr db.Project,
 	if in.env == nil {
 		in.env = map[string]string{}
 	}
+	// The coordinator splits load by region; workers never see the split,
+	// so workers that predate it still accept the scenario.
+	regions := s.Load.Regions
+	s.Load.Regions = nil
 	yamlOut, err := s.Marshal()
 	if err != nil {
 		return nil, err
 	}
 	return &preparedRun{
 		in: in, sc: sc, tg: tg, version: ver.Version, s: s, yaml: yamlOut, prog: prog, plan: plan,
-		ov: ov, obs: obs, faults: faults, secrets: secrets,
+		ov: ov, obs: obs, faults: faults, secrets: secrets, regions: regions,
 	}, nil
 }
 
@@ -232,12 +244,67 @@ func applyOverrides(s *scenario.Scenario, ov gen.RunOverrides) error {
 	if err := o.Apply(s); err != nil {
 		return errInvalid("overrides: " + err.Error())
 	}
+	if ov.Regions != nil {
+		regions := map[string]scenario.Percent{}
+		for r, pct := range *ov.Regions {
+			regions[r] = scenario.Percent(pct / 100)
+		}
+		if probs := scenario.ValidateRegions(regions); len(probs) > 0 {
+			return errInvalid("overrides: regions", probs...)
+		}
+		s.Load.Regions = regions
+		if len(regions) == 0 {
+			s.Load.Regions = nil
+		}
+	}
 	return nil
+}
+
+// checkRegions refuses a run split by region when a region has no
+// connected worker, before anything is recorded.
+func (h *handlers) checkRegions(regions map[string]scenario.Percent) error {
+	if len(regions) == 0 {
+		return nil
+	}
+	if h.cfg.Workers == nil {
+		return errInvalid("load.regions needs distributed workers, but this server runs load in-process; connect workers (stampede server --worker-addr, stampede worker --region) or remove the region split")
+	}
+	have := map[string]int{}
+	for _, w := range h.cfg.Workers() {
+		if w.Status != "lost" {
+			have[w.Region]++
+		}
+	}
+	var missing []string
+	for r := range regions {
+		if have[r] == 0 {
+			missing = append(missing, r)
+		}
+	}
+	if len(missing) == 0 {
+		return nil
+	}
+	sort.Strings(missing)
+	var known []string
+	for r := range have {
+		if r != "" {
+			known = append(known, r)
+		}
+	}
+	sort.Strings(known)
+	connected := "none of the connected workers has a region"
+	if len(known) > 0 {
+		connected = "connected workers are in " + strings.Join(known, ", ")
+	}
+	return errInvalid(fmt.Sprintf("no connected worker is in region %s (%s); start one with stampede worker --region %s", strings.Join(missing, ", "), connected, missing[0]))
 }
 
 // startRun records a prepared run as started by p, audits it and launches
 // it in the background.
 func (h *handlers) startRun(ctx context.Context, p *auth.Principal, pr db.Project, r *preparedRun) (db.GetRunRow, error) {
+	if err := h.checkRegions(r.regions); err != nil {
+		return db.GetRunRow{}, err
+	}
 	ovJSON, _ := json.Marshal(r.ov)
 	planJSON, _ := json.Marshal(planSummary(r.s))
 	envJSON, _ := json.Marshal(redactedEnv(r.in.env))
@@ -257,6 +324,7 @@ func (h *handlers) startRun(ctx context.Context, p *auth.Principal, pr db.Projec
 		ExecSpec{
 			RunID: id.String(), Scenario: r.s, YAML: r.yaml, Env: r.in.env, Secrets: r.secrets,
 			AllowHosts: r.tg.AllowHosts, TargetHost: r.tg.Host, Workers: r.in.workers,
+			Regions: regionFractions(r.regions),
 		}, r.prog, r.plan)
 
 	return h.st.GetRun(ctx, db.GetRunParams{ID: id, OrgID: p.OrgID})

@@ -2,6 +2,7 @@ package server
 
 import (
 	"context"
+	"errors"
 	"log/slog"
 	"net/url"
 	"sync"
@@ -29,6 +30,8 @@ type ExecSpec struct {
 	TargetHost string
 	// Workers is how many workers to use (0 = all available).
 	Workers int
+	// Regions splits load by worker region (fractions); nil does not.
+	Regions map[string]float64
 }
 
 // ExecEvent is something worth recording about a run: a worker joining,
@@ -109,6 +112,9 @@ type localExec struct {
 
 // Start compiles the scenario and runs it on an in-process engine.
 func (l *LocalExecutor) Start(ctx context.Context, spec ExecSpec) (Execution, error) {
+	if len(spec.Regions) > 0 {
+		return nil, errors.New("the load is split by region, which needs distributed workers; this server runs load in-process")
+	}
 	prog, err := scenario.Compile(spec.Scenario)
 	if err != nil {
 		return nil, err

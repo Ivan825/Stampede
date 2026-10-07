@@ -1584,6 +1584,14 @@ components:
         duration: { type: string, example: 5m }
         start: { type: string }
         max: { type: string }
+        regions:
+          type: object
+          description: |
+            Percent of the load per worker region, such as
+            {"mumbai": 50, "frankfurt": 30, "virginia": 20}. The shares add
+            up to 100 and replace the scenario's load.regions. A run is
+            refused when a region has no connected worker.
+          additionalProperties: { type: number, format: double, minimum: 0, maximum: 100 }
 
     RunCreate:
       type: object
