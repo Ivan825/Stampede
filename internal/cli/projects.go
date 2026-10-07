@@ -584,8 +584,8 @@ them all). Setting them needs the admin role and is audited.`,
 	var f capsFlags
 	var clear, setJSON bool
 	setCmd := &cobra.Command{
-		Use:     "set",
-		Short:   "Change the organisation's caps (admin)",
+		Use:   "set",
+		Short: "Change the organisation's caps (admin)",
 		Example: `  stampede caps set --max-rate 1000 --max-vus 5000 --max-duration 2h
   stampede caps set --max-vus 0      # remove the VU cap
   stampede caps set --clear          # remove every cap`,
