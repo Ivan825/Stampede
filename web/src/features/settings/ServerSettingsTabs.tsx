@@ -1,9 +1,13 @@
-import type { ReactNode } from 'react';
-import { useLimitSettings, useSSOSettings } from '@/api/queries';
-import type { LimitCaps } from '@/api/types';
+import { Link } from '@tanstack/react-router';
+import { useState, type FormEvent, type ReactNode } from 'react';
+import { useLimitSettings, useMe, useOrgCaps, usePutOrgCaps, useSSOSettings } from '@/api/queries';
+import type { Caps, LimitCaps, ProjectLimits } from '@/api/types';
 import { Chip, RoleChip } from '@/components/chips';
-import { Card, CardHeader, ErrorAlert, Loading, Notice, Table } from '@/components/ui';
+import { useToast } from '@/components/toast';
+import { Button, Card, CardHeader, ErrorAlert, Loading, Notice, Table } from '@/components/ui';
 import { humanDuration, pct } from '@/lib/format';
+import { permissions } from '@/lib/roles';
+import { CapsFields, capsErrors, capsForm, toCaps } from './CapsFields';
 
 function Row({ label, children }: { label: string; children: ReactNode }) {
   return (
@@ -102,6 +106,137 @@ const capHeads = (
   </>
 );
 
+function OrgCapsForm({ initial }: { initial: Caps }) {
+  const me = useMe();
+  const put = usePutOrgCaps();
+  const toast = useToast();
+  const [form, setForm] = useState(() => capsForm(initial));
+  const [touched, setTouched] = useState(false);
+  const errors = capsErrors(form);
+  const valid = Object.values(errors).every((e) => !e);
+  const submit = (e: FormEvent) => {
+    e.preventDefault();
+    setTouched(true);
+    if (!valid) return;
+    put.mutate(toCaps(form), {
+      onSuccess: (c) => {
+        setForm(capsForm(c));
+        setTouched(false);
+        toast.success('Organisation caps saved.');
+      },
+    });
+  };
+  return (
+    <form
+      onSubmit={submit}
+      className="flex flex-col gap-3 px-4 py-3"
+      aria-label="Organisation caps"
+      noValidate
+    >
+      <CapsFields
+        form={form}
+        setForm={setForm}
+        errors={touched ? errors : {}}
+        legend={`Caps on every run in ${me.orgName}`}
+      />
+      <ErrorAlert error={put.error} />
+      <div>
+        <Button type="submit" variant="primary" loading={put.isPending}>
+          Save caps
+        </Button>
+      </div>
+    </form>
+  );
+}
+
+/** The organisation's caps; admins edit them. */
+function OrgCapsCard() {
+  const caps = useOrgCaps();
+  const can = permissions(useMe().role);
+  return (
+    <Card>
+      <CardHeader
+        title="Organisation caps"
+        description="Every run must fit within these as well as the server's, its project's and its target's caps."
+      />
+      {caps.isPending ? (
+        <Loading />
+      ) : caps.error ? (
+        <ErrorAlert error={caps.error} className="m-4" />
+      ) : can.manageUsers ? (
+        <OrgCapsForm initial={caps.data} />
+      ) : (
+        <Table aria-label="Organisation caps">
+          <thead>
+            <tr>
+              <th>Applies to</th>
+              {capHeads}
+            </tr>
+          </thead>
+          <tbody>
+            <CapsRow label="Every run in the organisation" caps={caps.data} />
+          </tbody>
+        </Table>
+      )}
+    </Card>
+  );
+}
+
+/** Each project's caps and dry-run gate, linking to its settings. */
+function ProjectsCapsCard({ projects }: { projects: ProjectLimits[] }) {
+  return (
+    <Card>
+      <CardHeader
+        title="Projects"
+        description="Each project's caps and whether its runs must pass a dry run before load. Change them in the project's settings."
+      />
+      {projects.length === 0 ? (
+        <p className="px-4 py-3 text-[13px] text-muted">No projects yet.</p>
+      ) : (
+        <Table aria-label="Project caps">
+          <thead>
+            <tr>
+              <th>Project</th>
+              <th>Dry run before load</th>
+              {capHeads}
+            </tr>
+          </thead>
+          <tbody>
+            {projects.map((p) => (
+              <tr key={p.id}>
+                <td>
+                  <Link
+                    to="/projects/$projectId/settings"
+                    params={{ projectId: p.id }}
+                    className="font-medium hover:underline"
+                  >
+                    {p.name}
+                  </Link>
+                </td>
+                <td>
+                  {p.requireDryRun ? (
+                    <Chip tone="info">required</Chip>
+                  ) : (
+                    <span className="text-muted">not required</span>
+                  )}
+                </td>
+                {capCells(p.caps).map((v, i) => (
+                  <td
+                    key={i}
+                    className={v === 'no cap' ? 'text-right text-muted' : 'num text-right'}
+                  >
+                    {v}
+                  </td>
+                ))}
+              </tr>
+            ))}
+          </tbody>
+        </Table>
+      )}
+    </Card>
+  );
+}
+
 /** The caps every run is checked against, and each target's caps. */
 export function LimitsTab() {
   const limits = useLimitSettings();
@@ -136,6 +271,8 @@ export function LimitsTab() {
           </tbody>
         </Table>
       </Card>
+      <OrgCapsCard />
+      <ProjectsCapsCard projects={l.projects} />
       <Card>
         <CardHeader title="Abort floor" />
         {l.abortFloor ? (
@@ -162,7 +299,7 @@ export function LimitsTab() {
       <Card>
         <CardHeader
           title="Targets"
-          description="Each target's own caps, and the effective caps after the server's caps apply."
+          description="Each target's own caps, and its effective caps: the tightest of the server's, the organisation's, its project's and its own, and the unverified public caps until it is verified."
         />
         {l.targets.length === 0 ? (
           <p className="px-4 py-3 text-[13px] text-muted">No targets yet.</p>
