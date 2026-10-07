@@ -338,6 +338,7 @@ jobs:
           - { pack: edtech, port: 8101 }
           - { pack: government, port: 8102 }
           - { pack: delivery, port: 8103 }
+          - { pack: mobile-backends, port: 8104 }
     runs-on: ubuntu-latest
     env:
       PACK: ${{ matrix.pack }}

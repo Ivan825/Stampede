@@ -1,0 +1,81 @@
+# Back online: after an outage (or a subway ride for a whole city),
+# devices reconnect together, each with offline changes to sync and a
+# backlog of analytics events to flush. Reconnections climb from 5/s to
+# 150/s. Syncs must apply everything and stay quick; the event backlog
+# must not hold up the rest.
+apiVersion: stampede.dev/v1
+kind: Scenario
+metadata:
+  name: mobile-offline-catchup
+  tags: [pack:mobile-backends, ramp]
+target:
+  baseURL: ${env.TARGET_URL}
+  headers: { X-App-Version: 4.2.0 }
+data:
+  users: { csv: ../data/users.csv, mode: random }
+vars:
+  syncToken: v1000
+journeys:
+  - name: reconnect
+    steps:
+      - name: session
+        post: /api/v1/auth/login
+        json: { userId: "${data.users.userId}", password: "${data.users.password}" }
+        check: { status: 200 }
+        extract: { token: "$.accessToken" }
+      - name: sync offline changes
+        post: /api/v1/sync
+        headers: { Authorization: "Bearer ${token}" }
+        json:
+          since: "${vars.syncToken}"
+          changes:
+            - { id: "it_${data.users.userId}_1", done: true }
+            - { id: "it_${data.users.userId}_2", done: false }
+            - { id: "offline-${uuid()}", title: "Water the plants", done: false }
+            - { id: "offline-${uuid()}", title: "Evening walk", done: true }
+            - { id: "offline-${uuid()}", title: "Read before bed", done: false }
+        check: { status: 200, json: { "$.applied": 5 } }
+      - name: flush events
+        post: /api/v1/events
+        headers: { Authorization: "Bearer ${token}" }
+        json:
+          events:
+            - { name: app_open, ts: "${nowMs()}", props: { offline: true } }
+            - { name: item_completed, ts: "${nowMs()}", props: {} }
+            - { name: screen_view, ts: "${nowMs()}", props: { screen: home } }
+            - { name: screen_view, ts: "${nowMs()}", props: { screen: habits } }
+            - { name: item_created, ts: "${nowMs()}", props: {} }
+            - { name: item_created, ts: "${nowMs()}", props: {} }
+            - { name: item_created, ts: "${nowMs()}", props: {} }
+            - { name: screen_view, ts: "${nowMs()}", props: { screen: stats } }
+            - { name: streak_viewed, ts: "${nowMs()}", props: {} }
+            - { name: app_background, ts: "${nowMs()}", props: {} }
+            - { name: app_open, ts: "${nowMs()}", props: { offline: true } }
+            - { name: screen_view, ts: "${nowMs()}", props: { screen: home } }
+            - { name: item_viewed, ts: "${nowMs()}", props: {} }
+            - { name: item_completed, ts: "${nowMs()}", props: {} }
+            - { name: screen_view, ts: "${nowMs()}", props: { screen: settings } }
+            - { name: setting_changed, ts: "${nowMs()}", props: { reminders: true } }
+            - { name: screen_view, ts: "${nowMs()}", props: { screen: home } }
+            - { name: share_tapped, ts: "${nowMs()}", props: {} }
+            - { name: screen_view, ts: "${nowMs()}", props: { screen: stats } }
+            - { name: app_background, ts: "${nowMs()}", props: {} }
+        check: { status: 202, json: { "$.accepted": 20 } }
+      - name: home screen
+        graphql: /api/v1/graphql
+        headers: { Authorization: "Bearer ${token}" }
+        operationName: Today
+        persisted: true
+        query: 'query Today { home { today(limit: 3) { id title done } } }'
+        check: { json: { "$.data.home": exists } }
+load:
+  mode: rate
+  stages:
+    - { duration: 1m, target: 5/s }
+    - { duration: 2m, target: 150/s }
+    - { duration: 2m, target: 150/s }
+targets:
+  - "reconnect/sync offline changes.p95 < 500ms"
+  - "reconnect/flush events.p95 < 500ms"
+  - "reconnect/home screen.p95 < 300ms"
+  - errors < 1%

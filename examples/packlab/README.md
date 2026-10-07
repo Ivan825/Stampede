@@ -21,6 +21,7 @@ and as a single binary in CI. (The e-commerce pack's reference app is
 | `edtech` | [ExamLab](#examlab) | 8101 | [edtech](../../packs/edtech) |
 | `government` | [GovLab](#govlab) | 8102 | [government](../../packs/government) |
 | `delivery` | [RideLab](#ridelab) | 8103 | [delivery](../../packs/delivery) |
+| `mobile-backends` | [MobileLab](#mobilelab) | 8104 | [mobile-backends](../../packs/mobile-backends) |
 
 ```sh
 go run ./examples/packlab -product ticketing                # on :8094
@@ -272,3 +273,20 @@ the map where their app says.
 | `dispatch` | Matching calls the routing service for each candidate while holding the fleet lock, so trips are matched one at a time (at most about 30 a second) and the map and location updates wait | `dinner-rush.yaml`: `matched` and `nearby cars` p95 (seconds, against the half-second dispatch delay with the fix) |
 | `geo` | Finding nearby drivers, for the map and for matching, checks the distance to all 10,000 under the fleet lock | `location-flood.yaml`: `nearby cars`, `cancel` and `location ack` p95 |
 | `eta` | Every ETA is a routing call: each price check, each match, and each tracking update to each rider, every second; nothing is cached | `rider-mix.yaml`: CPU, and a routing call a second for every rider following a trip |
+
+## MobileLab
+
+The backend of a mobile to-do and habits app. Users `u00001` ...
+`u20000` (password `mobilelab-pass`) have 20 to 1,000 items each. Every
+API request needs `X-App-Version` of at least 3.0.0 (older versions get
+426 with `minVersion`); remote config at `/api/v1/config` evaluates 300
+feature flags for the platform, version and rollout bucket; `/api/v1/sync`
+takes offline changes and returns changes since a `v<number>` token
+(the counter starts at 1000); analytics come in batches; the home screen
+is GraphQL at `/api/v1/graphql` with automatic persisted queries.
+
+| Fix | Bottleneck | Where it shows |
+|---|---|---|
+| `config` | Every config request parses the whole 700 KB config document (300 flags with targeting rules) and evaluates it, and forbids caching | `push-storm.yaml`: `config` p95, and everything else as the CPU runs out |
+| `sync` | Delta sync ignores the token and sends every item the user has, every launch | `slow-network.yaml`: `delta sync` (about 570ms against 310ms with the fix on 3G); `push-storm.yaml`: `delta sync` |
+| `events` | Each analytics event is written on its own (200µs) under one global lock | `offline-catchup.yaml` and `push-storm.yaml`: `events` p95 |

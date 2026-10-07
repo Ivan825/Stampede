@@ -1,0 +1,156 @@
+# What a mobile app does to its backend on an ordinary day: cold
+# launches (config, sign-in, device registration, a full sync, the home
+# screen over GraphQL), resumes from the background (a delta sync with an
+# offline change), completing a habit (a mutation and a few analytics
+# events), background analytics flushes, and old app versions that must
+# be told to update. Every request carries the app's version.
+apiVersion: stampede.dev/v1
+kind: Scenario
+metadata:
+  name: mobile-app-mix
+  description: Weighted cold-launch, resume, complete, analytics-flush and outdated-version journeys.
+  tags: [pack:mobile-backends]
+target:
+  baseURL: ${env.TARGET_URL}
+  headers: { X-App-Version: 4.2.0 }
+data:
+  users: { csv: ../data/users.csv, mode: random }
+journeys:
+  - name: cold-launch
+    weight: 40
+    steps:
+      - name: config
+        get: /api/v1/config
+        headers: { X-Platform: "${data.users.platform}", X-Device-Id: "${data.users.deviceId}" }
+        check: { status: 200, json: { "$.minVersion": exists, "$.features": exists } }
+      - name: sign in
+        post: /api/v1/auth/login
+        json: { userId: "${data.users.userId}", password: "${data.users.password}" }
+        check: { status: 200 }
+        extract: { token: "$.accessToken" }
+      - name: register device
+        post: /api/v1/devices
+        headers: { Authorization: "Bearer ${token}" }
+        json: { deviceId: "${data.users.deviceId}", platform: "${data.users.platform}", pushToken: "push-${data.users.deviceId}" }
+        check: { status: [200, 201] }
+      - name: sync
+        post: /api/v1/sync
+        headers: { Authorization: "Bearer ${token}" }
+        json: { since: "", changes: [] }
+        check: { status: 200, json: { "$.next": exists } }
+      - name: home screen
+        graphql: /api/v1/graphql
+        headers: { Authorization: "Bearer ${token}" }
+        operationName: Home
+        persisted: true
+        query: |
+          query Home {
+            home { greeting streak unread today(limit: 10) { id title done } suggestions { id title } }
+          }
+        check: { json: { "$.data.home.greeting": exists } }
+  - name: resume
+    weight: 25
+    steps:
+      - name: sign in
+        post: /api/v1/auth/login
+        json: { userId: "${data.users.userId}", password: "${data.users.password}" }
+        check: { status: 200 }
+        extract: { token: "$.accessToken" }
+      - name: sync
+        post: /api/v1/sync
+        headers: { Authorization: "Bearer ${token}" }
+        json: { since: "", changes: [] }
+        check: { status: 200 }
+        extract: { next: "$.next", itemId: "$.changes[0].id" }
+      - think: 10s..30s
+      # Back from the background, with one change made offline.
+      - name: delta sync
+        post: /api/v1/sync
+        headers: { Authorization: "Bearer ${token}" }
+        json: { since: "${next}", changes: [{ id: "${itemId}", done: true }] }
+        check: { status: 200, json: { "$.applied": 1 } }
+      - name: home screen
+        graphql: /api/v1/graphql
+        headers: { Authorization: "Bearer ${token}" }
+        operationName: Home
+        persisted: true
+        query: |
+          query Home {
+            home { greeting streak unread today(limit: 10) { id title done } suggestions { id title } }
+          }
+        check: { json: { "$.data.home.streak": exists } }
+  - name: complete
+    weight: 20
+    steps:
+      - name: sign in
+        post: /api/v1/auth/login
+        json: { userId: "${data.users.userId}", password: "${data.users.password}" }
+        check: { status: 200 }
+        extract: { token: "$.accessToken" }
+      - name: home screen
+        graphql: /api/v1/graphql
+        headers: { Authorization: "Bearer ${token}" }
+        operationName: Today
+        persisted: true
+        query: 'query Today { home { today(limit: 3) { id title done } } }'
+        check: { json: { "$.data.home.today[0].id": exists } }
+        extract: { itemId: "$.data.home.today[0].id" }
+      - think: 3s..8s
+      - name: toggle item
+        graphql: /api/v1/graphql
+        headers: { Authorization: "Bearer ${token}" }
+        operationName: Toggle
+        query: 'mutation Toggle($id: ID!) { toggleItem(id: $id) { id done } }'
+        variables: { id: "${itemId}" }
+        check: { json: { "$.data.toggleItem.done": true } }
+      - name: events
+        post: /api/v1/events
+        headers: { Authorization: "Bearer ${token}" }
+        json:
+          events:
+            - { name: item_completed, ts: "${nowMs()}", props: { item: "${itemId}" } }
+            - { name: streak_viewed, ts: "${nowMs()}", props: {} }
+            - { name: screen_view, ts: "${nowMs()}", props: { screen: home } }
+        check: { status: 202 }
+  - name: background-flush
+    weight: 10
+    steps:
+      - name: sign in
+        post: /api/v1/auth/login
+        json: { userId: "${data.users.userId}", password: "${data.users.password}" }
+        check: { status: 200 }
+        extract: { token: "$.accessToken" }
+      - name: events
+        post: /api/v1/events
+        headers: { Authorization: "Bearer ${token}" }
+        json:
+          events:
+            - { name: app_open, ts: "${nowMs()}", props: { cold: true } }
+            - { name: screen_view, ts: "${nowMs()}", props: { screen: home } }
+            - { name: screen_view, ts: "${nowMs()}", props: { screen: habits } }
+            - { name: item_viewed, ts: "${nowMs()}", props: {} }
+            - { name: item_completed, ts: "${nowMs()}", props: {} }
+            - { name: screen_view, ts: "${nowMs()}", props: { screen: stats } }
+            - { name: share_tapped, ts: "${nowMs()}", props: {} }
+            - { name: notification_opened, ts: "${nowMs()}", props: { campaign: daily } }
+            - { name: screen_view, ts: "${nowMs()}", props: { screen: settings } }
+            - { name: app_background, ts: "${nowMs()}", props: {} }
+        check: { status: 202, json: { "$.accepted": 10 } }
+  - name: outdated
+    weight: 5
+    steps:
+      - name: old version
+        get: /api/v1/me
+        headers: { X-App-Version: 2.8.0 }
+        # The right answer is 426 with the version to update to.
+        check: { status: 426, json: { "$.minVersion": exists } }
+load:
+  mode: rate
+  rate: 20/s
+  duration: 5m
+targets:
+  - http.p95 < 500ms
+  - errors < 1%
+  - "cold-launch/config.p95 < 200ms"
+  - "cold-launch/sync.p95 < 500ms"
+  - "cold-launch/home screen.p95 < 300ms"

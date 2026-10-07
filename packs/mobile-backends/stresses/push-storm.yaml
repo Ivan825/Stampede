@@ -1,0 +1,65 @@
+# A push notification goes to every user ("Your streak is about to
+# end!") and a large share of them open the app within the minute. Every
+# open is a launch: remote config, the stored session, a delta sync, the
+# home screen and an app_open event. Arrivals spike from 10/s to 500/s.
+apiVersion: stampede.dev/v1
+kind: Scenario
+metadata:
+  name: mobile-push-storm
+  tags: [pack:mobile-backends, spike]
+target:
+  baseURL: ${env.TARGET_URL}
+  headers: { X-App-Version: 4.2.0 }
+data:
+  users: { csv: ../data/users.csv, mode: random }
+vars:
+  # A sync token from before the push: MobileLab's version counter starts
+  # at 1000. Use a token your clients would really hold.
+  syncToken: v1000
+journeys:
+  - name: opened-from-push
+    steps:
+      - name: config
+        get: /api/v1/config
+        headers: { X-Platform: "${data.users.platform}", X-Device-Id: "${data.users.deviceId}" }
+        check: { status: 200 }
+      - name: session
+        post: /api/v1/auth/login
+        json: { userId: "${data.users.userId}", password: "${data.users.password}" }
+        check: { status: 200 }
+        extract: { token: "$.accessToken" }
+      - name: delta sync
+        post: /api/v1/sync
+        headers: { Authorization: "Bearer ${token}" }
+        json: { since: "${vars.syncToken}", changes: [] }
+        check: { status: 200 }
+      - name: home screen
+        graphql: /api/v1/graphql
+        headers: { Authorization: "Bearer ${token}" }
+        operationName: Home
+        persisted: true
+        query: |
+          query Home {
+            home { greeting streak unread today(limit: 10) { id title done } suggestions { id title } }
+          }
+        check: { json: { "$.data.home.greeting": exists } }
+      - name: events
+        post: /api/v1/events
+        headers: { Authorization: "Bearer ${token}" }
+        json:
+          events:
+            - { name: notification_opened, ts: "${nowMs()}", props: { campaign: streak_reminder } }
+            - { name: app_open, ts: "${nowMs()}", props: { cold: true } }
+            - { name: screen_view, ts: "${nowMs()}", props: { screen: home } }
+        check: { status: 202 }
+load:
+  shape: spike
+  mode: rate
+  start: 10/s
+  max: 500/s
+  duration: 3m
+targets:
+  - "opened-from-push/config.p95 < 200ms"
+  - "opened-from-push/delta sync.p95 < 300ms"
+  - "opened-from-push/home screen.p95 < 300ms"
+  - errors < 1%

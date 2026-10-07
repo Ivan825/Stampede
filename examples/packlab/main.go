@@ -29,6 +29,7 @@ import (
 	"github.com/Ivan825/Stampede/examples/packlab/govlab"
 	"github.com/Ivan825/Stampede/examples/packlab/labkit"
 	"github.com/Ivan825/Stampede/examples/packlab/llmlab"
+	"github.com/Ivan825/Stampede/examples/packlab/mobilelab"
 	"github.com/Ivan825/Stampede/examples/packlab/newslab"
 	"github.com/Ivan825/Stampede/examples/packlab/ridelab"
 	"github.com/Ivan825/Stampede/examples/packlab/saaslab"
@@ -47,19 +48,20 @@ type product struct {
 }
 
 var products = map[string]product{
-	"saas":        {pack: "saas", addr: ":8091", new: saaslab.New},
-	"llm-apps":    {pack: "llm-apps", addr: ":8092", new: llmlab.New},
-	"chat":        {pack: "chat", addr: ":8093", new: chatlab.New},
-	"ticketing":   {pack: "ticketing", addr: ":8094", new: ticketlab.New},
-	"identity":    {pack: "identity", addr: ":8095", new: authlab.New},
-	"public-apis": {pack: "public-apis", addr: ":8096", new: apilab.New},
-	"fintech":     {pack: "fintech", addr: ":8097", new: banklab.New},
-	"social":      {pack: "social", addr: ":8098", new: sociallab.New},
-	"content":     {pack: "content", addr: ":8099", new: newslab.New},
-	"streaming":   {pack: "streaming", addr: ":8100", new: streamlab.New},
-	"edtech":      {pack: "edtech", addr: ":8101", new: examlab.New},
-	"government":  {pack: "government", addr: ":8102", new: govlab.New},
-	"delivery":    {pack: "delivery", addr: ":8103", new: ridelab.New},
+	"saas":            {pack: "saas", addr: ":8091", new: saaslab.New},
+	"llm-apps":        {pack: "llm-apps", addr: ":8092", new: llmlab.New},
+	"chat":            {pack: "chat", addr: ":8093", new: chatlab.New},
+	"ticketing":       {pack: "ticketing", addr: ":8094", new: ticketlab.New},
+	"identity":        {pack: "identity", addr: ":8095", new: authlab.New},
+	"public-apis":     {pack: "public-apis", addr: ":8096", new: apilab.New},
+	"fintech":         {pack: "fintech", addr: ":8097", new: banklab.New},
+	"social":          {pack: "social", addr: ":8098", new: sociallab.New},
+	"content":         {pack: "content", addr: ":8099", new: newslab.New},
+	"streaming":       {pack: "streaming", addr: ":8100", new: streamlab.New},
+	"edtech":          {pack: "edtech", addr: ":8101", new: examlab.New},
+	"government":      {pack: "government", addr: ":8102", new: govlab.New},
+	"delivery":        {pack: "delivery", addr: ":8103", new: ridelab.New},
+	"mobile-backends": {pack: "mobile-backends", addr: ":8104", new: mobilelab.New},
 }
 
 func names() []string {
