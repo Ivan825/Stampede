@@ -554,15 +554,25 @@ func (s *server) createTrip(w http.ResponseWriter, r *http.Request, id string) {
 	s.trips[t.ID] = t
 	s.tmu.Unlock()
 	go func() {
-		time.Sleep(s.delay)
-		s.match(t)
+		// A trip that finds no free driver, or loses every candidate to
+		// other trips while it weighs them, keeps searching until one frees
+		// up or the rider cancels.
+		for {
+			time.Sleep(s.delay)
+			t.mu.Lock()
+			canceled := t.canceled
+			t.mu.Unlock()
+			if canceled || s.match(t) {
+				return
+			}
+		}
 	}()
 	labkit.JSON(w, 201, map[string]any{"tripId": t.ID, "status": "searching", "fare": t.Fare})
 }
 
 // match assigns the best of the closest free drivers, by driving time to
-// the pickup.
-func (s *server) match(t *trip) {
+// the pickup, and reports whether it found one.
+func (s *server) match(t *trip) bool {
 	for radius := 1500.0; radius <= 12000; radius *= 2 {
 		if s.cfg.Fixes.On("dispatch") {
 			now := time.Now()
@@ -585,7 +595,7 @@ func (s *server) match(t *trip) {
 				if d := cands[i].d; !d.busy {
 					s.assign(t, d, cands[i].pos, etas[i], ride, now)
 					s.fleet.Unlock()
-					return
+					return true
 				}
 			}
 			s.fleet.Unlock()
@@ -608,9 +618,10 @@ func (s *server) match(t *trip) {
 		}
 		s.fleet.Unlock()
 		if best >= 0 {
-			return
+			return true
 		}
 	}
+	return false
 }
 
 // assign gives the trip to a driver; the caller holds the fleet lock.
