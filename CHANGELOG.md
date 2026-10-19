@@ -5,7 +5,15 @@ Notable changes to Stampede. The format follows
 follow [Semantic Versioning](https://semver.org/). The website's changelog
 page is built from this file.
 
-## Unreleased
+## 1.2.1 (2026-10-19)
+
+### Install
+
+- Homebrew on macOS and Linux: `brew install ivan825/tap/stampede`.
+- Scoop on Windows: `scoop bucket add ivan825
+  https://github.com/Ivan825/scoop-bucket`, then `scoop install stampede`.
+
+## 1.2.0 (2026-10-08)
 
 ### Run output
 
