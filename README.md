@@ -6,7 +6,8 @@
 </p>
 
 <p align="center"><b>Your launch-day traffic, before launch day.</b><br>
-Describe your users. Stampede becomes a thousand of them.</p>
+Describe your users. Stampede becomes a thousand of them.<br>
+<a href="https://stampede-pearl.vercel.app">stampede-pearl.vercel.app</a></p>
 
 <p align="center">
   <a href="https://github.com/Ivan825/Stampede/actions/workflows/ci.yml"><img src="https://github.com/Ivan825/Stampede/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
