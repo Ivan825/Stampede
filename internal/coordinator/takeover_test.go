@@ -21,15 +21,17 @@ func TestSpareTakesOverLostShare(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { hits.Add(1) }))
 	defer srv.Close()
 
-	hb := 200 * time.Millisecond
-	c := newCluster(t, coordinator.Config{HeartbeatInterval: hb, TakeoverLead: 500 * time.Millisecond})
+	// Loss takes three missed heartbeats: 1.5s here, so a busy CI machine
+	// that stalls for half a second does not lose every worker at once.
+	hb := 500 * time.Millisecond
+	c := newCluster(t, coordinator.Config{HeartbeatInterval: hb, TakeoverLead: time.Second})
 	workers := map[string]*testWorker{}
 	for _, name := range []string{"a", "b", "spare"} {
 		workers[name] = c.addWorker(worker.Config{Name: name, CPUs: 1})
 	}
 	c.waitConnected(3, 5*time.Second)
 
-	const rate, secs = 200, 6
+	const rate, secs = 200, 8
 	r, err := c.coord.Start(context.Background(), coordinator.RunSpec{
 		ID: "takeover", Scenario: rateScenario(srv.URL, rate, secs), StartDelay: 300 * time.Millisecond, Workers: 2,
 	})
@@ -107,7 +109,7 @@ func TestSpareTakesOverLostShare(t *testing.T) {
 func TestNoSpareMeansDegraded(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(http.ResponseWriter, *http.Request) {}))
 	defer srv.Close()
-	c := newCluster(t, coordinator.Config{HeartbeatInterval: 200 * time.Millisecond, TakeoverLead: 300 * time.Millisecond})
+	c := newCluster(t, coordinator.Config{HeartbeatInterval: 500 * time.Millisecond, TakeoverLead: 300 * time.Millisecond})
 	a := c.addWorker(worker.Config{Name: "a", CPUs: 1})
 	c.addWorker(worker.Config{Name: "b", CPUs: 1})
 	c.waitConnected(2, 5*time.Second)
