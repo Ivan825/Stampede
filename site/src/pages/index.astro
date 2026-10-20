@@ -61,6 +61,34 @@ const stats = [
     </div>
   </section>
 
+  <section class="block" id="demo">
+    <div class="wrap">
+      <span class="num">LIVE ON A LAPTOP</span>
+      <h2>Find the breaking point. Fix it. Prove it.</h2>
+      <p class="lede">ShopLab ships with Stampede: a small shop API with six performance problems planted on purpose. This is real output from one laptop, the same breakpoint scenario before and after turning the fixes on.</p>
+      <div class="grid">
+        <Term title="before: every bottleneck active"><span class="p">$</span> stampede run breakpoint.yaml
+  requests     17302  failed 0 (0.00%)
+  latency      p50 9.51ms  p95 <span class="bad">28.6s</span>
+
+  <span class="bad">✗</span> http.p95 &lt; 250ms        observed 28.57s
+
+  breakpoint   targets held up to <b>483/s</b>,
+               failed at 700/s
+  knee         p95 latency rose sharply</Term>
+        <Term title="after: SHOPLAB_FIX_ALL=1"><span class="p">$</span> stampede run breakpoint.yaml
+  requests     97220  failed 0 (0.00%)
+  latency      p50 1.70ms  p95 <span class="ok">60.5ms</span>
+
+  <span class="ok">✓</span> http.p95 &lt; 250ms        observed 60.5ms
+
+  breakpoint   targets held up to <b class="ok">1567/s</b>,
+               failed at 1783/s</Term>
+      </div>
+      <p style="margin-top:24px"><a href="/docs/quickstart/">Reproduce this on your machine →</a> About ten minutes with Docker; your numbers will differ with your hardware.</p>
+    </div>
+  </section>
+
   <section class="block shots" id="screenshots" aria-label="Screenshots">
     <div class="wrap">
       <figure class="lead">
@@ -123,46 +151,20 @@ const stats = [
     </div>
   </section>
 
-  <section class="block" id="demo">
-    <div class="wrap">
-      <span class="num">LIVE ON A LAPTOP</span>
-      <h2>Find the breaking point. Fix it. Prove it.</h2>
-      <p class="lede">ShopLab ships with Stampede: a small shop API with six performance problems planted on purpose. This is real output from one laptop, the same breakpoint scenario before and after turning the fixes on.</p>
-      <div class="grid">
-        <Term title="before: every bottleneck active"><span class="p">$</span> stampede run breakpoint.yaml
-  requests     17302  failed 0 (0.00%)
-  latency      p50 9.51ms  p95 <span class="bad">28.6s</span>
-
-  <span class="bad">✗</span> http.p95 &lt; 250ms        observed 28.57s
-
-  breakpoint   targets held up to <b>483/s</b>,
-               failed at 700/s
-  knee         p95 latency rose sharply</Term>
-        <Term title="after: SHOPLAB_FIX_ALL=1"><span class="p">$</span> stampede run breakpoint.yaml
-  requests     97220  failed 0 (0.00%)
-  latency      p50 1.70ms  p95 <span class="ok">60.5ms</span>
-
-  <span class="ok">✓</span> http.p95 &lt; 250ms        observed 60.5ms
-
-  breakpoint   targets held up to <b class="ok">1567/s</b>,
-               failed at 1783/s</Term>
-      </div>
-    </div>
-  </section>
-
   <section class="block">
     <div class="wrap">
       <span class="num">01</span>
       <h2>The problem</h2>
       <p class="lede">Load generators are good at sending traffic. The hard parts are everything around it: writing journeys that actually work, and trusting the numbers that come back.</p>
       <div class="table-wrap"><table>
-        <thead><tr><th></th><th>Hand-written load scripts</th><th>Stampede</th></tr></thead>
+        <thead><tr><th>The hard part</th><th>What Stampede does</th></tr></thead>
         <tbody>
-          <tr><td>Authoring</td><td>Scripts per endpoint, by hand</td><td>Weighted journeys in YAML, generated from an OpenAPI spec or a description with AI, or a ready-made product pack</td></tr>
-          <tr><td>Validation</td><td>Find out mid-test that login was broken</td><td>Every journey is dry-run with one user before it joins a load test</td></tr>
-          <tr><td>Measurement</td><td>Latency from when the request left; percentiles averaged across machines</td><td>Latency from when it should have left; histograms merged without loss</td></tr>
-          <tr><td>Trust</td><td>An overloaded generator blames your app</td><td>Workers report their own saturation; the verdict says generator-limited</td></tr>
-          <tr><td>Answer</td><td>Graphs to interpret</td><td>The breakpoint, the knee, pass or fail against your targets</td></tr>
+          <tr><td>Writing journeys that work</td><td>Weighted journeys in YAML, from a ready-made product pack, or drafted with AI (optional) from a description, an OpenAPI spec or recorded traffic</td></tr>
+          <tr><td>Finding a broken login mid-test</td><td>Every journey is dry-run with one user before it joins a load test</td></tr>
+          <tr><td>Queueing hidden in the numbers</td><td>Latency counted from when each request was scheduled to leave, as wrk2 also does (<a href="/benchmarks">measured nightly</a>)</td></tr>
+          <tr><td>Percentiles across many machines</td><td>Each worker's histograms are merged, never averaged</td></tr>
+          <tr><td>An overloaded load generator</td><td>Workers report their own saturation, and the verdict says generator-limited instead of blaming your app</td></tr>
+          <tr><td>Graphs to interpret</td><td>The breakpoint, the knee, and pass or fail against your targets</td></tr>
         </tbody>
       </table></div>
     </div>
