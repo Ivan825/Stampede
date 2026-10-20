@@ -41,8 +41,10 @@ One Go binary in several roles.
 2. The coordinator picks workers and splits load in proportion to their
    CPUs: each gets a slice of arrivals and of unique data rows.
 3. It measures each worker's clock offset over several round trips and sends
-   a start time a few seconds ahead in the worker's own clock; workers start
-   within a fraction of a millisecond of each other.
+   a start time a few seconds ahead in the worker's own clock. In the
+   coordinator's tests (one machine, clocks seconds apart, 3 ms of added
+   delay) workers start within about 0.2 ms of each other; across real
+   machines the spread follows the network.
 4. Every second each worker sends its histograms and counters, and the
    five slowest requests of each step with their trace IDs, with a
    sequence number; the coordinator merges them per second (a resend is never

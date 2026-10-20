@@ -71,8 +71,9 @@ failed, and the run's events.
   run's page) ends a run gracefully: no new iterations, in-flight ones may
   finish within the graceful-stop period (30 s by default).
 - **Kill** (`stampede kill <run>`, or the **Kill** button on a running
-  run's page) stops all load immediately. In tests the kill reaches every
-  worker in under a millisecond on a local network.
+  run's page) stops all load immediately. In the coordinator's tests, with
+  every process on one machine, the kill reaches all three workers in
+  about 0.2 ms, and the test fails if it takes over a second.
 - **Kill all** (`stampede kill --all`, the **Kill all** switch in the web
   UI's header whenever a run is active, or `POST /api/v1/runs/kill-all`)
   kills every active run in the organisation.

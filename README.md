@@ -24,9 +24,11 @@ runs many of them at once and tells you where your product breaks.
   <img src="site/public/screenshots/demo.gif" alt="stampede init detects a ticketing API and checks its six journeys, then an on-sale rush from 10 to 300 requests a second passes every target" width="820">
 </p>
 
-> **Released.** Install the [latest release](https://github.com/Ivan825/Stampede/releases/latest)
-> with the one-line installer below. This README lists what works today;
-> anything not built yet is marked **planned**.
+> **Released, and early.** The CLI, scenarios, load engine, measurement and
+> reports are the most tested parts; newer parts say how far they have been
+> tested where they are described below. This README lists what works
+> today; anything not built yet is marked **planned**. Feedback and bug
+> reports are very welcome.
 
 ## Get started
 
@@ -57,9 +59,19 @@ the single `stampede` binary. Nothing else is needed. Then:
 
 ```sh
 stampede init --target http://localhost:3000   # detect the product type, install a pack, dry-run its journeys
-stampede run stampede/<pack>/journeys/<file>.yaml -e TARGET_URL=http://localhost:3000 -o report.html
-stampede                                        # or the interactive console: /init, /run spike, ...
 ```
+
+`init` ends by printing the exact command to run next. For a shop API it
+picks the e-commerce pack, and that command is:
+
+```sh
+stampede run stampede/ecommerce/journeys/shop-mix.yaml -e TARGET_URL=http://localhost:3000 -o report.html
+```
+
+Packs are templates for a typical API of each kind, so against your own
+API some journeys may fail their dry run and need their paths, fields or
+test accounts adjusted ([when your API differs](docs/guides/packs.md#when-your-api-differs-from-the-pack)).
+`stampede` on its own opens an interactive console (`/init`, `/run spike`, ...).
 
 **The full stack with the web UI.** Server, web UI, two workers and the
 database, with Docker:
@@ -178,11 +190,17 @@ PostgreSQL and MySQL containers; none has been run against a production
 cluster here.
 
 **Distributed.** `stampede worker` connects out to the server over gRPC.
-Load is split by capacity with no arrival lost or duplicated, start times are
-synchronised to within a millisecond, results merge losslessly, a lost
-worker's share is taken over by an idle worker (or the gap is marked in the
-report when there is none), and a kill reaches every
-worker in under a millisecond on a local network. With `--worker-mtls`
+Load is split by capacity with no arrival lost or duplicated, workers start
+together on a synchronised clock, histograms are merged rather than
+averaged, a lost worker's share is taken over by an idle worker (or the gap
+is marked in the report when there is none), and a kill reaches every
+worker at once. In the coordinator's tests, which run every process on one
+machine ([integration tests](internal/coordinator/integration_test.go)),
+three workers with clocks seconds apart and 3 ms of added network delay
+start within about 0.2 ms of each other (the test fails above 10 ms), a
+kill reaches all three in about 0.2 ms (it fails above one second), and
+three unequal workers together send exactly the arrivals one engine would.
+Across real machines, expect the spread to follow your network. With `--worker-mtls`
 (the default in Compose and Helm) every worker gets its own certificate from
 a CA built into the server, and the join token never crosses the network.
 
@@ -232,7 +250,8 @@ checkout", always confirmed before it runs. Sessions are saved;
 
 **Product packs.** `stampede init` probes a target (its OpenAPI document,
 OpenID Connect discovery, home page and headers) and installs the matching
-pack. All twenty packs ship: e-commerce (tested against ShopLab), and SaaS
+pack: journeys written for a typical API of that kind, checked once
+against yours before any load. All twenty packs ship: e-commerce (tested against ShopLab), and SaaS
 with GraphQL, AI and LLM apps over SSE, chat over WebSocket, ticketing
 with a waiting room, login and identity, public APIs with rate limits,
 fintech with duplicate-payment checks, social feeds with live
@@ -252,9 +271,9 @@ load). Anthropic, OpenAI, Gemini, Ollama or any OpenAI-compatible server
 turns a description, an OpenAPI spec, a GraphQL schema, a HAR file, an
 access log or a headless-browser crawl of the site into a scenario. Every journey is dry-run against your target and repaired until it
 works before you approve it; recorded traffic is redacted before anything
-reaches a model ([AI generation](docs/ai.md)). The pipeline is tested with a
-scripted model; it has not yet been run against a real provider in this
-repository's CI. `stampede run --narrative` (or `stampede report
+reaches a model ([AI generation](docs/ai.md)). In CI the pipeline is tested with a
+scripted model, not a real provider, so treat AI generation as
+experimental: how well it works depends on the model you use. `stampede run --narrative` (or `stampede report
 --narrative`) adds a written summary to a finished report in which every
 claim cites the figures behind it and is labelled measured or suspected.
 `stampede coverage` shows which API endpoints no journey exercises, and
@@ -287,8 +306,8 @@ website's benchmarks page.
 Each [release](https://github.com/Ivan825/Stampede/releases) has binaries for Linux, macOS and Windows (amd64 and
 arm64) with SBOMs and signed checksums, signed multi-arch images on
 `ghcr.io/ivan825/stampede`, the Helm chart on `oci://ghcr.io/ivan825/charts`
-and offline bundles. The latest is
-[v1.0.0](https://github.com/Ivan825/Stampede/releases/tag/v1.0.0).
+and offline bundles. The latest is on the
+[releases page](https://github.com/Ivan825/Stampede/releases/latest).
 
 ## Documentation
 
