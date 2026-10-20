@@ -11,6 +11,8 @@ page is built from this file.
 
 - A plugin that stops responding no longer keeps a run from finishing: when
   the run ends it gets five seconds to exit, then its process is stopped.
+- RideLab's trip feed always reports that a driver was assigned, even when
+  the driver reaches the pickup before the feed next looks.
 
 ## 1.2.3 (2026-10-20)
 

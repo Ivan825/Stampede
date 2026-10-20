@@ -251,3 +251,35 @@ func TestDriverStream(t *testing.T) {
 		t.Fatalf("a driver requested a trip: %d", code)
 	}
 }
+
+// A rider who starts watching after the driver reached the pickup is still
+// told a driver was assigned first: a fast pickup must not skip it.
+func TestTrackingAlwaysReportsAssignment(t *testing.T) {
+	_, base := start(t, "")
+	tok := login(t, base, "r0001")
+	id := request(t, base, tok, ride)
+	waitAssigned(t, base, tok, id)
+	for range 500 {
+		if _, m := call(t, "GET", base+"/api/trips/"+id, tok, ""); m["status"] != "driver_assigned" {
+			break
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	c, _, err := websocket.Dial(ctx, "ws"+strings.TrimPrefix(base, "http")+"/api/trips/"+id+"/track",
+		&websocket.DialOptions{HTTPHeader: http.Header{"Authorization": {"Bearer " + tok}}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer c.CloseNow()
+	_, b, err := c.Read(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var m map[string]any
+	_ = json.Unmarshal(b, &m)
+	if m["type"] != "status" || m["status"] != "driver_assigned" {
+		t.Fatalf("first message %v, want the driver_assigned status", m)
+	}
+}

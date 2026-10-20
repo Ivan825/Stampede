@@ -796,6 +796,13 @@ func (s *server) track(w http.ResponseWriter, r *http.Request, id string) {
 	last := ""
 	for {
 		st, pos, left := s.state(t, time.Now())
+		if st != last && (last == "" || last == "searching") && st != "searching" && st != "driver_assigned" && st != "canceled" {
+			// A driver close to the pickup can arrive before this loop
+			// next looks; the rider is still told a driver was assigned.
+			if !send(map[string]any{"type": "status", "status": "driver_assigned"}) {
+				return
+			}
+		}
 		if st != last {
 			if !send(map[string]any{"type": "status", "status": st}) {
 				return
