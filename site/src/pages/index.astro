@@ -232,11 +232,13 @@ const stats = [
 <span class="p">$</span> stampede init --target http://localhost:3000
 <span class="m"># detects your product type, installs a pack, dry-runs every journey</span></Term>
       <div style="margin-top:12px"><Term title="the CLI · Windows PowerShell"><span class="p">$</span> irm https://raw.githubusercontent.com/Ivan825/Stampede/main/install.ps1 | iex</Term></div>
+      <div style="margin-top:12px"><Term title="the CLI · Homebrew, Scoop"><span class="p">$</span> brew install ivan825/tap/stampede
+<span class="m"># Windows:</span>
+<span class="p">&gt;</span> scoop bucket add ivan825 https://github.com/Ivan825/scoop-bucket
+<span class="p">&gt;</span> scoop install stampede</Term></div>
       <div style="margin-top:12px"><Term title="the full stack · Docker"><span class="p">$</span> stampede up
 <span class="m"># web UI on localhost:8080 · two workers · TimescaleDB</span>
-<span class="m"># or, with the ShopLab demo: git clone the repo, then docker compose up -d --build</span></Term></div>
-      <p class="muted" style="margin-top:12px">Until v1.0 is tagged the installers build from source, which needs Go 1.27 or later.</p>
-      <div class="table-wrap" style="margin-top:20px"><table>
+<span class="m"># or, with the ShopLab demo: git clone the repo, then docker compose up -d --build</span></Term></div>      <div class="table-wrap" style="margin-top:20px"><table>
         <thead><tr><th>Command</th><th>Does</th></tr></thead>
         <tbody>
           <tr><td><code>stampede init --target URL</code></td><td>Detects the product type, installs the matching pack, dry-runs it</td></tr>

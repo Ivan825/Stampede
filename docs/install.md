@@ -3,6 +3,7 @@
 | Option | Use it for | Guide |
 |---|---|---|
 | One-line installer | the CLI: `stampede run`, `init`, `compare`, the console | below |
+| Homebrew or Scoop | the CLI, updated with your package manager | below |
 | `stampede up` | the full stack (server, web UI, workers, database) from released images, no clone | below |
 | `docker compose up` in a clone | the full stack plus the ShopLab demo | [deploy/compose.md](deploy/compose.md) |
 | Release archives | the same binary, downloaded by hand | [GitHub releases](https://github.com/Ivan825/Stampede/releases) |
@@ -32,6 +33,29 @@ release files.
 
 CI checks both scripts on Linux, macOS and Windows against a release built
 from every commit, including that a tampered archive is refused.
+
+## Homebrew and Scoop
+
+```sh
+brew install ivan825/tap/stampede      # macOS, Linux
+```
+
+```powershell
+scoop bucket add ivan825 https://github.com/Ivan825/scoop-bucket   # Windows
+scoop install stampede
+```
+
+Every release updates the [tap](https://github.com/Ivan825/homebrew-tap)
+and the [bucket](https://github.com/Ivan825/scoop-bucket), so
+`brew upgrade stampede` and `scoop update stampede` bring the newest
+version. Use the full name `ivan825/tap/stampede` with Homebrew: it marks
+the cask as trusted, which Homebrew requires for casks outside its own
+taps. The binaries are not notarised by Apple, so the cask removes the
+quarantine flag macOS puts on Homebrew downloads; without that, macOS
+would refuse to start `stampede`.
+
+These install the CLI. The web UI runs in the server, which `stampede up`
+starts with Docker, below.
 
 ## The full stack without a clone
 

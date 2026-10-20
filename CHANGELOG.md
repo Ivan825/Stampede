@@ -5,6 +5,16 @@ Notable changes to Stampede. The format follows
 follow [Semantic Versioning](https://semver.org/). The website's changelog
 page is built from this file.
 
+## Unreleased
+
+### Install
+
+- The Homebrew cask clears the macOS quarantine flag with
+  `postflight_steps`, so Homebrew 7 no longer warns that `postflight` is
+  deprecated.
+- The installation page, the README and the home page show the Homebrew
+  and Scoop installs.
+
 ## 1.2.2 (2026-10-20)
 
 1.2.1 was withdrawn: its release stopped before publishing the Helm chart,

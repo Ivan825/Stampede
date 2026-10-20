@@ -23,6 +23,7 @@ Everything is done with the `stampede` CLI; the web UI at
 
 ```sh
 curl -fsSL https://raw.githubusercontent.com/Ivan825/Stampede/main/install.sh | sh
+# or: brew install ivan825/tap/stampede  (Windows: Scoop, see installation)
 ```
 
 Then create the organisation and its owner account on the new server, which

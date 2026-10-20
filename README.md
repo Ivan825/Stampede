@@ -43,6 +43,14 @@ curl -fsSL https://raw.githubusercontent.com/Ivan825/Stampede/main/install.sh | 
 irm https://raw.githubusercontent.com/Ivan825/Stampede/main/install.ps1 | iex
 ```
 
+or with a package manager, which also keeps it up to date:
+
+```sh
+brew install ivan825/tap/stampede                                  # macOS, Linux
+scoop bucket add ivan825 https://github.com/Ivan825/scoop-bucket   # Windows,
+scoop install stampede                                             # then this
+```
+
 The installers download the latest release for your OS and CPU (Linux,
 macOS or Windows; amd64 or arm64), check its SHA-256 checksum and install
 the single `stampede` binary. Nothing else is needed. Then:

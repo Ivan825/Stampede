@@ -74,6 +74,7 @@ groups:
       - { name: "Kubernetes operator (alpha)", status: shipped, doc: docs/deploy/operator }
       - { name: "Terraform examples for multi-region workers", status: shipped, doc: docs/deploy/terraform }
       - { name: "Air-gapped install bundle", status: shipped, doc: docs/deploy/airgap }
+      - { name: "Homebrew and Scoop packages", status: shipped, doc: docs/install }
   - name: Safety
     features:
       - { name: "Ownership verification and caps for public targets", status: shipped, doc: safety }
