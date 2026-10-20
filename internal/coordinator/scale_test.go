@@ -30,7 +30,10 @@ func TestCoordinates200Workers(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { hits.Add(1) }))
 	defer srv.Close()
 
-	c := newCluster(t, coordinator.Config{})
+	// A starved runner can deliver one of 200 workers' snapshots after the
+	// default two-second grace; the merged result is checked exactly
+	// below, so give the live intervals longer rather than count late ones.
+	c := newCluster(t, coordinator.Config{MergeGrace: 5 * time.Second})
 	begin := time.Now()
 	for i := 0; i < n; i++ {
 		c.addWorker(worker.Config{Name: fmt.Sprintf("w%03d", i), CPUs: 1 + i%4})
