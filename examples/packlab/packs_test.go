@@ -355,6 +355,10 @@ func shorten(s *scenario.Scenario) {
 			if n, err := strconv.Atoi(l.Stages[i].Target); err == nil && n > 50 {
 				l.Stages[i].Target = "50"
 			}
+			// Rate stages ("500/s") are capped the same way.
+			if r, err := scenario.ParseRate(l.Stages[i].Target); err == nil && r > 50 {
+				l.Stages[i].Target = "50/s"
+			}
 		}
 		return
 	}
