@@ -224,7 +224,11 @@ func runScenario(ctx context.Context, stdout, stderr io.Writer, path string, f *
 		}
 		var prog func(runner.Progress)
 		if !f.quiet {
-			fmt.Fprintf(stderr, "stampede: running %s against %s (%s, %s planned)\n", s.Metadata.Name, base, plan.Executor, plan.TotalDuration())
+			planned := plan.TotalDuration().String() + " planned"
+			if plan.Executor == scenario.ExecIterations {
+				planned = fmt.Sprintf("%d across %d users", plan.Iterations, plan.VUs)
+			}
+			fmt.Fprintf(stderr, "stampede: running %s against %s (%s, %s)\n", s.Metadata.Name, base, plan.Executor, planned)
 			prog = progressPrinter(stderr)
 		}
 		rep, err := runner.Run(ctx, runner.Options{
@@ -489,8 +493,12 @@ func progressPrinter(w io.Writer) func(runner.Progress) {
 		if p.Mode == scenario.ModeRate {
 			planned = "plan " + fmt.Sprintf("%.0f/s", p.Planned)
 		}
-		elapsed := p.Elapsed
-		if p.Total > 0 && elapsed > p.Total {
+		elapsed, total := p.Elapsed, "/"+p.Total.Truncate(time.Second).String()
+		switch {
+		case p.Total == 0:
+			// A fixed number of iterations has no planned length or level.
+			total, planned = "", "iterations"
+		case elapsed > p.Total:
 			// Load has ended; users finish the journeys they are in.
 			elapsed, planned = p.Total, "finishing"
 		}
@@ -499,8 +507,8 @@ func progressPrinter(w io.Writer) func(runner.Progress) {
 		if t.Requests > 0 {
 			p95 = report.Ms(float64(t.Latency.Quantile(0.95)) / 1e6)
 		}
-		fmt.Fprintf(w, "  %6s/%-6s  %-14s vus %-5d rps %-7d p95 %-9s err %-7s dropped %d\n",
-			elapsed.Truncate(time.Second), p.Total.Truncate(time.Second), planned, p.Snapshot.VUs, t.Requests,
+		fmt.Fprintf(w, "  %6s%-7s  %-14s vus %-5d rps %-7d p95 %-9s err %-7s dropped %d\n",
+			elapsed.Truncate(time.Second), total, planned, p.Snapshot.VUs, t.Requests,
 			p95, report.Pct(errRate), p.Snapshot.Dropped)
 	}
 }

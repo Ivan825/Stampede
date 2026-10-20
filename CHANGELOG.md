@@ -15,6 +15,12 @@ page is built from this file.
 - The installation page, the README and the home page show the Homebrew
   and Scoop installs.
 
+### Run output
+
+- A run of a fixed number of iterations says how many, across how many
+  users, instead of "0s planned", and its progress lines no longer show
+  `/0s` and `plan 0 VUs`.
+
 ## 1.2.2 (2026-10-20)
 
 1.2.1 was withdrawn: its release stopped before publishing the Helm chart,
