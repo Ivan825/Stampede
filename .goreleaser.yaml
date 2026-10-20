@@ -194,6 +194,14 @@ homebrew_casks:
       email: ivan.bhargava@iiitb.ac.in
     commit_msg_template: "stampede {{ .Tag }}"
     skip_upload: '{{ if index .Env "HOMEBREW_TAP_GITHUB_TOKEN" }}false{{ else }}true{{ end }}'
+    caveats: |
+      The CLI runs tests on its own: stampede init, stampede run, or stampede
+      for the console.
+
+      For the web UI, install Docker (Docker Desktop, OrbStack or Colima), then:
+        stampede up      # server, web UI, workers and database
+        stampede setup   # create the organisation and the owner account
+      and open http://localhost:8080
     # The binaries are not notarised, so remove the quarantine flag macOS sets
     # on downloads; otherwise Gatekeeper refuses to start stampede.
     hooks:
