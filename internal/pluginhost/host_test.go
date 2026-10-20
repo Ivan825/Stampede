@@ -6,6 +6,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"sync"
 	"testing"
@@ -48,7 +49,7 @@ func TestDescribeAndLifecycle(t *testing.T) {
 	if p.Name != "echo" || p.Version != "1.0.0" {
 		t.Fatalf("described as %s %s", p.Name, p.Version)
 	}
-	if got := strings.Join(p.StepNames(), ","); got != "closed,connect,crash,panic,say" {
+	if got := strings.Join(p.StepNames(), ","); got != "closed,connect,crash,freeze,panic,say" {
 		t.Fatalf("steps %s", got)
 	}
 	if got := p.Steps["say"].Targets; len(got) != 1 || got[0] != "addr" {
@@ -243,7 +244,7 @@ metadata: {name: t}
 journeys: [{name: j, steps: [{plugin: echo.shout, with: {}}]}]
 load: {vus: 1, iterations: 1}`))
 	prog, _ := scenario.Compile(sc)
-	if err := pluginhost.CheckProgram(prog, set); err == nil || !strings.Contains(err.Error(), `plugin echo has no step "shout" (it has closed, connect, crash, panic, say)`) {
+	if err := pluginhost.CheckProgram(prog, set); err == nil || !strings.Contains(err.Error(), `plugin echo has no step "shout" (it has closed, connect, crash, freeze, panic, say)`) {
 		t.Errorf("unknown step: %v", err)
 	}
 }
@@ -278,5 +279,34 @@ func TestTargetHosts(t *testing.T) {
 		if _, err := pluginhost.TargetHosts(bad); err == nil {
 			t.Errorf("%v: want an error", bad)
 		}
+	}
+}
+
+// A plugin that has hung, and reads nothing, is killed when the run ends
+// instead of holding the run open.
+func TestKillStopsAHungPlugin(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("freezing a process needs SIGSTOP")
+	}
+	p := load(t)
+	s, err := p.Open(context.Background(), 1, "r")
+	if err != nil {
+		t.Fatal(err)
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
+	_, _ = s.Execute(ctx, &pluginv1.ExecuteRequest{Step: "freeze", Config: []byte(`{}`), TimeoutNs: int64(time.Second)})
+
+	start := time.Now()
+	done := make(chan struct{})
+	go func() {
+		p.Kill()
+		close(done)
+	}()
+	select {
+	case <-done:
+		t.Logf("hung plugin stopped in %s", time.Since(start).Round(time.Millisecond))
+	case <-time.After(20 * time.Second):
+		t.Fatal("Kill still waiting on a hung plugin after 20s")
 	}
 }

@@ -26,6 +26,6 @@ func TestEchoConforms(t *testing.T) {
 			{Step: "panic", Config: map[string]any{}, WantClass: "plugin panic"},
 		},
 		VUs:          40,
-		SkipBadInput: []string{"crash"},
+		SkipBadInput: []string{"crash", "freeze"},
 	})
 }

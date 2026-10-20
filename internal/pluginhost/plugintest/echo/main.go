@@ -73,6 +73,16 @@ func main() {
 				},
 			},
 			{
+				// freeze stops the process, which then reads nothing: a plugin
+				// that has hung.
+				Name:   "freeze",
+				Schema: `{"type": "object"}`,
+				Run: func(context.Context, *pluginsdk.Call) (*pluginsdk.Result, error) {
+					freeze()
+					return &pluginsdk.Result{}, nil
+				},
+			},
+			{
 				Name:   "panic",
 				Schema: `{"type": "object"}`,
 				Run: func(context.Context, *pluginsdk.Call) (*pluginsdk.Result, error) {

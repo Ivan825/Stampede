@@ -5,6 +5,13 @@ Notable changes to Stampede. The format follows
 follow [Semantic Versioning](https://semver.org/). The website's changelog
 page is built from this file.
 
+## Unreleased
+
+### Fixes
+
+- A plugin that stops responding no longer keeps a run from finishing: when
+  the run ends it gets five seconds to exit, then its process is stopped.
+
 ## 1.2.3 (2026-10-20)
 
 ### Install

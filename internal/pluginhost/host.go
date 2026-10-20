@@ -30,6 +30,10 @@ var ErrCrashed = errors.New("plugin process exited")
 // restartEvery limits how often a crashed plugin is restarted.
 const restartEvery = time.Second
 
+// stopGrace is how long a plugin gets to exit when asked before its
+// process is killed.
+const stopGrace = 5 * time.Second
+
 // StepType is a step a plugin offers, with its compiled config schema.
 type StepType struct {
 	Name        string
@@ -61,11 +65,36 @@ type Plugin struct {
 
 type process struct {
 	client *plugin.Client
+	cmd    *exec.Cmd
 	svc    pluginv1.PluginServiceClient
 	gen    uint64
 }
 
 func (p *process) exited() bool { return p.client.Exited() }
+
+// stop asks the process to exit and kills it after stopGrace. go-plugin
+// waits for the plugin to answer its shutdown call without a time limit,
+// so a plugin that has stopped reading would otherwise hang the run.
+func (p *process) stop() {
+	done := make(chan struct{})
+	go func() {
+		p.client.Kill()
+		close(done)
+	}()
+	select {
+	case <-done:
+		return
+	case <-time.After(stopGrace):
+	}
+	if p.cmd.Process != nil {
+		_ = p.cmd.Process.Kill()
+	}
+	// Killing the process ends the shutdown call, and Kill returns.
+	select {
+	case <-done:
+	case <-time.After(stopGrace):
+	}
+}
 
 // crashed reports whether a failed call failed because the process died.
 // The connection usually breaks a moment before go-plugin notices the
@@ -102,11 +131,11 @@ func Start(ctx context.Context, path string, log *slog.Logger) (*Plugin, error) 
 	defer cancel()
 	d, err := proc.svc.Describe(dctx, &pluginv1.DescribeRequest{HostVersion: version.Version})
 	if err != nil {
-		proc.client.Kill()
+		proc.stop()
 		return nil, fmt.Errorf("plugin %s: describe: %w", path, err)
 	}
 	if err := pluginsdk.ValidateDescription(d); err != nil {
-		proc.client.Kill()
+		proc.stop()
 		return nil, fmt.Errorf("plugin %s describes itself incorrectly: %w", path, err)
 	}
 	p.Name, p.Version, p.Description = d.GetName(), d.GetVersion(), d.GetDescription()
@@ -130,10 +159,11 @@ func (p *Plugin) launch() (*process, error) {
 	if name == "" {
 		name = strings.TrimPrefix(filepath.Base(p.Path), BinaryPrefix)
 	}
+	cmd := exec.Command(p.Path) //nolint:gosec // runs the plugin executable the user installed
 	client := plugin.NewClient(&plugin.ClientConfig{
 		HandshakeConfig:  pluginsdk.Handshake,
 		Plugins:          plugin.PluginSet{pluginsdk.PluginKey: &pluginsdk.GRPCPlugin{}},
-		Cmd:              exec.Command(p.Path), //nolint:gosec // runs the plugin executable the user installed
+		Cmd:              cmd,
 		AllowedProtocols: []plugin.Protocol{plugin.ProtocolGRPC},
 		StartTimeout:     15 * time.Second,
 		Logger:           hclogTo(p.log, name),
@@ -155,7 +185,7 @@ func (p *Plugin) launch() (*process, error) {
 	}
 	p.gen++
 	p.lastStart = time.Now()
-	return &process{client: client, svc: svc, gen: p.gen}, nil
+	return &process{client: client, cmd: cmd, svc: svc, gen: p.gen}, nil
 }
 
 // live returns the running process, restarting a crashed one.
@@ -186,7 +216,7 @@ func (p *Plugin) Kill() {
 	defer p.mu.Unlock()
 	p.killed = true
 	if p.cur != nil {
-		p.cur.client.Kill()
+		p.cur.stop()
 	}
 }
 
