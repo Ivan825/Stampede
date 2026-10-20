@@ -124,6 +124,38 @@ detect:
 The best-scoring shipped pack is proposed and confirmed before anything is
 installed.
 
+## When your API differs from the pack
+
+Detection only says what *kind* of product a target is. A pack's journeys
+are templates written for a typical API of that kind: fixed paths (the
+e-commerce pack calls `/api/products`, `/api/cart`, `/api/login`), JSON
+field names for extractors, a login that returns a bearer token, and test
+accounts in `data/users.csv`. No AI is involved in `init`.
+
+So against your own shop, expect some journeys to fail their dry run. That
+is what the dry run is for: `init` runs every journey once with one user
+and marks each one passed (✓) or failed (✗) with the reason, such as the
+step whose status check failed, so a broken journey is found before any
+load is sent.
+
+From there you have three options:
+
+- **Edit the YAML.** Change paths, field names, the login step and the
+  accounts in `data/users.csv` to match your API, then check again with
+  `stampede pack test stampede/<pack> --target <url>`. The journeys are
+  short and readable; this is usually a few minutes per journey.
+- **Generate journeys with AI** (optional, your own key or a local model):
+  `stampede generate --from-openapi spec.yaml --target <url>` drafts a
+  scenario from your real endpoints and repairs it against the target
+  until each journey passes ([AI generation](../ai.md)).
+- **Write the scenario yourself** from a pack journey or the [scenario
+  reference](../reference/scenario.md).
+
+You always have to supply what the API cannot tell Stampede: real test
+accounts (or a sign-up step), any authentication beyond a bearer token
+from a login call, and business rules such as stock limits or a payment
+sandbox.
+
 ## Writing a pack
 
 1. Run `stampede pack create <name>` (or copy a shipped pack) and edit
