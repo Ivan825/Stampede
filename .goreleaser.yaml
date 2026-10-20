@@ -203,13 +203,15 @@ homebrew_casks:
         stampede setup   # create the organisation and the owner account
       and open http://localhost:8080
     # The binaries are not notarised, so remove the quarantine flag macOS sets
-    # on downloads; otherwise Gatekeeper refuses to start stampede.
-    hooks:
-      post:
-        install: |
-          if OS.mac?
-            system_command "/usr/bin/xattr", args: ["-dr", "com.apple.quarantine", "#{staged_path}/stampede"]
-          end
+    # on downloads; otherwise Gatekeeper refuses to start stampede. Homebrew 7
+    # deprecates the Ruby postflight block that hooks.post.install writes, so
+    # this is its declarative replacement.
+    custom_block: |
+      postflight_steps do
+        on_macos do
+          run "/usr/bin/xattr", args: ["-dr", "com.apple.quarantine", "stampede"], chdir: "."
+        end
+      end
 
 # Scoop manifest in Ivan825/scoop-bucket (scoop bucket add ivan825
 # https://github.com/Ivan825/scoop-bucket; scoop install stampede).
