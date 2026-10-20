@@ -21,7 +21,7 @@ how your users behave, Stampede checks each journey with a single user, then
 runs many of them at once and tells you where your product breaks.
 
 <p align="center">
-  <img src="site/public/screenshots/console.png" alt="The Stampede console: the teal bull, a welcome naming the signed-in user, server and project, and suggested first commands" width="820">
+  <img src="site/public/screenshots/demo.gif" alt="stampede init detects a ticketing API and checks its six journeys, then an on-sale rush from 10 to 300 requests a second passes every target" width="820">
 </p>
 
 > **Released.** Install the [latest release](https://github.com/Ivan825/Stampede/releases/latest)

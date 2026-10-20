@@ -15,6 +15,12 @@ page is built from this file.
 - The installation page, the README and the home page show the Homebrew
   and Scoop installs.
 
+### Website and README
+
+- A 40-second demo at the top of the README and the home page:
+  `stampede init` against a ticketing API, then an on-sale rush.
+  `scripts/demo.tape` re-records it.
+
 ### Run output
 
 - A run of a fixed number of iterations says how many, across how many
