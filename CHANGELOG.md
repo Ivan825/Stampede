@@ -5,13 +5,28 @@ Notable changes to Stampede. The format follows
 follow [Semantic Versioning](https://semver.org/). The website's changelog
 page is built from this file.
 
-## 1.2.1 (2026-10-19)
+## 1.2.2 (2026-10-20)
+
+1.2.1 was withdrawn: its release stopped before publishing the Helm chart,
+the offline bundles and the Homebrew and Scoop packages.
 
 ### Install
 
 - Homebrew on macOS and Linux: `brew install ivan825/tap/stampede`.
 - Scoop on Windows: `scoop bucket add ivan825
   https://github.com/Ivan825/scoop-bucket`, then `scoop install stampede`.
+
+### Security
+
+- Built with Go 1.27.2 and golang.org/x/net 0.60.0, which fix HTTP/2 and
+  net/http advisories GO-2026-6611, GO-2026-6612, GO-2026-6613 and
+  GO-2026-6617.
+
+### Fixes
+
+- RideLab, the delivery pack's reference app, keeps searching for a driver
+  when other trips take every free one first, instead of leaving the trip
+  searching forever.
 
 ## 1.2.0 (2026-10-08)
 
