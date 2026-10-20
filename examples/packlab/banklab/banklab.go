@@ -123,6 +123,7 @@ type server struct {
 	summed   labkit.Counter // postings added up to compute balances
 	scanned  labkit.Counter // journal postings scanned for statements
 	inflight labkit.Gauge   // transfers inside the ledger's critical section
+	checking labkit.Gauge   // fraud checks running at once
 }
 
 // New returns BankLab's handler.
@@ -594,10 +595,10 @@ func (s *server) lockMove(from, to *account) func() {
 	if !s.cfg.Fixes.On("lock") {
 		s.global.Lock()
 		done := s.inflight.Enter()
-		time.Sleep(s.fraud) // bottleneck: the fraud check runs under the ledger lock
+		s.fraudCheck() // bottleneck: the fraud check runs under the ledger lock
 		return func() { done(); s.global.Unlock() }
 	}
-	time.Sleep(s.fraud)
+	s.fraudCheck()
 	s.snap.RLock()
 	a, b := from, to
 	if b.idx < a.idx {
@@ -607,6 +608,13 @@ func (s *server) lockMove(from, to *account) func() {
 	b.mu.Lock()
 	done := s.inflight.Enter()
 	return func() { done(); b.mu.Unlock(); a.mu.Unlock(); s.snap.RUnlock() }
+}
+
+// fraudCheck stands in for a call to a fraud service.
+func (s *server) fraudCheck() {
+	done := s.checking.Enter()
+	time.Sleep(s.fraud)
+	done()
 }
 
 func (s *server) getTransfer(w http.ResponseWriter, r *http.Request, c string) {

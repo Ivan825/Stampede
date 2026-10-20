@@ -146,6 +146,7 @@ func TestNoMoneyMadeOrLost(t *testing.T) {
 func TestLockBottleneck(t *testing.T) {
 	const fraud = 10 * time.Millisecond
 	elapsed := map[string]time.Duration{}
+	checks := map[string]int64{}
 	for _, fixes := range []string{"", "lock"} {
 		s, base := start(t, fixes)
 		s.fraud = fraud
@@ -168,15 +169,22 @@ func TestLockBottleneck(t *testing.T) {
 		close(begin)
 		wg.Wait()
 		elapsed[fixes] = time.Since(t0)
+		checks[fixes] = s.checking.Peak()
 		if fixes == "" && s.inflight.Peak() != 1 {
 			t.Errorf("without the fix %d transfers were in the ledger at once", s.inflight.Peak())
 		}
 	}
-	// Under the ledger lock the 20 fraud checks run one after another;
-	// with the fix they overlap. The bound is loose for busy CI machines.
-	if elapsed[""] < 20*fraud || elapsed["lock"] > elapsed[""]/2 {
-		t.Errorf("20 transfers took %s with the lock and %s without", elapsed[""], elapsed["lock"])
+	// Under the ledger lock the 20 fraud checks run one after another, so
+	// they take at least 20 of them; with the fix they overlap. Counting
+	// overlapping checks, not timing the fixed run, keeps a slow CI
+	// machine's request overhead out of the verdict.
+	if elapsed[""] < 20*fraud {
+		t.Errorf("20 transfers took %s with the lock, less than 20 fraud checks in a row", elapsed[""])
 	}
+	if checks[""] != 1 || checks["lock"] < 2 {
+		t.Errorf("fraud checks at once: %d with the lock, %d without (want 1 and more than 1)", checks[""], checks["lock"])
+	}
+	t.Logf("with the lock %s, %d check at a time; without %s, up to %d at once", elapsed[""], checks[""], elapsed["lock"], checks["lock"])
 }
 
 func TestBalanceBottleneck(t *testing.T) {
