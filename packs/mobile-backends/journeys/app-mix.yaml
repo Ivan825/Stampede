@@ -14,7 +14,7 @@ target:
   baseURL: ${env.TARGET_URL}
   headers: { X-App-Version: 4.2.0 }
 data:
-  users: { csv: ../data/users.csv, mode: random }
+  users: { csv: ../data/users.csv, mode: sequential }  # users running at once never share an account
 journeys:
   - name: cold-launch
     weight: 40

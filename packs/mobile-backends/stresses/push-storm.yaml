@@ -11,7 +11,7 @@ target:
   baseURL: ${env.TARGET_URL}
   headers: { X-App-Version: 4.2.0 }
 data:
-  users: { csv: ../data/users.csv, mode: random }
+  users: { csv: ../data/users.csv, mode: sequential }  # users running at once never share an account
 vars:
   # A sync token from before the push: MobileLab's version counter starts
   # at 1000. Use a token your clients would really hold.
