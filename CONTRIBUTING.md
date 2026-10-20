@@ -3,6 +3,28 @@
 Thanks for helping. Stampede aims to be a load tester whose numbers people
 can trust, so correctness and clear behaviour come before features.
 
+## Start here
+
+Issues labelled [good first
+issue](https://github.com/Ivan825/Stampede/labels/good%20first%20issue)
+are scoped for a first pull request. If none fits, these are always open:
+
+- **Run the quick start on your machine.** Follow
+  [docs/quickstart.md](docs/quickstart.md) exactly as written. Done when
+  every command worked, or you have fixed the step that did not (or opened
+  an issue with your OS, the command and its output).
+- **Add a journey to a pack.** Pick a pack in `packs/`, add a journey that
+  real users of that kind of product take, and extend its reference app in
+  `examples/packlab` if the journey needs an endpoint it lacks. Done when
+  its test passes, for example
+  `go test ./examples/packlab -run TestPacksAgainstReferenceApps/ticketing`
+  (the e-commerce pack is tested against `examples/shoplab` instead).
+- **Add a regression fixture.** Find a scenario mistake that gives an
+  unclear error (a typo'd field, a variable used before it is extracted)
+  and add it to the parser's tests in `internal/scenario` with the error
+  you would expect. Done when the test fails before your fix to the
+  message and passes after.
+
 ## Ground rules
 
 - **Numbers first.** Any change to the engine, metrics or reports must keep
