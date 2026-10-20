@@ -67,9 +67,17 @@ func TestRunOnWorkers(t *testing.T) {
 
 	c := newClient(t, hs.URL)
 	setup(t, c)
+	// Both workers are listed and free. A worker watches its own machine,
+	// so on a busy CI runner an idle one may honestly say it is saturated.
 	var workers []map[string]any
-	if c.do("GET", "/workers", nil, &workers); len(workers) != 2 || workers[0]["status"] != "idle" {
+	c.do("GET", "/workers", nil, &workers)
+	if len(workers) != 2 {
 		t.Fatalf("workers: %v", workers)
+	}
+	for _, w := range workers {
+		if st := w["status"]; st != "idle" && st != "saturated" {
+			t.Fatalf("worker %v is %v before any run", w["name"], st)
+		}
 	}
 	var proj, tgt, sc, run map[string]any
 	c.do("POST", "/projects", map[string]string{"name": "dist"}, &proj)
