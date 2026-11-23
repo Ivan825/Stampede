@@ -3,6 +3,7 @@ package report
 import (
 	"bytes"
 	"encoding/csv"
+	"math"
 	"strings"
 	"testing"
 	"time"
@@ -143,6 +144,40 @@ targets: ["p95 < 1s"]`))
 	r := Build(Input{Program: prog, Plan: plan})
 	if r.Verdict != VerdictFail || r.Thresholds[0].ObservedText != "no data" {
 		t.Errorf("a target with no data must fail: %+v", r.Thresholds)
+	}
+
+	// A run stopped before a targeted journey ran still writes its JSON
+	// report: no data is null, and reads back as NaN.
+	var buf bytes.Buffer
+	if err := r.WriteJSON(&buf); err != nil {
+		t.Fatalf("WriteJSON with no data: %v", err)
+	}
+	if !strings.Contains(buf.String(), `"observed": null`) {
+		t.Errorf("no data should be written as null:\n%s", buf.String())
+	}
+	back, err := ReadJSON(&buf)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if c := back.Thresholds[0]; !math.IsNaN(c.Observed) || c.Pass || c.ObservedText != "no data" || c.Scope != r.Thresholds[0].Scope {
+		t.Errorf("read back %+v", c)
+	}
+}
+
+func TestCheckJSONKeepsObserved(t *testing.T) {
+	r := build(t, 10*time.Millisecond, 0)
+	var buf bytes.Buffer
+	if err := r.WriteJSON(&buf); err != nil {
+		t.Fatal(err)
+	}
+	back, err := ReadJSON(&buf)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for i, c := range back.Thresholds {
+		if c != r.Thresholds[i] {
+			t.Errorf("threshold %d: wrote %+v, read %+v", i, r.Thresholds[i], c)
+		}
 	}
 }
 

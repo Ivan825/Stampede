@@ -237,7 +237,7 @@ export interface Check {
   metric: string;
   op: string;
   target: number;
-  observed: number;
+  observed: number | null; // null when the target had no data
   pass: boolean;
   targetText: string;
   observedText: string;

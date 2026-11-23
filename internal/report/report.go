@@ -3,6 +3,8 @@
 package report
 
 import (
+	"encoding/json"
+	"math"
 	"sort"
 	"time"
 
@@ -127,16 +129,53 @@ type LoadInfo struct {
 
 // Check is the outcome of one target.
 type Check struct {
-	Source   string  `json:"source"`
-	Scope    string  `json:"scope"`
-	Metric   string  `json:"metric"`
-	Op       string  `json:"op"`
-	Target   float64 `json:"target"`
+	Source string  `json:"source"`
+	Scope  string  `json:"scope"`
+	Metric string  `json:"metric"`
+	Op     string  `json:"op"`
+	Target float64 `json:"target"`
+	// Observed is NaN when the target's scope had no data, for example a
+	// journey that had not run yet when the run was stopped. JSON carries
+	// that as null.
 	Observed float64 `json:"observed"`
 	Pass     bool    `json:"pass"`
 	// Display strings in the metric's unit.
 	TargetText   string `json:"targetText"`
 	ObservedText string `json:"observedText"`
+}
+
+// checkJSON is Check with Observed as a nullable number: encoding/json
+// refuses NaN, and one target with no data would otherwise lose the
+// whole report.
+type checkJSON struct {
+	checkFields
+	Observed *float64 `json:"observed"`
+}
+
+type checkFields Check
+
+// MarshalJSON writes an Observed with no data (NaN or ±Inf) as null.
+func (c Check) MarshalJSON() ([]byte, error) {
+	out := checkJSON{checkFields: checkFields(c)}
+	if !math.IsNaN(c.Observed) && !math.IsInf(c.Observed, 0) {
+		v := c.Observed
+		out.Observed = &v
+	}
+	return json.Marshal(out)
+}
+
+// UnmarshalJSON reads a null Observed back as NaN.
+func (c *Check) UnmarshalJSON(b []byte) error {
+	var in checkJSON
+	if err := json.Unmarshal(b, &in); err != nil {
+		return err
+	}
+	*c = Check(in.checkFields)
+	c.Observed = math.NaN()
+	if in.Observed != nil {
+		c.Observed = *in.Observed
+	}
+	return nil
 }
 
 // Stats summarises a set of requests.
