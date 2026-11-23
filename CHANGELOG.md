@@ -5,6 +5,29 @@ Notable changes to Stampede. The format follows
 follow [Semantic Versioning](https://semver.org/). The website's changelog
 page is built from this file.
 
+## Unreleased
+
+### Fixes
+
+- Stopping a run (Ctrl+C) before a targeted journey had sent a request no
+  longer fails with `json: unsupported value: NaN` and an empty JSON
+  report. A target with no data is written as `"observed": null`. The same
+  failure hit any run in which a targeted journey never ran.
+- `--shape breakpoint` and `--shape steps` work without a `max`: ten times
+  the start (or `--rate`, `--vus`) is the highest level tried, so
+  `stampede run checkout.yaml --shape breakpoint --rate 20/s` steps from
+  20/s to 200/s.
+- `stampede run` has `--start` and `--max`, like `stampede start`.
+- `--shape smoke` runs 2 users (or 1/s) for a minute as documented,
+  instead of the rate, users and duration the scenario was written for.
+  `--rate`, `--vus`, `--start` and `--duration` given with it still apply.
+
+### Docs
+
+- The README, installation page, quickstart and home page lead with
+  Homebrew and Scoop. The install script is shown as download, read, then
+  run, instead of piped into a shell.
+
 ## 1.2.4 (2026-10-20)
 
 ### Fixes
