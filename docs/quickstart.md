@@ -24,8 +24,8 @@ docker compose up -d --build shoplab
 Install the CLI:
 
 ```sh
-curl -fsSL https://raw.githubusercontent.com/Ivan825/Stampede/main/install.sh | sh
-# or: brew install ivan825/tap/stampede  (Windows: Scoop, see installation)
+brew install ivan825/tap/stampede
+# Windows: Scoop. Without a package manager: the install script, see installation
 ```
 
 ### 2. Let Stampede recognise it

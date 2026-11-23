@@ -2,8 +2,8 @@
 
 | Option | Use it for | Guide |
 |---|---|---|
-| One-line installer | the CLI: `stampede run`, `init`, `compare`, the console | below |
 | Homebrew or Scoop | the CLI, updated with your package manager | below |
+| Install script | the CLI without a package manager | below |
 | `stampede up` | the full stack (server, web UI, workers, database) from released images, no clone | below |
 | `docker compose up` in a clone | the full stack plus the ShopLab demo | [deploy/compose.md](deploy/compose.md) |
 | Release archives | the same binary, downloaded by hand | [GitHub releases](https://github.com/Ivan825/Stampede/releases) |
@@ -14,25 +14,6 @@
 
 There is one binary. It is the CLI, the server (`stampede server`), a worker
 (`stampede worker`) and the terminal console (`stampede` on its own).
-
-## The CLI in one line
-
-```sh
-curl -fsSL https://raw.githubusercontent.com/Ivan825/Stampede/main/install.sh | sh        # Linux, macOS
-irm https://raw.githubusercontent.com/Ivan825/Stampede/main/install.ps1 | iex             # Windows PowerShell
-```
-
-The script finds the latest release, downloads the archive for your OS and
-CPU (amd64 or arm64), checks it against the release's SHA-256 checksums
-and installs `stampede` into `~/.local/bin` (Windows:
-`%LOCALAPPDATA%\stampede\bin`, added to your PATH). Read it first if you
-prefer: it is short. Set `STAMPEDE_VERSION=v1.0.0` for a particular
-release, `STAMPEDE_INSTALL_DIR` for another folder, or
-`STAMPEDE_DOWNLOAD_BASE` to download from an internal mirror of the
-release files.
-
-CI checks both scripts on Linux, macOS and Windows against a release built
-from every commit, including that a tampered archive is refused.
 
 ## Homebrew and Scoop
 
@@ -54,8 +35,35 @@ taps. The binaries are not notarised by Apple, so the cask removes the
 quarantine flag macOS puts on Homebrew downloads; without that, macOS
 would refuse to start `stampede`.
 
-These install the CLI. The web UI runs in the server, which `stampede up`
-starts with Docker, below.
+## Install script
+
+Download the script, read it (it is short), then run it:
+
+```sh
+# Linux, macOS
+curl -fsSLO https://raw.githubusercontent.com/Ivan825/Stampede/main/install.sh
+sh install.sh
+```
+
+```powershell
+# Windows PowerShell
+Invoke-WebRequest https://raw.githubusercontent.com/Ivan825/Stampede/main/install.ps1 -OutFile install.ps1
+powershell -ExecutionPolicy Bypass -File .\install.ps1
+```
+
+The script finds the latest release, downloads the archive for your OS and
+CPU (amd64 or arm64), checks it against the release's SHA-256 checksums
+and installs `stampede` into `~/.local/bin` (Windows:
+`%LOCALAPPDATA%\stampede\bin`, added to your PATH). Set
+`STAMPEDE_VERSION=v1.0.0` for a particular release, `STAMPEDE_INSTALL_DIR`
+for another folder, or `STAMPEDE_DOWNLOAD_BASE` to download from an
+internal mirror of the release files.
+
+CI checks both scripts on Linux, macOS and Windows against a release built
+from every commit, including that a tampered archive is refused.
+
+Both ways install the CLI. The web UI runs in the server, which
+`stampede up` starts with Docker, below.
 
 ## The full stack without a clone
 

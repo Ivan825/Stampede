@@ -114,9 +114,9 @@ the build unstable instead, wrap the step in
 `catchError(buildResult: 'UNSTABLE', stageResult: 'UNSTABLE') { ... }`.
 
 Both examples build the CLI with `go install`, which needs Go on the agent.
-Without Go, use the one-line installer instead
-(`curl -fsSL .../install.sh | sh`, see [installation](../install.md)), which
-downloads the released binary. These two examples are not run in this
+Without Go, download and run the install script instead
+(`install.sh`, see [installation](../install.md#install-script)), which
+downloads the released binary and checks its checksum. These two examples are not run in this
 repository's CI; the GitHub Action below is.
 
 ## GitHub Action

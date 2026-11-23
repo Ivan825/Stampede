@@ -36,22 +36,21 @@ runs many of them at once and tells you where your product breaks.
 scenario, run it, get a report.
 
 ```sh
-# Linux and macOS
-curl -fsSL https://raw.githubusercontent.com/Ivan825/Stampede/main/install.sh | sh
-```
-
-```powershell
-# Windows (PowerShell)
-irm https://raw.githubusercontent.com/Ivan825/Stampede/main/install.ps1 | iex
-```
-
-or with a package manager, which also keeps it up to date:
-
-```sh
 brew install ivan825/tap/stampede                                  # macOS, Linux
 scoop bucket add ivan825 https://github.com/Ivan825/scoop-bucket   # Windows,
 scoop install stampede                                             # then this
 ```
+
+Without a package manager, download the install script, read it, then run
+it. It fetches the release for your OS and CPU and checks its SHA-256
+checksum:
+
+```sh
+curl -fsSLO https://raw.githubusercontent.com/Ivan825/Stampede/main/install.sh
+sh install.sh
+```
+
+Windows and other options: [installation](docs/install.md).
 
 The installers download the latest release for your OS and CPU (Linux,
 macOS or Windows; amd64 or arm64), check its SHA-256 checksum and install
