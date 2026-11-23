@@ -50,7 +50,7 @@ func runCluster(cmd *cobra.Command, path string, f *runFlags) error {
 	}
 	rf := &remoteRunFlags{
 		project: f.cluster.project, file: path, target: target, note: f.cluster.note,
-		shape: f.shape, rate: f.rate, duration: f.duration, vus: f.vus,
+		shape: f.shape, rate: f.rate, duration: f.duration, vus: f.vus, start: f.start, max: f.max,
 		workers: f.cluster.workers, env: f.env, detach: f.cluster.detach, regions: f.cluster.regions,
 	}
 	ctx := cmd.Context()

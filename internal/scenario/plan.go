@@ -291,7 +291,12 @@ func (l Load) shapeStages(p *Plan, parse func(string, string) (float64, error)) 
 		}
 		p.Stages = []PlanStage{st(2*m, start), st(hold, start), st(2*m, 0)}
 	case "breakpoint", "steps":
-		if err := need("max (the highest load to try)", peak); err != nil {
+		if peak == 0 {
+			// Like spike, a start alone (or vus/rate) sets the range:
+			// ten times it is the highest level tried.
+			peak = start * 10
+		}
+		if err := need("max (the highest load to try) or start", peak); err != nil {
 			return err
 		}
 		n := l.Steps

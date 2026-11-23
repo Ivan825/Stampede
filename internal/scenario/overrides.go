@@ -26,6 +26,12 @@ func (o Overrides) Apply(s *Scenario) error {
 	if o.Shape != "" {
 		l.Shape, l.Stages, l.Iterations = o.Shape, nil, 0
 	}
+	if o.Shape == "smoke" {
+		// A smoke test is a couple of users (or 1/s) for a minute, not the
+		// load the scenario was written for: only levels and a duration
+		// given with the override change it.
+		l.Rate, l.VUs, l.Start, l.Max, l.Duration = 0, 0, "", "", 0
+	}
 	if o.Mode != "" {
 		if o.Mode != ModeVUs && o.Mode != ModeRate {
 			return fmt.Errorf("mode must be vus or rate")

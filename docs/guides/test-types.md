@@ -3,17 +3,19 @@
 Traffic shapes are presets on one engine. Set `load.shape` in a scenario,
 pass `--shape` to `stampede run` or `stampede start`, or type
 `/run <shape>` in the console. `start` and `max` are rates in rate
-mode (`50/s`) and user counts in vus mode. `duration` stretches or shrinks
-the preset, except where noted.
+mode (`50/s`) and user counts in vus mode; set them in `load`, or with
+`--start` and `--max`. When `start` is not set, the scenario's `rate` or
+`vus` (or `--rate`, `--vus`) is used. `duration` stretches or shrinks the
+preset, except where noted.
 
 | Shape | Question it answers | What it does (defaults) |
 |---|---|---|
-| `smoke` | Do the journeys work at all? | 2 users (or 1/s) for 1 minute |
+| `smoke` | Do the journeys work at all? | 2 users (or 1/s) for 1 minute; `--shape smoke` ignores the scenario's own rate, users and duration, so only `--rate`, `--vus`, `--start` or `--duration` given with it change that |
 | `baseline` | How does it behave at normal traffic? | ramp to `start` over 1m, hold for `duration` (10m) |
 | `stress` | What happens past the expected peak? | ramp to `start`, hold 5m, ramp to `max` (2× start), hold 5m, ramp down |
 | `spike` | Does it survive a sudden jump? | hold `start`, jump to `max` (10× start) in 10s, hold 3m, drop back, hold 3m |
 | `soak` | Do leaks show up over hours? | ramp 2m, hold `start` for `duration` (4h), ramp down |
-| `breakpoint` | At what load does it fail? | steps from `start` to `max` (`steps`, default 10, each `stepDuration`, default 2m); stops at the first level that misses a target |
+| `breakpoint` | At what load does it fail? | steps from `start` to `max` (10× start if not set; `steps`, default 10, each `stepDuration`, default 2m); stops at the first level that misses a target |
 | `steps` | How does each increment change latency? | like breakpoint (5 steps) but never stops early |
 | `recovery` | How fast does it return to normal after overload? | normal, 3× overload for 3m, back to normal for 5m |
 | `wave` | Does it cope with repeated peaks? | `cycles` (4) of ramp to `max`, hold, ramp to `start`, hold |
@@ -35,8 +37,10 @@ seconds in a row), or that it had not recovered by the end of the run.
 Any scenario's journeys work with any shape:
 
 ```sh
-stampede run checkout.yaml --shape spike --rate 50/s     # start 50/s, max 500/s
-stampede run checkout.yaml --shape breakpoint --rate 20/s
+stampede run checkout.yaml --shape spike --rate 50/s                    # start 50/s, max 500/s
+stampede run checkout.yaml --shape breakpoint --rate 20/s               # 20/s to 200/s in ten steps
+stampede run checkout.yaml --shape breakpoint --start 20/s --max 400/s  # 20/s to 400/s
+stampede run checkout.yaml --shape smoke                                # 1/s (or 2 users) for a minute
 ```
 
 ## Breakpoint runs

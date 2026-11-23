@@ -27,6 +27,7 @@ stampede run <scenario.yaml> [flags]
 ```
   stampede run checkout.yaml
   stampede run checkout.yaml --shape spike --rate 200/s -o report.html
+  stampede run checkout.yaml --shape breakpoint --start 20/s --max 400/s
   stampede run smoke.yaml -e TARGET_URL=http://localhost:8090 --junit junit.xml
   stampede run checkout.yaml --cluster --project shop --target staging --duration 10m -o report.html
 ```
@@ -46,6 +47,7 @@ stampede run <scenario.yaml> [flags]
       --iterations int        run a fixed number of iterations instead
       --json string           write a JSON report to this file (- for stdout)
       --junit string          write JUnit XML (one test per target) to this file
+      --max string            the shape's highest level, e.g. 400/s or 200 (users)
       --max-vus int           cap on virtual users in rate mode (default: five times the peak rate); raise it for long journeys
       --md string             write a Markdown summary to this file (- for stdout)
       --model string          model for --narrative (default claude-sonnet-5-5 for anthropic)
@@ -61,6 +63,7 @@ stampede run <scenario.yaml> [flags]
       --region stringArray    with --cluster: split the load by worker region, REGION=PERCENT (repeatable, adds up to 100%), e.g. --region mumbai=50% --region frankfurt=50%; replaces load.regions
       --repeat int            run the scenario this many times (for stampede compare); report files get -1, -2 ... suffixes (default 1)
       --shape string          apply a traffic shape: smoke, baseline, stress, spike, soak, breakpoint, steps, recovery, wave
+      --start string          the shape's starting level, e.g. 20/s or 10 (users)
       --target string         with --cluster: target name, base URL or id saved on the server
       --timeline-csv string   write the per-second timeline as CSV to this file (- for stdout)
   -v, --verbose               log step errors as they happen

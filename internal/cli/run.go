@@ -62,6 +62,7 @@ type runFlags struct {
 	rate                  string
 	duration              string
 	shape                 string
+	start, max            string
 	iterations            int
 	allowHosts            []string
 	quiet                 bool
@@ -102,6 +103,7 @@ Exit codes: 0 when every target passes (or none are set), 3 when a target
 fails, 1 on any other error.`,
 		Example: `  stampede run checkout.yaml
   stampede run checkout.yaml --shape spike --rate 200/s -o report.html
+  stampede run checkout.yaml --shape breakpoint --start 20/s --max 400/s
   stampede run smoke.yaml -e TARGET_URL=http://localhost:8090 --junit junit.xml
   stampede run checkout.yaml --cluster --project shop --target staging --duration 10m -o report.html`,
 		Args: cobra.ExactArgs(1),
@@ -128,6 +130,8 @@ fails, 1 on any other error.`,
 	fl.IntVar(&f.maxVUs, "max-vus", 0, "cap on virtual users in rate mode (default: five times the peak rate); raise it for long journeys")
 	fl.StringVar(&f.duration, "duration", "", "override the duration, e.g. 30s or 5m")
 	fl.StringVar(&f.shape, "shape", "", "apply a traffic shape: "+strings.Join(scenario.Shapes, ", "))
+	fl.StringVar(&f.start, "start", "", "the shape's starting level, e.g. 20/s or 10 (users)")
+	fl.StringVar(&f.max, "max", "", "the shape's highest level, e.g. 400/s or 200 (users)")
 	fl.IntVar(&f.iterations, "iterations", 0, "run a fixed number of iterations instead")
 	fl.StringSliceVar(&f.allowHosts, "allow-host", nil, "extra public hosts requests may reach besides the target")
 	fl.BoolVarP(&f.quiet, "quiet", "q", false, "no live progress")
@@ -298,6 +302,7 @@ func applyOverrides(s *scenario.Scenario, f *runFlags) error {
 	}
 	return scenario.Overrides{
 		Shape: f.shape, VUs: f.vus, MaxVUs: f.maxVUs, Rate: f.rate, Duration: f.duration, Iterations: f.iterations,
+		Start: f.start, Max: f.max,
 	}.Apply(s)
 }
 
